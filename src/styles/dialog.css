@@ -1,0 +1,484 @@
+/* Global Dialog Styles
+ * Apply these classes to dialogs throughout the application
+ * Based on Edit Patient Appointment dialog structure from FrontDesk.tsx and DoctorConsultation.tsx
+ */
+
+/* ============================================
+   Dialog Container Structure
+   ============================================ */
+
+/* DialogContent - Main container */
+.dialog-content-standard {
+  padding: 0;
+  gap: 0;
+  background-color: white;
+}
+
+/* Dialog scrollable wrapper (contains header, body, and footer) */
+.dialog-scrollable-wrapper {
+  flex: 1;
+  overflow-y: scroll; /* Always show scrollbar */
+  min-height: 0;
+  background-color: white;
+  max-height: 90vh; /* Limit height */
+}
+
+/* ============================================
+   Dialog Header
+   ============================================ */
+
+/* DialogHeader - Header section */
+.dialog-header-standard {
+  padding-left: 1.5rem; /* px-6 */
+  padding-right: 1.5rem;
+  padding-top: 1rem; /* pt-4 */
+  padding-bottom: 0.75rem; /* pb-3 */
+  background-color: white; /* light background - reversed from dark */
+}
+
+/* DialogTitle - Title text for Edit dialogs (matches FrontDesk Add Appointment) */
+.dialog-title-standard {
+  color: rgb(17, 24, 39); /* dark text on light header - reversed */
+  font-size: 1.125rem; /* 18px - matches FrontDesk text-lg */
+  line-height: 1.5;
+  font-weight: 700; /* bold - increased from 500 */
+}
+
+/* DialogTitle - Standard size (for View/Add dialogs) */
+.dialog-title-standard-view {
+  color: rgb(17, 24, 39); /* dark text on light header - reversed */
+  font-size: 1.125rem; /* 18px - matches FrontDesk text-lg */
+  line-height: 1.5;
+  font-weight: 700; /* bold */
+}
+
+/* ============================================
+   Dialog Body
+   ============================================ */
+
+/* Dialog body content wrapper */
+.dialog-body-content-wrapper {
+  padding-left: 1.5rem; /* px-6 */
+  padding-right: 1.5rem; /* px-6 - matches dialog-footer-standard for alignment */
+  padding-bottom: 0.25rem; /* pb-1 */
+  box-sizing: border-box;
+}
+
+/* Dialog form container */
+.dialog-form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem; /* space-y-2 - reduced from space-y-4 */
+  padding-top: 0.75rem; /* py-3 - reduced from py-4 */
+  padding-bottom: 0.75rem; /* reduced from py-4 */
+}
+
+/* Dialog form field wrapper (single field) */
+.dialog-form-field {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dialog form field grid (2 columns) */
+.dialog-form-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem; /* gap-2 - reduced from gap-4 */
+}
+
+/* ============================================
+   Form Labels
+   ============================================ */
+
+/* Form Labels (matches FrontDesk Add Appointment) */
+.dialog-label-standard {
+  color: rgb(17, 24, 39); /* text-gray-900 - darker font */
+  font-size: 0.875rem; /* 14px - matches FrontDesk text-sm */
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* ============================================
+   Form Inputs
+   ============================================ */
+
+/* Form Inputs - Enabled state (matches FrontDesk Add Appointment) */
+.dialog-input-standard {
+  color: rgb(55, 65, 81); /* text-gray-700 */
+  background-color: rgb(243, 244, 246); /* bg-gray-100 */
+  font-size: 1rem; /* 16px - matches FrontDesk text-base on mobile */
+  line-height: 1.5;
+}
+
+@media (min-width: 768px) {
+  .dialog-input-standard {
+    font-size: 0.875rem; /* 14px - matches FrontDesk md:text-sm on desktop */
+  }
+}
+
+/* Form Inputs - Disabled state */
+.dialog-input-disabled {
+  color: rgb(55, 65, 81); /* text-gray-700 */
+  background-color: rgb(249, 250, 251); /* bg-gray-50 */
+  font-size: 1.125rem; /* 18px */
+  line-height: 1.5;
+}
+
+/* ============================================
+   Form Selects
+   ============================================ */
+
+/* Form Selects (matches FrontDesk Add Appointment) */
+.dialog-select-standard {
+  color: rgb(55, 65, 81); /* text-gray-700 */
+  background-color: rgb(243, 244, 246); /* bg-gray-100 */
+  font-size: 1rem; /* 16px - matches FrontDesk text-base on mobile */
+  line-height: 1.5;
+  width: 100%;
+  padding: 0.5rem 0.75rem; /* px-3 py-2 */
+  border: 1px solid rgb(229, 231, 235); /* border-gray-200 */
+  border-radius: 0.375rem; /* rounded-md */
+}
+
+@media (min-width: 768px) {
+  .dialog-select-standard {
+    font-size: 0.875rem; /* 14px - matches FrontDesk md:text-sm on desktop */
+  }
+}
+
+/* ============================================
+   Form Textareas
+   ============================================ */
+
+/* Form Textareas (matches FrontDesk Add Appointment) */
+.dialog-textarea-standard {
+  color: rgb(55, 65, 81); /* text-gray-700 */
+  background-color: rgb(243, 244, 246); /* bg-gray-100 */
+  font-size: 1rem; /* 16px - matches FrontDesk text-base on mobile */
+  line-height: 1.5;
+}
+
+@media (min-width: 768px) {
+  .dialog-textarea-standard {
+    font-size: 0.875rem; /* 14px - matches FrontDesk md:text-sm on desktop */
+  }
+}
+
+/* ============================================
+   Form Checkboxes
+   ============================================ */
+
+/* Checkbox container */
+.dialog-checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* gap-2 */
+}
+
+/* Checkbox Labels */
+.dialog-checkbox-label-standard {
+  color: rgb(75, 85, 99); /* text-gray-600 */
+  font-size: 1.125rem; /* 18px */
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+/* ============================================
+   Helper Text
+   ============================================ */
+
+/* Helper text (small text below inputs) */
+.dialog-helper-text {
+  font-size: 0.75rem; /* text-xs */
+  color: rgb(55, 65, 81); /* text-gray-700 */
+  margin-top: 0.25rem; /* mt-1 */
+}
+
+/* ============================================
+   Dialog Footer
+   ============================================ */
+
+/* Dialog Footer */
+.dialog-footer-standard {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem; /* gap-2 */
+  padding-left: 1.5rem; /* px-6 - matches dialog-body-content-wrapper exactly */
+  padding-right: 1.5rem; /* px-6 - matches dialog-body-content-wrapper exactly to align buttons with input fields */
+  padding-top: 0.5rem; /* py-2 */
+  padding-bottom: 0.5rem;
+  border-top: 1px solid rgb(229, 231, 235); /* border-t */
+  background-color: white;
+  flex-shrink: 0;
+  /* Ensure buttons align with the right edge of input fields above */
+  box-sizing: border-box;
+}
+
+/* Footer button */
+.dialog-footer-button {
+  padding-top: 0.25rem; /* py-1 */
+  padding-bottom: 0.25rem;
+}
+
+/* ============================================
+   Dialog Layout Utilities
+   ============================================ */
+
+/* Full width field (spans both columns in grid) */
+.dialog-field-full-width {
+  grid-column: span 2 / span 2;
+}
+
+/* Single column field in grid */
+.dialog-field-single-column {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================
+   Large Dialog Styling
+   ============================================ */
+
+/* Override dialog for large popup windows */
+[data-slot="dialog-content"].large-dialog {
+  width: 55vw !important;
+  max-width: 550px !important;
+  height: 90vh !important;
+  max-height: 90vh !important;
+  min-width: 350px !important;
+  min-height: 400px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  translate: none !important;
+  margin: 0 !important;
+  border-radius: 0.75rem !important; /* increased from 0.5rem for more curved corners */
+  padding: 0 !important;
+  background-color: white !important;
+  z-index: 9999 !important;
+}
+
+
+@media (width >= 40rem) {
+  [data-slot="dialog-content"].large-dialog {
+    max-width: 550px !important;
+    max-height: 90vh !important;
+    min-width: 350px !important;
+    min-height: 400px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  [data-slot="dialog-content"].large-dialog {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    min-width: 95vw !important;
+  }
+}
+
+/* ============================================
+   Dialog Scrollbar Styling
+   ============================================ */
+
+/* Custom scrollbar styling for dialog content - always visible */
+.dialog-content-scrollable {
+  scrollbar-width: auto !important;
+  scrollbar-color: #888 #f1f1f1 !important;
+  scroll-behavior: smooth !important;
+}
+
+.dialog-content-scrollable::-webkit-scrollbar {
+  width: 16px !important;
+  display: block !important;
+  -webkit-appearance: none !important;
+}
+
+.dialog-content-scrollable::-webkit-scrollbar-track {
+  background: #e5e5e5 !important;
+  border-radius: 8px !important;
+  border: 1px solid #d0d0d0 !important;
+}
+
+.dialog-content-scrollable::-webkit-scrollbar-thumb {
+  background: #888 !important;
+  border-radius: 8px !important;
+  border: 2px solid #e5e5e5 !important;
+  min-height: 30px !important;
+  transition: background 0.2s ease !important;
+}
+
+.dialog-content-scrollable::-webkit-scrollbar-thumb:hover {
+  background: #666 !important;
+}
+
+.dialog-content-scrollable::-webkit-scrollbar-thumb:active {
+  background: #444 !important;
+}
+
+.dialog-content-scrollable::-webkit-scrollbar-corner {
+  background: #e5e5e5 !important;
+}
+
+/* ============================================
+   Switch Toggle Styling
+   ============================================ */
+
+/* Ensure switch thumb is visible and moves correctly */
+[data-slot="switch-thumb"] {
+  background-color: white !important;
+  border: 1px solid rgb(156, 163, 175) !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+  width: 1rem !important;
+  height: 1rem !important;
+  min-width: 1rem !important;
+  min-height: 1rem !important;
+}
+
+/* Ensure switch thumb translates correctly */
+[data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
+  transform: translateX(calc(2.5rem - 1rem - 2px)) !important;
+  transition: transform 0.2s ease-in-out !important;
+}
+
+[data-slot="switch"][data-state="unchecked"] [data-slot="switch-thumb"] {
+  transform: translateX(2px) !important;
+  transition: transform 0.2s ease-in-out !important;
+}
+
+/* ============================================
+   Dialog Dropdown/Search Results Styling
+   ============================================ */
+
+/* Dropdown container */
+.dialog-dropdown-container {
+  border: 1px solid rgb(229, 231, 235); /* border-gray-200 */
+  border-radius: 0.375rem; /* rounded-md */
+  max-height: 15rem; /* max-h-60 */
+  overflow-y: auto;
+}
+
+/* Dropdown table row - base styles */
+.dialog-dropdown-row {
+  border-bottom: 1px solid rgb(243, 244, 246); /* border-b border-gray-100 */
+  cursor: pointer;
+}
+
+/* Dropdown row hover state */
+.dialog-dropdown-row:hover {
+  background-color: rgb(249, 250, 251); /* hover:bg-gray-50 */
+}
+
+/* Dropdown row - selected state */
+.dialog-dropdown-row-selected {
+  background-color: rgb(243, 244, 246); /* bg-gray-100 */
+}
+
+/* Dropdown row - highlighted state (keyboard navigation) */
+.dialog-dropdown-row-highlighted {
+  background-color: rgb(239, 246, 255); /* bg-blue-50 */
+}
+
+/* Dropdown row - both highlighted and selected */
+.dialog-dropdown-row-highlighted.dialog-dropdown-row-selected {
+  background-color: rgb(239, 246, 255); /* bg-blue-50 takes precedence */
+}
+
+/* ============================================
+   Manage Button Styling
+   ============================================ */
+
+/* Manage button - light grey with dark text */
+.dialog-manage-button {
+  height: 2rem; /* h-8 */
+  padding-left: 0.75rem; /* px-3 */
+  padding-right: 0.75rem;
+  font-size: 0.875rem; /* text-sm */
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* gap-2 */
+  background-color: rgb(243, 244, 246); /* bg-gray-100 */
+  color: rgb(55, 65, 81); /* text-gray-700 */
+  border: 1px solid rgb(209, 213, 219); /* border-gray-300 */
+}
+
+.dialog-manage-button:hover {
+  background-color: rgb(229, 231, 235); /* hover:bg-gray-200 */
+  color: rgb(31, 41, 55); /* hover:text-gray-800 */
+}
+
+/* ============================================
+   Dialog Table Styling (for Lab Tests)
+   ============================================ */
+
+/* Table container */
+.dialog-table-container {
+  overflow-x: auto;
+  background-color: white;
+}
+
+/* Table */
+.dialog-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: white;
+}
+
+/* Table header row */
+.dialog-table-header-row {
+  border-bottom: 1px solid rgb(229, 231, 235); /* border-b border-gray-200 */
+}
+
+/* Table header cell */
+.dialog-table-header-cell {
+  text-align: left;
+  padding-top: 0.75rem; /* py-3 */
+  padding-bottom: 0.75rem;
+  padding-left: 1rem; /* px-4 */
+  padding-right: 1rem;
+  font-size: 0.75rem; /* text-xs */
+  font-weight: 500; /* font-medium */
+  color: rgb(55, 65, 81); /* text-gray-700 */
+}
+
+/* Table body */
+.dialog-table-body {
+  background-color: white;
+}
+
+/* Table body row */
+.dialog-table-body-row {
+  border-bottom: 1px solid rgb(243, 244, 246); /* border-b border-gray-100 */
+  background-color: white;
+}
+
+.dialog-table-body-row:hover {
+  background-color: rgb(249, 250, 251); /* hover:bg-gray-50 */
+}
+
+/* Table body cell */
+.dialog-table-body-cell {
+  padding-top: 0.75rem; /* py-3 */
+  padding-bottom: 0.75rem;
+  padding-left: 1rem; /* px-4 */
+  padding-right: 1rem;
+  font-size: 0.875rem; /* text-sm */
+}
+
+/* Table body cell - primary text */
+.dialog-table-body-cell-primary {
+  color: rgb(17, 24, 39); /* text-gray-900 */
+}
+
+/* Table body cell - secondary text */
+.dialog-table-body-cell-secondary {
+  color: rgb(75, 85, 99); /* text-gray-600 */
+}
+
+/* Table body cell - monospace */
+.dialog-table-body-cell-mono {
+  font-family: ui-monospace, monospace; /* font-mono */
+  color: rgb(75, 85, 99); /* text-gray-600 */
+}

@@ -1,0 +1,2400 @@
+// Front Desk Component - Displays FrontDesk appointment data in PR table format
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Card, CardContent } from './ui/card';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Badge } from './ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from './ui/dialog';
+import { Textarea } from './ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Switch } from './ui/switch';
+import { Search, Eye, Edit, Clock, Stethoscope, CheckCircle2, Hospital, Plus, Users, X } from 'lucide-react';
+import { formatDateToDDMMYYYY, formatDateTimeIST, convertToIST } from '../utils/timeUtils';
+import { usePatientAppointments } from '../hooks/usePatientAppointments';
+import { useStaff } from '../hooks/useStaff';
+import { useRoles } from '../hooks/useRoles';
+import { useDepartments } from '../hooks/useDepartments';
+import { patientsApi } from '../api/patients';
+import { apiRequest } from '../api/base';
+import { Patient, PatientAppointment, Doctor } from '../types';
+import { formatDateIST, getTodayIST } from '../utils/timeUtils';
+
+export function FrontDesk() {
+  const { patientAppointments, loading: appointmentsLoading, error: appointmentsError, fetchPatientAppointments, createPatientAppointment, updatePatientAppointment, deletePatientAppointment } = usePatientAppointments();
+  const { staff, fetchStaff } = useStaff();
+  const { roles, fetchRoles } = useRoles();
+  const { departments, fetchDepartments } = useDepartments();
+  
+  // Fetch data on mount - always from network
+  useEffect(() => {
+    fetchStaff();
+    fetchRoles();
+    fetchDepartments();
+  }, [fetchStaff, fetchRoles, fetchDepartments]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<PatientAppointment | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    patientId: '',
+    doctorId: '',
+    appointmentDate: '',
+    appointmentTime: '',
+    appointmentStatus: 'Waiting' as PatientAppointment['appointmentStatus'],
+    consultationCharge: 0,
+    followUpDetails: '',
+    status: false,
+  });
+  const [addFormData, setAddFormData] = useState({
+    patientId: '',
+    doctorId: '',
+    appointmentDate: '',
+    appointmentTime: '',
+    appointmentStatus: 'Waiting' as PatientAppointment['appointmentStatus'],
+    consultationCharge: 0,
+    status: true, // Always active when creating
+  });
+  const [patientSearchTerm, setPatientSearchTerm] = useState('');
+  const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
+  const [patientError, setPatientError] = useState('');
+  const [doctorError, setDoctorError] = useState('');
+  const [editPatientSearchTerm, setEditPatientSearchTerm] = useState('');
+  const [editDoctorSearchTerm, setEditDoctorSearchTerm] = useState('');
+  const [editPatientError, setEditPatientError] = useState('');
+  const [editDoctorError, setEditDoctorError] = useState('');
+  
+  // Keyboard navigation indices for dropdowns
+  const [patientHighlightIndex, setPatientHighlightIndex] = useState(-1);
+  const [doctorHighlightIndex, setDoctorHighlightIndex] = useState(-1);
+  const [editPatientHighlightIndex, setEditPatientHighlightIndex] = useState(-1);
+  const [editDoctorHighlightIndex, setEditDoctorHighlightIndex] = useState(-1);
+  
+  // Lab Tests state
+  const [patientLabTests, setPatientLabTests] = useState<any[]>([]);
+  const [labTestsLoading, setLabTestsLoading] = useState(false);
+  const [labTestsError, setLabTestsError] = useState<string | null>(null);
+  const [isAddLabTestDialogOpen, setIsAddLabTestDialogOpen] = useState(false);
+  const [labTestFormData, setLabTestFormData] = useState({
+    labTestId: '',
+    priority: 'Normal' as 'Normal' | 'Urgent' | null,
+    labTestDone: 'No' as 'Yes' | 'No',
+    testStatus: 'Pending' as 'Pending' | 'InProgress' | 'Completed' | null,
+  });
+  const [availableLabTests, setAvailableLabTests] = useState<any[]>([]);
+  const [labTestSearchTerm, setLabTestSearchTerm] = useState('');
+  const [showLabTestList, setShowLabTestList] = useState(false);
+  
+  // Manage Lab Test state
+  const [selectedLabTest, setSelectedLabTest] = useState<any>(null);
+  const [isManageLabTestDialogOpen, setIsManageLabTestDialogOpen] = useState(false);
+  const [manageLabTestFormData, setManageLabTestFormData] = useState<any>(null);
+  
+  // Formatted display values for date and time
+  const [addDateDisplay, setAddDateDisplay] = useState('');
+  const [addTimeDisplay, setAddTimeDisplay] = useState('');
+  const [editDateDisplay, setEditDateDisplay] = useState('');
+  const [editTimeDisplay, setEditTimeDisplay] = useState('');
+  const addTimeInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper functions for date formatting (dd-mm-yyyy) in IST
+  const formatDateToDisplay = (dateStr: string): string => {
+    if (!dateStr) return '';
+    try {
+      // Use IST utilities to get date in IST timezone
+      const istDate = formatDateIST(dateStr);
+      if (!istDate) return '';
+      
+      // Parse the YYYY-MM-DD format and convert to dd-mm-yyyy
+      const [year, month, day] = istDate.split('-');
+      return `${day}-${month}-${year}`;
+    } catch {
+      return '';
+    }
+  };
+
+  const parseDateFromDisplay = (displayStr: string): string => {
+    if (!displayStr) return '';
+    // Remove any non-digit characters except dashes
+    const cleaned = displayStr.replace(/[^\d-]/g, '');
+    // Match dd-mm-yyyy or dd-mm-yy format
+    const match = cleaned.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/);
+    if (!match) return '';
+    
+    let day = parseInt(match[1], 10);
+    let month = parseInt(match[2], 10);
+    let year = parseInt(match[3], 10);
+    
+    // Handle 2-digit year (for backward compatibility)
+    if (year < 100) {
+      year += 2000;
+    }
+    
+    if (day < 1 || day > 31 || month < 1 || month > 12) return '';
+    
+    try {
+      // Create date in IST timezone (Asia/Kolkata)
+      // Use UTC methods with IST offset
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      // Validate the date
+      const date = new Date(`${dateStr}T00:00:00+05:30`); // IST offset
+      if (date.getDate() !== day || date.getMonth() !== month - 1) return '';
+      return dateStr; // Return YYYY-MM-DD format
+    } catch {
+      return '';
+    }
+  };
+
+  // Helper functions for time formatting (hh:mm AM/PM) in IST
+  const formatTimeToDisplay = (timeStr: string): string => {
+    if (!timeStr) return '';
+    try {
+      const [hours, minutes] = timeStr.split(':');
+      if (!hours || !minutes) return '';
+      const h = parseInt(hours, 10);
+      const m = parseInt(minutes, 10);
+      if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) return '';
+      
+      // Time is already in IST (HH:mm format from backend)
+      const period = h >= 12 ? 'PM' : 'AM';
+      const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      return `${String(displayHour).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
+    } catch {
+      return '';
+    }
+  };
+
+  const parseTimeFromDisplay = (displayStr: string): string => {
+    if (!displayStr) return '';
+    // Remove spaces and convert to uppercase
+    const cleaned = displayStr.trim().toUpperCase();
+    
+    // Match hh:mm AM/PM or hh:mmAM/PM
+    const match = cleaned.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i) || cleaned.match(/^(\d{1,2}):(\d{2})(AM|PM)$/i);
+    if (!match) {
+      // Try to parse partial input (e.g., "9" or "9:30")
+      const partialMatch = cleaned.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+      if (partialMatch) {
+        let hour = parseInt(partialMatch[1], 10);
+        const minute = partialMatch[2] ? parseInt(partialMatch[2], 10) : 0;
+        const period = partialMatch[3]?.toUpperCase() || '';
+        
+        if (isNaN(hour) || hour < 1 || hour > 12) return '';
+        if (minute < 0 || minute > 59) return '';
+        
+        if (period === 'PM' && hour !== 12) hour += 12;
+        if (period === 'AM' && hour === 12) hour = 0;
+        
+        return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+      }
+      return '';
+    }
+    
+    let hour = parseInt(match[1], 10);
+    const minute = parseInt(match[2], 10);
+    const period = match[3].toUpperCase();
+    
+    if (isNaN(hour) || hour < 1 || hour > 12) return '';
+    if (isNaN(minute) || minute < 0 || minute > 59) return '';
+    
+    if (period === 'PM' && hour !== 12) hour += 12;
+    if (period === 'AM' && hour === 12) hour = 0;
+    
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  };
+
+  // Filter to show only doctors and surgeons from staff
+  const appointmentDoctors = useMemo(() => {
+    if (!staff || !roles || !departments) return [];
+    
+    return staff
+      .filter((member) => {
+        if (!member.RoleId) return false;
+        const role = roles.find(r => r.id === member.RoleId);
+        if (!role || !role.name) return false;
+        const roleNameLower = role.name.toLowerCase();
+        return roleNameLower.includes('doctor') || roleNameLower.includes('surgeon');
+      })
+      .map((member) => {
+        const department = member.DoctorDepartmentId 
+          ? departments.find(d => 
+              d.id.toString() === member.DoctorDepartmentId || 
+              d.id === Number(member.DoctorDepartmentId)
+            )
+          : null;
+        
+        return {
+          id: member.UserId || 0,
+          name: member.UserName || 'Unknown',
+          specialty: department?.name || 'General',
+          type: member.DoctorType === 'INHOUSE' ? 'inhouse' as const : 'consulting' as const,
+        } as Doctor;
+      });
+  }, [staff, roles, departments]);
+
+  // Sync display values with form data
+  useEffect(() => {
+    if (addFormData.appointmentDate) {
+      setAddDateDisplay(formatDateToDisplay(addFormData.appointmentDate));
+    } else {
+      setAddDateDisplay('');
+    }
+  }, [addFormData.appointmentDate]);
+
+  useEffect(() => {
+    if (addFormData.appointmentTime) {
+      setAddTimeDisplay(formatTimeToDisplay(addFormData.appointmentTime));
+    } else {
+      setAddTimeDisplay('');
+    }
+  }, [addFormData.appointmentTime]);
+
+  useEffect(() => {
+    if (editFormData.appointmentDate) {
+      setEditDateDisplay(formatDateToDisplay(editFormData.appointmentDate));
+    } else {
+      setEditDateDisplay('');
+    }
+  }, [editFormData.appointmentDate]);
+
+  useEffect(() => {
+    if (editFormData.appointmentTime) {
+      setEditTimeDisplay(formatTimeToDisplay(editFormData.appointmentTime));
+    } else {
+      setEditTimeDisplay('');
+    }
+  }, [editFormData.appointmentTime]);
+  
+  // Scroll highlighted items into view
+  useEffect(() => {
+    if (patientHighlightIndex >= 0) {
+      const element = document.querySelector(`#add-patient-dropdown tbody tr:nth-child(${patientHighlightIndex + 1})`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [patientHighlightIndex]);
+  
+  useEffect(() => {
+    if (doctorHighlightIndex >= 0) {
+      const element = document.querySelector(`#add-doctor-dropdown tbody tr:nth-child(${doctorHighlightIndex + 1})`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [doctorHighlightIndex]);
+  
+  useEffect(() => {
+    if (editPatientHighlightIndex >= 0) {
+      const element = document.querySelector(`#edit-patient-dropdown tbody tr:nth-child(${editPatientHighlightIndex + 1})`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [editPatientHighlightIndex]);
+  
+  useEffect(() => {
+    if (editDoctorHighlightIndex >= 0) {
+      const element = document.querySelector(`#edit-doctor-dropdown tbody tr:nth-child(${editDoctorHighlightIndex + 1})`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [editDoctorHighlightIndex]);
+
+  // Helper function to extract field with multiple variations
+  const extractField = (data: any, fieldVariations: string[], defaultValue: any = '') => {
+    for (const field of fieldVariations) {
+      // Handle nested fields (e.g., 'Patient.PatientNo')
+      if (field.includes('.')) {
+        const parts = field.split('.');
+        let value = data;
+        for (const part of parts) {
+          value = value?.[part];
+          if (value === undefined || value === null) break;
+        }
+        if (value !== undefined && value !== null && value !== '') {
+          return value;
+        }
+      } else {
+        const value = data?.[field];
+        if (value !== undefined && value !== null && value !== '') {
+          return value;
+        }
+      }
+    }
+    return defaultValue;
+  };
+
+  // Helper function to format datetime to dd-mm-yyyy, hh:mm format in IST
+  const formatDateTimeForInput = (dateTime: string | Date | undefined): string => {
+    if (!dateTime) return '';
+    try {
+      // Use convertToIST to properly convert to IST
+      const istDate = convertToIST(dateTime);
+      
+      // Get date components in IST
+      const day = String(istDate.getUTCDate()).padStart(2, '0');
+      const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+      const year = String(istDate.getUTCFullYear());
+      const hours = String(istDate.getUTCHours()).padStart(2, '0');
+      const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+      
+      return `${day}-${month}-${year}, ${hours}:${minutes}`;
+    } catch {
+      return '';
+    }
+  };
+
+  // Helper function to parse datetime from dd-mm-yyyy, hh:mm format (assumed to be in IST)
+  const parseDateTimeFromInput = (inputStr: string): string => {
+    if (!inputStr) return '';
+    try {
+      // Match dd-mm-yyyy, hh:mm format
+      const match = inputStr.match(/^(\d{1,2})-(\d{1,2})-(\d{4}),\s*(\d{1,2}):(\d{2})$/);
+      if (!match) return '';
+      
+      const day = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10);
+      const year = parseInt(match[3], 10);
+      const hours = parseInt(match[4], 10);
+      const minutes = parseInt(match[5], 10);
+      
+      if (day < 1 || day > 31 || month < 1 || month > 12) return '';
+      if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return '';
+      
+      // Create date string in IST timezone (UTC+5:30)
+      // Format: YYYY-MM-DDTHH:mm:ss+05:30
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00+05:30`;
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return '';
+      
+      // Return in ISO format (UTC) for API
+      // The date object will automatically convert from IST to UTC
+      return date.toISOString();
+    } catch {
+      return '';
+    }
+  };
+
+  // Fetch lab tests for appointment
+  const fetchPatientLabTests = async (appointmentId: number) => {
+    if (!appointmentId) return;
+    try {
+      setLabTestsLoading(true);
+      setLabTestsError(null);
+      const response = await apiRequest<any>(`/patient-lab-tests/with-details?appointmentId=${appointmentId}`);
+      
+      console.log('FrontDesk - Lab Tests API Response:', JSON.stringify(response, null, 2));
+      
+      // Handle response structure
+      let labTestsData: any[] = [];
+      if (Array.isArray(response)) {
+        labTestsData = response;
+      } else if (response?.data && Array.isArray(response.data)) {
+        labTestsData = response.data;
+      } else if (response?.data?.data && Array.isArray(response.data.data)) {
+        labTestsData = response.data.data;
+      }
+      
+      console.log('FrontDesk - Extracted Lab Tests Data:', JSON.stringify(labTestsData, null, 2));
+      if (labTestsData.length > 0) {
+        console.log('FrontDesk - First Lab Test Object Keys:', Object.keys(labTestsData[0]));
+        console.log('FrontDesk - First Lab Test Sample:', labTestsData[0]);
+      }
+      
+      setPatientLabTests(labTestsData || []);
+    } catch (err) {
+      setLabTestsError(err instanceof Error ? err.message : 'Failed to fetch lab tests');
+      setPatientLabTests([]);
+    } finally {
+      setLabTestsLoading(false);
+    }
+  };
+
+  // Fetch available lab tests for dropdown
+  const fetchAvailableLabTests = async () => {
+    try {
+      const response = await apiRequest<any>('/lab-tests');
+      const labTestsData = response?.data || response || [];
+      
+      // Normalize the data to ensure TestName is properly extracted
+      const normalizedLabTests = Array.isArray(labTestsData) ? labTestsData.map((test: any) => {
+        return {
+          ...test,
+          // Ensure TestName is extracted from various possible field names
+          TestName: test.TestName || test.testName || test.name || test.Name || '',
+          testName: test.TestName || test.testName || test.name || test.Name || '',
+          // Ensure other fields are also normalized
+          LabTestsId: test.LabTestsId || test.labTestsId || test.LabTestId || test.labTestId || test.id || 0,
+          TestCategory: test.TestCategory || test.testCategory || test.category || test.Category || '',
+        };
+      }) : [];
+      
+      setAvailableLabTests(normalizedLabTests);
+    } catch (err) {
+      console.error('Failed to fetch available lab tests:', err);
+      setAvailableLabTests([]);
+    }
+  };
+
+  // Fetch lab tests when appointment is selected
+  useEffect(() => {
+    if (selectedAppointment?.id) {
+      fetchPatientLabTests(selectedAppointment.id);
+      fetchAvailableLabTests();
+    }
+  }, [selectedAppointment?.id]);
+
+  // Close lab test dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showLabTestList && !target.closest('.dialog-dropdown-container') && !target.closest('#add-labtest-labTestId')) {
+        setShowLabTestList(false);
+      }
+    };
+    if (showLabTestList) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showLabTestList]);
+
+  // Fetch patients
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const response = await patientsApi.getAll(1, 1000);
+        // patientsApi.getAll returns PaginatedResponse<Patient> with a 'data' property
+        const patientsList = response.data || [];
+        setPatients(patientsList);
+      } catch (err) {
+        console.error('Failed to fetch patients:', err);
+        setPatients([]);
+      }
+    };
+    fetchPatients();
+    fetchPatientAppointments().catch((err) => {
+      console.error('Error fetching appointments:', err);
+    });
+  }, [fetchPatientAppointments]);
+
+  // Separate active and inactive appointments, and filter based on search term
+  const { activeAppointments, inactiveAppointments, filteredActiveAppointments } = useMemo(() => {
+    if (!patientAppointments || patientAppointments.length === 0) {
+      return { activeAppointments: [], inactiveAppointments: [], filteredActiveAppointments: [] };
+    }
+    
+    // Separate active and inactive appointments
+    const active: PatientAppointment[] = [];
+    const inactive: PatientAppointment[] = [];
+    
+    patientAppointments.forEach(appointment => {
+      const statusValue = (appointment as any).Status || (appointment as any).status;
+      const isActive = typeof statusValue === 'string' 
+        ? statusValue === 'Active' 
+        : (statusValue === true || statusValue === 'true');
+      
+      if (isActive) {
+        active.push(appointment);
+      } else {
+        inactive.push(appointment);
+      }
+    });
+    
+    // Filter active appointments by search term (exclude inactive from search)
+    let filtered: PatientAppointment[] = [];
+    if (!searchTerm) {
+      filtered = active;
+    } else {
+      filtered = active.filter(appointment => {
+        const patient = patients.find(p => 
+          (p as any).patientId === appointment.patientId || 
+          (p as any).PatientId === appointment.patientId
+        );
+        const patientName = patient 
+          ? `${(patient as any).patientName || (patient as any).PatientName || ''} ${(patient as any).lastName || (patient as any).LastName || ''}`.trim() 
+          : appointment.patientId === '00000000-0000-0000-0000-000000000001' 
+            ? 'Dummy Patient Name' 
+            : appointment.patientId;
+        const doctor = appointmentDoctors.find(d => d.id.toString() === appointment.doctorId);
+        const doctorName = doctor ? doctor.name : appointment.doctorId;
+        const patientPhone = patient 
+          ? (patient as any).PhoneNo || (patient as any).phoneNo || (patient as any).phone || ''
+          : '';
+        const patientId = patient 
+          ? (patient as any).PatientNo || (patient as any).patientNo || appointment.patientId.substring(0, 8)
+          : appointment.patientId.substring(0, 8);
+        
+        const searchLower = searchTerm.toLowerCase();
+        return (
+          appointment.tokenNo?.toLowerCase().includes(searchLower) ||
+          patientName.toLowerCase().includes(searchLower) ||
+          doctorName.toLowerCase().includes(searchLower) ||
+          patientPhone.includes(searchTerm) ||
+          patientId.toLowerCase().includes(searchLower) ||
+          appointment.patientId.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+    
+    return { activeAppointments: active, inactiveAppointments: inactive, filteredActiveAppointments: filtered };
+  }, [patientAppointments, searchTerm, patients, appointmentDoctors]);
+
+  // For backward compatibility, use filteredActiveAppointments
+  const filteredAppointments = filteredActiveAppointments;
+
+  const getAppointmentsByStatus = (status: PatientAppointment['appointmentStatus']) => {
+    return filteredAppointments.filter(a => a.appointmentStatus === status);
+  };
+
+  const getStatusBadge = (status: PatientAppointment['appointmentStatus']) => {
+    switch (status) {
+      case 'Waiting':
+        return <span className="px-3 py-1 rounded-full text-xs bg-yellow-100 text-yellow-700">Waiting</span>;
+      case 'Consulting':
+        return <span className="px-3 py-1 rounded-full text-xs bg-blue-100 text-blue-700">Consulting</span>;
+      case 'Completed':
+        return <span className="px-3 py-1 rounded-full text-xs bg-green-100 text-green-700">Completed</span>;
+      default:
+        return <span className="px-3 py-1 rounded-full text-xs bg-red-100 text-red-700">{status}</span>;
+    }
+  };
+
+  const handleViewAppointment = (appointment: PatientAppointment) => {
+    setSelectedAppointment(appointment);
+    setIsViewDialogOpen(true);
+  };
+
+  const handleEditAppointment = (appointment: PatientAppointment) => {
+    setSelectedAppointment(appointment);
+    // Get status from appointment - it could be a string "Active"/"Inactive" or boolean
+    const statusValue = (appointment as any).Status || (appointment as any).status;
+    // Convert string status to boolean: "Active" -> true, "Inactive" or anything else -> false
+    const statusBoolean = typeof statusValue === 'string' 
+      ? statusValue === 'Active' 
+      : (statusValue === true || statusValue === 'true');
+    
+    setEditFormData({
+      patientId: appointment.patientId,
+      doctorId: appointment.doctorId,
+      appointmentDate: appointment.appointmentDate,
+      appointmentTime: appointment.appointmentTime,
+      appointmentStatus: appointment.appointmentStatus,
+      consultationCharge: appointment.consultationCharge,
+      followUpDetails: appointment.followUpDetails || '',
+      status: statusBoolean,
+    });
+    
+    // Set search terms for patient and doctor
+    const patient = patients.find(p => {
+      const pid = (p as any).patientId || (p as any).PatientId || '';
+      return pid === appointment.patientId;
+    });
+    if (patient) {
+      const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+      const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+      const lastName = (patient as any).lastName || (patient as any).LastName || '';
+      const fullName = `${patientName} ${lastName}`.trim();
+      setEditPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+    } else {
+      setEditPatientSearchTerm('');
+    }
+    
+    const doctor = appointmentDoctors.find(d => d.id.toString() === appointment.doctorId);
+    if (doctor) {
+      setEditDoctorSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+    } else {
+      setEditDoctorSearchTerm('');
+    }
+    
+    setEditPatientError('');
+    setEditDoctorError('');
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDeleteAppointment = async (appointment: PatientAppointment) => {
+    if (confirm('Are you sure you want to delete this appointment? This action cannot be undone.')) {
+      try {
+        await deletePatientAppointment(appointment.id);
+        await fetchPatientAppointments();
+      } catch (err) {
+        console.error('Failed to delete appointment:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Failed to delete appointment';
+        alert(errorMessage);
+      }
+    }
+  };
+
+  // Helper function to render appointment row
+  const renderAppointmentRow = (appointment: PatientAppointment, isInactive: boolean = false) => {
+    const patient = patients.find(p => 
+      (p as any).patientId === appointment.patientId || 
+      (p as any).PatientId === appointment.patientId
+    );
+    const doctor = appointmentDoctors.find(d => d.id.toString() === appointment.doctorId);
+    const patientName = patient 
+      ? `${(patient as any).patientName || (patient as any).PatientName || ''} ${(patient as any).lastName || (patient as any).LastName || ''}`.trim() 
+      : appointment.patientId === '00000000-0000-0000-0000-000000000001' 
+        ? 'Dummy Patient Name' 
+        : appointment.patientId;
+    const doctorName = doctor ? doctor.name : appointment.doctorId;
+    const patientPhone = patient 
+      ? (patient as any).PhoneNo || (patient as any).phoneNo || (patient as any).phone || '-'
+      : '-';
+    const patientId = patient 
+      ? (patient as any).PatientNo || (patient as any).patientNo || appointment.patientId.substring(0, 8)
+      : appointment.patientId.substring(0, 8);
+    
+    return (
+      <tr 
+        key={appointment.id} 
+        className={`border-b border-gray-100 hover:bg-gray-50 ${isInactive ? 'opacity-50 bg-gray-50' : ''}`}
+      >
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : ''}`}>
+          <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded">
+            {appointment.tokenNo}
+          </span>
+        </td>
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-900'}`}>
+          {patientName}
+        </td>
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>
+          {patientPhone}
+        </td>
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>
+          {doctorName}
+        </td>
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>
+          {appointment.appointmentTime}
+        </td>
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : ''}`}>
+          {getStatusBadge(appointment.appointmentStatus)}
+        </td>
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : ''}`}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleEditAppointment(appointment)}
+            title="Manage Appointment"
+          >
+            Manage
+          </Button>
+        </td>
+      </tr>
+    );
+  };
+
+  // Helper function to render appointments table
+  const renderAppointmentsTable = (appointments: PatientAppointment[]) => {
+    // Show inactive appointments at the end only when not searching
+    const showInactive = !searchTerm && inactiveAppointments.length > 0;
+    const allAppointments = showInactive 
+      ? [...appointments, ...inactiveAppointments]
+      : appointments;
+    
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-gray-700">Token #</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Patient Name</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Phone</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Doctor</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Time</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Status</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allAppointments.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-12 text-gray-500">
+                      {searchTerm ? 'No appointments found matching your search.' : 'No appointments found.'}
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {appointments.map((appointment) => renderAppointmentRow(appointment, false))}
+                    {showInactive && (
+                      <>
+                        {inactiveAppointments.map((appointment) => renderAppointmentRow(appointment, true))}
+                      </>
+                    )}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  if (appointmentsLoading) {
+    return (
+      <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
+        <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
+          <div className="px-6 pt-6 pb-0 flex-shrink-0">
+            <div className="text-center py-12 text-gray-600">Loading appointments...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (appointmentsError) {
+    return (
+      <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
+        <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
+          <div className="px-6 pt-6 pb-0 flex-shrink-0">
+            <div className="text-center py-12 text-red-600">Error: {appointmentsError}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
+      <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
+        <div className="px-6 pt-6 pb-0 flex-shrink-0">
+          <div className="flex items-center justify-between mb-4 flex-shrink-0">
+            <div>
+              <h1 className="text-gray-900 mb-2">Front Desk - Patient Appointments</h1>
+              <p className="text-gray-500">Generate and manage patient appointments for doctor consultation</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <Plus className="size-4" />
+                Add Appointment
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Patient Appointment</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                  <div>
+                    <Label htmlFor="add-patient-search">Patient *</Label>
+                    <div className="relative mb-2">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                      <Input
+                        id="add-patient-search"
+                        name="add-patient-search"
+                        autoComplete="off"
+                        placeholder="Search by Patient ID, Name, or Mobile Number..."
+                        value={patientSearchTerm}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setPatientSearchTerm(newValue);
+                          setPatientHighlightIndex(-1);
+                          // Clear patient selection if user edits the search term
+                          if (addFormData.patientId) {
+                            setAddFormData({ ...addFormData, patientId: '' });
+                          }
+                          // Clear error when user starts typing
+                          if (patientError) {
+                            setPatientError('');
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          const filteredPatients = patients.filter(patient => {
+                            if (!patientSearchTerm) return false;
+                            const searchLower = patientSearchTerm.toLowerCase();
+                            const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                            const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                            const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                            const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                            const fullName = `${patientName} ${lastName}`.trim();
+                            const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                            return (
+                              patientId.toLowerCase().includes(searchLower) ||
+                              patientNo.toLowerCase().includes(searchLower) ||
+                              fullName.toLowerCase().includes(searchLower) ||
+                              phoneNo.includes(patientSearchTerm)
+                            );
+                          });
+                          
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setPatientHighlightIndex(prev => 
+                              prev < filteredPatients.length - 1 ? prev + 1 : prev
+                            );
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setPatientHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                          } else if (e.key === 'Enter' && patientHighlightIndex >= 0 && filteredPatients[patientHighlightIndex]) {
+                            e.preventDefault();
+                            const patient = filteredPatients[patientHighlightIndex];
+                            const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                            const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                            const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                            const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                            const fullName = `${patientName} ${lastName}`.trim();
+                            setAddFormData({ ...addFormData, patientId });
+                            setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                            setPatientError('');
+                            setPatientHighlightIndex(-1);
+                          }
+                        }}
+                        className={`pl-10 ${patientError ? 'border-red-500' : ''}`}
+                      />
+                    </div>
+                    {patientError && (
+                      <p className="text-sm text-red-600 mt-1">{patientError}</p>
+                    )}
+                    {patientSearchTerm && (() => {
+                      const filteredPatients = patients.filter(patient => {
+                        if (!patientSearchTerm) return false;
+                        const searchLower = patientSearchTerm.toLowerCase();
+                        const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                        const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                        const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                        const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                        const fullName = `${patientName} ${lastName}`.trim();
+                        const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                        return (
+                          patientId.toLowerCase().includes(searchLower) ||
+                          patientNo.toLowerCase().includes(searchLower) ||
+                          fullName.toLowerCase().includes(searchLower) ||
+                          phoneNo.includes(patientSearchTerm)
+                        );
+                      });
+                      
+                      return filteredPatients.length > 0 ? (
+                        <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto" id="add-patient-dropdown">
+                          <table className="w-full">
+                            <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Patient ID</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Mobile</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredPatients.map((patient, index) => {
+                                const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                const fullName = `${patientName} ${lastName}`.trim();
+                                const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                const isSelected = addFormData.patientId === patientId;
+                                const isHighlighted = patientHighlightIndex === index;
+                                return (
+                                  <tr
+                                    key={patientId}
+                                    onClick={() => {
+                                      setAddFormData({ ...addFormData, patientId });
+                                      setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                                      setPatientError('');
+                                      setPatientHighlightIndex(-1);
+                                    }}
+                                    onMouseDown={(e) => {
+                                      // Prevent input from losing focus when clicking on dropdown
+                                      e.preventDefault();
+                                    }}
+                                    className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                  >
+                                    <td className="py-2 px-3 text-sm text-gray-900 font-mono">{patientNo || patientId.substring(0, 8)}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{fullName || 'Unknown'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{phoneNo || '-'}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                  <div>
+                    <Label htmlFor="add-doctor-search">Doctor *</Label>
+                    <div className="relative mb-2">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                      <Input
+                        id="add-doctor-search"
+                        name="add-doctor-search"
+                        autoComplete="off"
+                        placeholder="Search by Doctor Name or Specialty..."
+                        value={doctorSearchTerm}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setDoctorSearchTerm(newValue);
+                          setDoctorHighlightIndex(-1);
+                          // Clear doctor selection if user edits the search term
+                          if (addFormData.doctorId) {
+                            setAddFormData({ ...addFormData, doctorId: '' });
+                          }
+                          // Clear error when user starts typing
+                          if (doctorError) {
+                            setDoctorError('');
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          const filteredDoctors = appointmentDoctors.filter(doctor => {
+                            if (!doctorSearchTerm) return false;
+                            const searchLower = doctorSearchTerm.toLowerCase();
+                            return (
+                              doctor.name.toLowerCase().includes(searchLower) ||
+                              doctor.specialty.toLowerCase().includes(searchLower)
+                            );
+                          });
+                          
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setDoctorHighlightIndex(prev => 
+                              prev < filteredDoctors.length - 1 ? prev + 1 : prev
+                            );
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setDoctorHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                          } else if (e.key === 'Enter' && doctorHighlightIndex >= 0 && filteredDoctors[doctorHighlightIndex]) {
+                            e.preventDefault();
+                            const doctor = filteredDoctors[doctorHighlightIndex];
+                            setAddFormData({ ...addFormData, doctorId: doctor.id.toString() });
+                            setDoctorSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                            setDoctorError('');
+                            setDoctorHighlightIndex(-1);
+                          }
+                        }}
+                        className={`pl-10 ${doctorError ? 'border-red-500' : ''}`}
+                      />
+                    </div>
+                    {doctorError && (
+                      <p className="text-sm text-red-600 mt-1">{doctorError}</p>
+                    )}
+                    {doctorSearchTerm && (() => {
+                      const filteredDoctors = appointmentDoctors.filter(doctor => {
+                        if (!doctorSearchTerm) return false;
+                        const searchLower = doctorSearchTerm.toLowerCase();
+                        return (
+                          doctor.name.toLowerCase().includes(searchLower) ||
+                          doctor.specialty.toLowerCase().includes(searchLower)
+                        );
+                      });
+                      
+                        return filteredDoctors.length > 0 ? (
+                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto" id="add-doctor-dropdown">
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Specialty</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Type</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredDoctors.map((doctor, index) => {
+                                  const isSelected = addFormData.doctorId === doctor.id.toString();
+                                  const isHighlighted = doctorHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={doctor.id}
+                                      onClick={() => {
+                                        setAddFormData({ ...addFormData, doctorId: doctor.id.toString() });
+                                        setDoctorSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                                        setDoctorError('');
+                                        setDoctorHighlightIndex(-1);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        // Prevent input from losing focus when clicking on dropdown
+                                        e.preventDefault();
+                                      }}
+                                      className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                    <td className="py-2 px-3 text-sm text-gray-900">{doctor.name}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{doctor.specialty}</td>
+                                    <td className="py-2 px-3 text-sm">
+                                      <span className={`px-2 py-0.5 rounded text-xs ${
+                                        doctor.type === 'inhouse' 
+                                          ? 'bg-gray-100 text-gray-700' 
+                                          : 'bg-purple-100 text-purple-700'
+                                      }`}>
+                                        {doctor.type === 'inhouse' ? 'Inhouse' : 'Consulting'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                  <div>
+                    <Label htmlFor="add-appointmentDate">Appointment Date *</Label>
+                      <Input
+                        id="add-appointmentDate"
+                        type="text"
+                        placeholder="dd-mm-yyyy"
+                        value={addDateDisplay}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setAddDateDisplay(value);
+                          const parsed = parseDateFromDisplay(value);
+                          if (parsed) {
+                            setAddFormData({ ...addFormData, appointmentDate: parsed });
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const parsed = parseDateFromDisplay(e.target.value);
+                          if (parsed) {
+                            setAddDateDisplay(formatDateToDisplay(parsed));
+                            setAddFormData({ ...addFormData, appointmentDate: parsed });
+                          } else if (e.target.value) {
+                            setAddDateDisplay('');
+                          }
+                        }}
+                      />
+                  </div>
+                  <div>
+                    <Label htmlFor="add-appointmentTime">Appointment Time *</Label>
+                      <Input
+                        ref={addTimeInputRef}
+                        id="add-appointmentTime"
+                        type="text"
+                        placeholder="hh:mm AM/PM"
+                        value={addTimeDisplay}
+                        onKeyDown={(e) => {
+                          const input = e.currentTarget;
+                          const currentValue = input.value;
+                          const cursorPos = input.selectionStart || 0;
+                          
+                          // Handle single digit hours (0, 2-9) - auto-advance to minutes
+                          if (e.key >= '0' && e.key <= '9' && cursorPos === 0 && currentValue === '') {
+                            const digit = e.key;
+                            // If digit is 0, 2-9, auto-format to 0X: and move to minutes
+                            if (digit !== '1') {
+                              e.preventDefault();
+                              const newValue = `0${digit}:`;
+                              setAddTimeDisplay(newValue);
+                              setTimeout(() => {
+                                if (addTimeInputRef.current) {
+                                  addTimeInputRef.current.setSelectionRange(3, 3);
+                                }
+                              }, 0);
+                              return;
+                            }
+                            // If digit is 1, let it through (could be 10, 11, 12)
+                          }
+                          
+                          // Handle colon after single digit hour
+                          if (e.key === ':' && cursorPos === 1 && /^[0-9]$/.test(currentValue)) {
+                            e.preventDefault();
+                            const newValue = `0${currentValue}:`;
+                            setAddTimeDisplay(newValue);
+                            setTimeout(() => {
+                              if (addTimeInputRef.current) {
+                                addTimeInputRef.current.setSelectionRange(3, 3);
+                              }
+                            }, 0);
+                            return;
+                          }
+                          
+                          // Handle colon after two-digit hour (10-12)
+                          if (e.key === ':' && cursorPos === 2 && /^1[0-2]$/.test(currentValue)) {
+                            // Let colon through, will be handled in onChange
+                          }
+                        }}
+                        onChange={(e) => {
+                          let value = e.target.value.toUpperCase();
+                          const input = e.target;
+                          const cursorPos = input.selectionStart || 0;
+                          
+                          // Auto-format as user types
+                          value = value.replace(/[^\d:APM\s]/g, '');
+                          
+                          // Handle auto-advance after minutes are complete (hh:mm)
+                          const timeWithMinutesMatch = value.match(/^(\d{1,2}):(\d{2})$/);
+                          if (timeWithMinutesMatch && cursorPos === value.length && value.length === 5) {
+                            const hour = parseInt(timeWithMinutesMatch[1], 10);
+                            const minute = parseInt(timeWithMinutesMatch[2], 10);
+                            if (hour >= 1 && hour <= 12 && minute >= 0 && minute <= 59) {
+                              // Auto-add AM if not specified
+                              value = `${timeWithMinutesMatch[1].padStart(2, '0')}:${timeWithMinutesMatch[2]} AM`;
+                              setAddTimeDisplay(value);
+                              // Move cursor to before AM (to allow changing to PM)
+                              setTimeout(() => {
+                                if (addTimeInputRef.current) {
+                                  const newPos = value.length - 3; // Position before " AM"
+                                  addTimeInputRef.current.setSelectionRange(newPos, newPos);
+                                }
+                              }, 0);
+                              const parsed = parseTimeFromDisplay(value);
+                              if (parsed) {
+                                setAddFormData({ ...addFormData, appointmentTime: parsed });
+                              }
+                              return;
+                            }
+                          }
+                          
+                          setAddTimeDisplay(value);
+                          const parsed = parseTimeFromDisplay(value);
+                          if (parsed) {
+                            setAddFormData({ ...addFormData, appointmentTime: parsed });
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const trimmed = e.target.value.trim();
+                          if (!trimmed) {
+                            setAddTimeDisplay('');
+                            return;
+                          }
+                          
+                          // Try to parse and format
+                          let parsed = parseTimeFromDisplay(trimmed);
+                          
+                          // If parsing fails, try to auto-format single digit hours
+                          if (!parsed) {
+                            const hourMatch = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+                            if (hourMatch) {
+                              let hour = parseInt(hourMatch[1], 10);
+                              const minute = hourMatch[2] ? parseInt(hourMatch[2], 10) : 0;
+                              const period = hourMatch[3]?.toUpperCase() || 'AM';
+                              
+                              if (hour >= 1 && hour <= 12 && minute >= 0 && minute <= 59) {
+                                const formatted = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${period}`;
+                                setAddTimeDisplay(formatted);
+                                parsed = parseTimeFromDisplay(formatted);
+                                if (parsed) {
+                                  setAddFormData({ ...addFormData, appointmentTime: parsed });
+                                }
+                                return;
+                              }
+                            }
+                            setAddTimeDisplay('');
+                            return;
+                          }
+                          
+                          // Format the parsed time
+                          const formatted = formatTimeToDisplay(parsed);
+                          setAddTimeDisplay(formatted);
+                          setAddFormData({ ...addFormData, appointmentTime: parsed });
+                        }}
+                      />
+                  </div>
+                  <div>
+                    <Label htmlFor="add-appointmentStatus">Appointment Status</Label>
+                    <select
+                      id="add-appointmentStatus"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                        value={addFormData.appointmentStatus}
+                        onChange={(e) => setAddFormData({ ...addFormData, appointmentStatus: e.target.value as PatientAppointment['appointmentStatus'] })}
+                      >
+                        <option value="Waiting">Waiting</option>
+                        <option value="Consulting">Consulting</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="add-consultationCharge">Consultation Charge (₹) *</Label>
+                    <Input
+                      id="add-consultationCharge"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g., 500"
+                      value={addFormData.consultationCharge}
+                      onChange={(e) => setAddFormData({ ...addFormData, consultationCharge: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => {
+                    setIsAddDialogOpen(false);
+                    setAddFormData({
+                      patientId: '',
+                      doctorId: '',
+                      appointmentDate: '',
+                      appointmentTime: '',
+                      appointmentStatus: 'Waiting',
+                      consultationCharge: 0,
+                      status: true,
+                    });
+                    setAddDateDisplay('');
+                    setAddTimeDisplay('');
+                    setPatientSearchTerm('');
+                    setDoctorSearchTerm('');
+                    setPatientError('');
+                    setDoctorError('');
+                    setPatientHighlightIndex(-1);
+                    setDoctorHighlightIndex(-1);
+                    }}>Cancel</Button>
+                <Button
+                  onClick={async () => {
+                      // Validate patient is selected from the list
+                      if (!addFormData.patientId) {
+                        setPatientError('Please select a patient from the list.');
+                        return;
+                      }
+                      
+                      // Verify patient exists in the patients list
+                      const selectedPatient = patients.find(p => {
+                        const pid = (p as any).patientId || (p as any).PatientId || '';
+                        return pid === addFormData.patientId;
+                      });
+                      
+                      if (!selectedPatient) {
+                        setPatientError('Please select a valid patient from the list.');
+                        return;
+                      }
+                      
+                      // Validate doctor is selected from the list
+                      if (!addFormData.doctorId) {
+                        setDoctorError('Please select a doctor from the list.');
+                        return;
+                      }
+                      
+                      // Verify doctor exists in the doctors list
+                      const selectedDoctor = appointmentDoctors.find(d => d.id.toString() === addFormData.doctorId);
+                      
+                      if (!selectedDoctor) {
+                        setDoctorError('Please select a valid doctor from the list.');
+                        return;
+                      }
+                      
+                      if (!addFormData.appointmentDate || !addFormData.appointmentTime) {
+                        alert('Please fill in all required fields.');
+                        return;
+                      }
+                      
+                      // Clear any previous errors
+                      setPatientError('');
+                      setDoctorError('');
+                      try {
+                        // selectedDoctor is already validated above
+                        const doctorName = selectedDoctor ? selectedDoctor.name : 'Unknown Doctor';
+                        await createPatientAppointment({
+                          patientId: addFormData.patientId,
+                          doctorId: addFormData.doctorId,
+                          appointmentDate: addFormData.appointmentDate,
+                          appointmentTime: addFormData.appointmentTime,
+                          appointmentStatus: addFormData.appointmentStatus,
+                          consultationCharge: addFormData.consultationCharge,
+                          status: addFormData.status,
+                        } as any, doctorName);
+                        await fetchPatientAppointments();
+                        setIsAddDialogOpen(false);
+                        setAddFormData({
+                          patientId: '',
+                          doctorId: '',
+                          appointmentDate: '',
+                          appointmentTime: '',
+                          appointmentStatus: 'Waiting',
+                          consultationCharge: 0,
+                          status: true,
+                        });
+                        setAddDateDisplay('');
+                        setAddTimeDisplay('');
+                    setPatientSearchTerm('');
+                    setDoctorSearchTerm('');
+                    setPatientError('');
+                    setDoctorError('');
+                    setPatientHighlightIndex(-1);
+                    setDoctorHighlightIndex(-1);
+                        alert('Appointment created successfully!');
+                      } catch (err) {
+                        console.error('Failed to create appointment:', err);
+                        alert('Failed to create appointment. Please try again.');
+                      }
+                    }}
+                >
+                  Create Appointment
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 pt-4 pb-4 flex-1">
+        {/* Quick Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Total Appointments</p>
+                  <h3 className="text-gray-900">{patientAppointments.length}</h3>
+                </div>
+                <Users className="size-8 text-blue-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Waiting</p>
+                  <h3 className="text-gray-900">{getAppointmentsByStatus('Waiting').length}</h3>
+                </div>
+                <div className="size-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                  <span className="text-yellow-700">⏳</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Consulting</p>
+                  <h3 className="text-gray-900">{getAppointmentsByStatus('Consulting').length}</h3>
+                </div>
+                <div className="size-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-700">👨‍⚕️</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Completed</p>
+                  <h3 className="text-gray-900">{getAppointmentsByStatus('Completed').length}</h3>
+                </div>
+                <div className="size-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-green-700">✓</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search */}
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+              <Input
+                placeholder="Search by patient name or token number..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Appointments Table with Tabs */}
+        <Tabs defaultValue="all" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="all">All Appointments ({filteredAppointments.length})</TabsTrigger>
+            <TabsTrigger value="waiting">Waiting ({getAppointmentsByStatus('Waiting').length})</TabsTrigger>
+            <TabsTrigger value="consulting">Consulting ({getAppointmentsByStatus('Consulting').length})</TabsTrigger>
+            <TabsTrigger value="completed">Completed ({getAppointmentsByStatus('Completed').length})</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="all">
+            {renderAppointmentsTable(filteredAppointments)}
+          </TabsContent>
+
+          <TabsContent value="waiting">
+            {renderAppointmentsTable(getAppointmentsByStatus('Waiting'))}
+          </TabsContent>
+
+          <TabsContent value="consulting">
+            {renderAppointmentsTable(getAppointmentsByStatus('Consulting'))}
+          </TabsContent>
+
+          <TabsContent value="completed">
+            {renderAppointmentsTable(getAppointmentsByStatus('Completed'))}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* View Appointment Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
+          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+            {selectedAppointment && (() => {
+              const patient = patients.find(p => 
+                (p as any).patientId === selectedAppointment.patientId || 
+                (p as any).PatientId === selectedAppointment.patientId
+              );
+              const doctor = appointmentDoctors.find(d => d.id.toString() === selectedAppointment.doctorId);
+              const patientName = patient 
+                ? `${(patient as any).patientName || (patient as any).PatientName || ''} ${(patient as any).lastName || (patient as any).LastName || ''}`.trim() 
+                : selectedAppointment.patientId;
+              const doctorName = doctor ? doctor.name : selectedAppointment.doctorId;
+              const patientPhone = patient 
+                ? (patient as any).PhoneNo || (patient as any).phoneNo || (patient as any).phone || '-'
+                : '-';
+
+              return (
+                <>
+                  <DialogHeader className="dialog-header-standard">
+                    <DialogTitle className="dialog-title-standard-view">View Patient Appointment</DialogTitle>
+                  </DialogHeader>
+                  <div className="dialog-body-content-wrapper">
+                  <div className="dialog-form-container">
+                    <div className="dialog-form-field">
+                      <Label className="dialog-label-standard">Token No</Label>
+                      <Input value={selectedAppointment.tokenNo} disabled className="dialog-input-disabled" />
+                    </div>
+                    <div className="dialog-form-field-grid">
+                      <div className="dialog-field-single-column">
+                        <Label className="dialog-label-standard">Patient *</Label>
+                        <Input
+                          value={(() => {
+                            const patient = patients.find(p => 
+                              (p as any).patientId === selectedAppointment.patientId || 
+                              (p as any).PatientId === selectedAppointment.patientId
+                            );
+                            if (patient) {
+                              const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                              const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                              return `${patientNo ? `${patientNo} - ` : ''}${patientName} (ID: ${patientId.substring(0, 8)})`;
+                            }
+                            return `${patientName} (ID: ${selectedAppointment.patientId ? selectedAppointment.patientId.substring(0, 8) : 'N/A'})`;
+                          })()}
+                          disabled
+                          className="dialog-input-disabled"
+                        />
+                      </div>
+                      <div className="dialog-field-single-column">
+                        <Label className="dialog-label-standard">Doctor *</Label>
+                        <Input
+                          value={doctorName}
+                          disabled
+                          className="dialog-input-disabled"
+                        />
+                      </div>
+                    </div>
+                    <div className="dialog-form-field-grid">
+                      <div className="dialog-field-single-column">
+                        <Label className="dialog-label-standard">Appointment Date *</Label>
+                        <Input
+                          type="date"
+                          value={selectedAppointment.appointmentDate}
+                          disabled
+                          className="dialog-input-disabled"
+                        />
+                      </div>
+                      <div className="dialog-field-single-column">
+                        <Label className="dialog-label-standard">Appointment Time *</Label>
+                        <Input
+                          type="time"
+                          value={selectedAppointment.appointmentTime}
+                          disabled
+                          className="dialog-input-disabled"
+                        />
+                      </div>
+                    </div>
+                    <div className="dialog-form-field-grid">
+                      <div className="dialog-field-single-column">
+                        <Label className="dialog-label-standard">Appointment Status</Label>
+                        <Input
+                          value={selectedAppointment.appointmentStatus}
+                          disabled
+                          className="dialog-input-disabled"
+                        />
+                      </div>
+                      <div className="dialog-field-single-column">
+                        <Label className="dialog-label-standard">Consultation Charge (₹) *</Label>
+                        <Input
+                          type="number"
+                          value={selectedAppointment.consultationCharge}
+                          disabled
+                          className="dialog-input-disabled"
+                        />
+                      </div>
+                    </div>
+                    <div className="dialog-form-field">
+                      <Label className="dialog-label-standard">Follow Up Details</Label>
+                      <Textarea
+                        value={selectedAppointment.followUpDetails || ''}
+                        disabled
+                        className="dialog-textarea-standard"
+                        style={{ fontSize: '1.125rem' }}
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                  </div>
+                  <div className="dialog-footer-standard">
+                    <Button variant="outline" onClick={() => setIsViewDialogOpen(false)} className="dialog-footer-button">Close</Button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Appointment Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent 
+          className="max-h-[90vh] overflow-y-auto"
+          style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
+        >
+          {selectedAppointment && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Edit Patient Appointment</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                  <div>
+                    <Label>Token No</Label>
+                    <Input value={selectedAppointment.tokenNo} disabled className="bg-gray-50" />
+                    <p className="text-xs text-gray-500 mt-1">Token No is auto-generated and cannot be changed</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="edit-patient-search">Patient *</Label>
+                      <div className="relative mb-2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                        <Input
+                          id="edit-patient-search"
+                          name="edit-patient-search"
+                          autoComplete="off"
+                          placeholder="Search by Patient ID, Name, or Mobile Number..."
+                          value={editPatientSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setEditPatientSearchTerm(newValue);
+                            setEditPatientHighlightIndex(-1);
+                            // Clear patient selection if user edits the search term
+                            if (editFormData.patientId) {
+                              setEditFormData({ ...editFormData, patientId: '' });
+                            }
+                            // Clear error when user starts typing
+                            if (editPatientError) {
+                              setEditPatientError('');
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            const filteredPatients = patients.filter(patient => {
+                              if (!editPatientSearchTerm) return false;
+                              const searchLower = editPatientSearchTerm.toLowerCase();
+                              const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                              const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                              const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                              const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                              const fullName = `${patientName} ${lastName}`.trim();
+                              const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                              return (
+                                patientId.toLowerCase().includes(searchLower) ||
+                                patientNo.toLowerCase().includes(searchLower) ||
+                                fullName.toLowerCase().includes(searchLower) ||
+                                phoneNo.includes(editPatientSearchTerm)
+                              );
+                            });
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setEditPatientHighlightIndex(prev => 
+                                prev < filteredPatients.length - 1 ? prev + 1 : prev
+                              );
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setEditPatientHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                            } else if (e.key === 'Enter' && editPatientHighlightIndex >= 0 && filteredPatients[editPatientHighlightIndex]) {
+                              e.preventDefault();
+                              const patient = filteredPatients[editPatientHighlightIndex];
+                              const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                              const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                              const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                              const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                              const fullName = `${patientName} ${lastName}`.trim();
+                              setEditFormData({ ...editFormData, patientId });
+                              setEditPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                              setEditPatientError('');
+                              setEditPatientHighlightIndex(-1);
+                            }
+                          }}
+                          className={`pl-10 ${editPatientError ? 'border-red-500' : ''}`}
+                        />
+                      </div>
+                      {editPatientError && (
+                        <p className="text-sm text-red-600 mt-1">{editPatientError}</p>
+                      )}
+                      {editPatientSearchTerm && (() => {
+                        const filteredPatients = patients.filter(patient => {
+                          if (!editPatientSearchTerm) return false;
+                          const searchLower = editPatientSearchTerm.toLowerCase();
+                          const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                          const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                          const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                          const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                          const fullName = `${patientName} ${lastName}`.trim();
+                          const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                          return (
+                            patientId.toLowerCase().includes(searchLower) ||
+                            patientNo.toLowerCase().includes(searchLower) ||
+                            fullName.toLowerCase().includes(searchLower) ||
+                            phoneNo.includes(editPatientSearchTerm)
+                          );
+                        });
+                        
+                        return filteredPatients.length > 0 ? (
+                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto" id="edit-patient-dropdown">
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Patient ID</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Mobile</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredPatients.map((patient, index) => {
+                                  const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                  const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                  const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                  const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                  const fullName = `${patientName} ${lastName}`.trim();
+                                  const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                  const isSelected = editFormData.patientId === patientId;
+                                  const isHighlighted = editPatientHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={patientId}
+                                      onClick={() => {
+                                        setEditFormData({ ...editFormData, patientId });
+                                        setEditPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                                        setEditPatientError('');
+                                        setEditPatientHighlightIndex(-1);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        // Prevent input from losing focus when clicking on dropdown
+                                        e.preventDefault();
+                                      }}
+                                      className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900 font-mono">{patientNo || patientId.substring(0, 8)}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{fullName || 'Unknown'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{phoneNo || '-'}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-doctor-search">Doctor *</Label>
+                      <div className="relative mb-2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                        <Input
+                          id="edit-doctor-search"
+                          name="edit-doctor-search"
+                          autoComplete="off"
+                          placeholder="Search by Doctor Name or Specialty..."
+                          value={editDoctorSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setEditDoctorSearchTerm(newValue);
+                            setEditDoctorHighlightIndex(-1);
+                            // Clear doctor selection if user edits the search term
+                            if (editFormData.doctorId) {
+                              setEditFormData({ ...editFormData, doctorId: '' });
+                            }
+                            // Clear error when user starts typing
+                            if (editDoctorError) {
+                              setEditDoctorError('');
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            const filteredDoctors = appointmentDoctors.filter(doctor => {
+                              if (!editDoctorSearchTerm) return false;
+                              const searchLower = editDoctorSearchTerm.toLowerCase();
+                              return (
+                                doctor.name.toLowerCase().includes(searchLower) ||
+                                doctor.specialty.toLowerCase().includes(searchLower)
+                              );
+                            });
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setEditDoctorHighlightIndex(prev => 
+                                prev < filteredDoctors.length - 1 ? prev + 1 : prev
+                              );
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setEditDoctorHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                            } else if (e.key === 'Enter' && editDoctorHighlightIndex >= 0 && filteredDoctors[editDoctorHighlightIndex]) {
+                              e.preventDefault();
+                              const doctor = filteredDoctors[editDoctorHighlightIndex];
+                              setEditFormData({ ...editFormData, doctorId: doctor.id.toString() });
+                              setEditDoctorSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                              setEditDoctorError('');
+                              setEditDoctorHighlightIndex(-1);
+                            }
+                          }}
+                          className={`pl-10 ${editDoctorError ? 'border-red-500' : ''}`}
+                        />
+                      </div>
+                      {editDoctorError && (
+                        <p className="text-sm text-red-600 mt-1">{editDoctorError}</p>
+                      )}
+                      {editDoctorSearchTerm && (() => {
+                        const filteredDoctors = appointmentDoctors.filter(doctor => {
+                          if (!editDoctorSearchTerm) return false;
+                          const searchLower = editDoctorSearchTerm.toLowerCase();
+                          return (
+                            doctor.name.toLowerCase().includes(searchLower) ||
+                            doctor.specialty.toLowerCase().includes(searchLower)
+                          );
+                        });
+                        
+                        return filteredDoctors.length > 0 ? (
+                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto" id="edit-doctor-dropdown">
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Specialty</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Type</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredDoctors.map((doctor, index) => {
+                                  const isSelected = editFormData.doctorId === doctor.id.toString();
+                                  const isHighlighted = editDoctorHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={doctor.id}
+                                      onClick={() => {
+                                        setEditFormData({ ...editFormData, doctorId: doctor.id.toString() });
+                                        setEditDoctorSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                                        setEditDoctorError('');
+                                        setEditDoctorHighlightIndex(-1);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        // Prevent input from losing focus when clicking on dropdown
+                                        e.preventDefault();
+                                      }}
+                                      className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900">{doctor.name}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{doctor.specialty}</td>
+                                      <td className="py-2 px-3 text-sm">
+                                        <span className={`px-2 py-0.5 rounded text-xs ${
+                                          doctor.type === 'inhouse' 
+                                            ? 'bg-gray-100 text-gray-700' 
+                                            : 'bg-purple-100 text-purple-700'
+                                        }`}>
+                                          {doctor.type === 'inhouse' ? 'Inhouse' : 'Consulting'}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="edit-appointmentDate">Appointment Date *</Label>
+                      <Input
+                        id="edit-appointmentDate"
+                        type="text"
+                        placeholder="dd-mm-yyyy"
+                        value={editDateDisplay}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setEditDateDisplay(value);
+                          const parsed = parseDateFromDisplay(value);
+                          if (parsed) {
+                            setEditFormData({ ...editFormData, appointmentDate: parsed });
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const parsed = parseDateFromDisplay(e.target.value);
+                          if (parsed) {
+                            setEditDateDisplay(formatDateToDisplay(parsed));
+                            setEditFormData({ ...editFormData, appointmentDate: parsed });
+                          } else if (e.target.value) {
+                            setEditDateDisplay('');
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-appointmentTime">Appointment Time *</Label>
+                      <Input
+                        id="edit-appointmentTime"
+                        type="text"
+                        placeholder="hh:mm AM/PM"
+                        value={editTimeDisplay}
+                        onChange={(e) => {
+                          let value = e.target.value.toUpperCase();
+                          // Auto-format as user types
+                          value = value.replace(/[^\d:APM\s]/g, '');
+                          
+                          // Auto-format single digit hour when colon is typed
+                          const colonMatch = value.match(/^(\d):$/);
+                          if (colonMatch) {
+                            value = `0${colonMatch[1]}:`;
+                          }
+                          
+                          setEditTimeDisplay(value);
+                          const parsed = parseTimeFromDisplay(value);
+                          if (parsed) {
+                            setEditFormData({ ...editFormData, appointmentTime: parsed });
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const trimmed = e.target.value.trim();
+                          if (!trimmed) {
+                            setEditTimeDisplay('');
+                            return;
+                          }
+                          
+                          // Try to parse and format
+                          let parsed = parseTimeFromDisplay(trimmed);
+                          
+                          // If parsing fails, try to auto-format single digit hours
+                          if (!parsed) {
+                            const hourMatch = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+                            if (hourMatch) {
+                              let hour = parseInt(hourMatch[1], 10);
+                              const minute = hourMatch[2] ? parseInt(hourMatch[2], 10) : 0;
+                              const period = hourMatch[3]?.toUpperCase() || 'AM';
+                              
+                              if (hour >= 1 && hour <= 12 && minute >= 0 && minute <= 59) {
+                                const formatted = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${period}`;
+                                setEditTimeDisplay(formatted);
+                                parsed = parseTimeFromDisplay(formatted);
+                                if (parsed) {
+                                  setEditFormData({ ...editFormData, appointmentTime: parsed });
+                                }
+                                return;
+                              }
+                            }
+                            setEditTimeDisplay('');
+                            return;
+                          }
+                          
+                          // Format the parsed time
+                          const formatted = formatTimeToDisplay(parsed);
+                          setEditTimeDisplay(formatted);
+                          setEditFormData({ ...editFormData, appointmentTime: parsed });
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="edit-appointmentStatus">Appointment Status</Label>
+                      <select
+                        id="edit-appointmentStatus"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                        value={editFormData.appointmentStatus}
+                        onChange={(e) => setEditFormData({ ...editFormData, appointmentStatus: e.target.value as PatientAppointment['appointmentStatus'] })}
+                      >
+                        <option value="Waiting">Waiting</option>
+                        <option value="Consulting">Consulting</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-consultationCharge">Consultation Charge (₹) *</Label>
+                      <Input
+                        id="edit-consultationCharge"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="e.g., 500"
+                        value={editFormData.consultationCharge}
+                        onChange={(e) => setEditFormData({ ...editFormData, consultationCharge: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <Label htmlFor="edit-status">Status</Label>
+                      <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
+                        <Switch
+                          id="edit-status"
+                          checked={editFormData.status}
+                          onCheckedChange={(checked) => setEditFormData({ ...editFormData, status: checked })}
+                          className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
+                          style={{
+                            width: '2.5rem',
+                            height: '1.5rem',
+                            minWidth: '2.5rem',
+                            minHeight: '1.5rem',
+                            display: 'inline-flex',
+                            position: 'relative',
+                            backgroundColor: editFormData.status ? '#2563eb' : '#d1d5db',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-followUpDetails">Follow Up Details</Label>
+                    <Textarea
+                      id="edit-followUpDetails"
+                      placeholder="Enter follow up details..."
+                      value={editFormData.followUpDetails}
+                      onChange={(e) => setEditFormData({ ...editFormData, followUpDetails: e.target.value })}
+                      rows={2}
+                    />
+                  </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+                <Button 
+                    onClick={async () => {
+                      if (!selectedAppointment) return;
+                      // Validate patient is selected from the list
+                      if (!editFormData.patientId) {
+                        setEditPatientError('Please select a patient from the list.');
+                        return;
+                      }
+                      
+                      // Verify patient exists in the patients list
+                      const selectedPatient = patients.find(p => {
+                        const pid = (p as any).patientId || (p as any).PatientId || '';
+                        return pid === editFormData.patientId;
+                      });
+                      
+                      if (!selectedPatient) {
+                        setEditPatientError('Please select a valid patient from the list.');
+                        return;
+                      }
+                      
+                      // Validate doctor is selected from the list
+                      if (!editFormData.doctorId) {
+                        setEditDoctorError('Please select a doctor from the list.');
+                        return;
+                      }
+                      
+                      // Verify doctor exists in the doctors list
+                      const selectedDoctor = appointmentDoctors.find(d => d.id.toString() === editFormData.doctorId);
+                      
+                      if (!selectedDoctor) {
+                        setEditDoctorError('Please select a valid doctor from the list.');
+                        return;
+                      }
+                      
+                      if (!editFormData.appointmentDate || !editFormData.appointmentTime) {
+                        alert('Please fill in all required fields.');
+                        return;
+                      }
+                      
+                      // Clear any previous errors
+                      setEditPatientError('');
+                      setEditDoctorError('');
+                      try {
+                        await updatePatientAppointment({
+                          id: selectedAppointment.id,
+                          patientId: editFormData.patientId,
+                          doctorId: editFormData.doctorId,
+                          appointmentDate: editFormData.appointmentDate,
+                          appointmentTime: editFormData.appointmentTime,
+                          appointmentStatus: editFormData.appointmentStatus,
+                          consultationCharge: editFormData.consultationCharge,
+                          followUpDetails: editFormData.followUpDetails || undefined,
+                          status: editFormData.status,
+                        } as any);
+                        await fetchPatientAppointments();
+                        setIsEditDialogOpen(false);
+                        setSelectedAppointment(null);
+                        setEditPatientSearchTerm('');
+                        setEditDoctorSearchTerm('');
+                        setEditPatientError('');
+                        setEditDoctorError('');
+                        setEditPatientHighlightIndex(-1);
+                        setEditDoctorHighlightIndex(-1);
+                      } catch (err) {
+                        console.error('Failed to update appointment:', err);
+                        alert('Failed to update appointment. Please try again.');
+                      }
+                    }} 
+                    className="py-1"
+                  >
+                    Update Appointment
+                  </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* Add Lab Test Dialog */}
+      <Dialog open={isAddLabTestDialogOpen} onOpenChange={setIsAddLabTestDialogOpen}>
+        <DialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
+          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+            <DialogHeader className="dialog-header-standard">
+              <DialogTitle className="dialog-title-standard-view">Add Lab Test</DialogTitle>
+            </DialogHeader>
+            <div className="dialog-body-content-wrapper">
+              <div className="dialog-form-container">
+                <div className="dialog-form-field">
+                  <Label htmlFor="add-labtest-labTestId" className="dialog-label-standard">Lab Test *</Label>
+                  <select
+                    id="add-labtest-labTestId"
+                    aria-label="Lab Test"
+                    className="dialog-select-standard"
+                    value={labTestFormData.labTestId}
+                    onChange={(e) => setLabTestFormData({ ...labTestFormData, labTestId: e.target.value })}
+                  >
+                    <option value="">Select Lab Test</option>
+                    {availableLabTests.map((test: any) => {
+                      const testId = test.LabTestsId || test.labTestsId || test.LabTestId || test.labTestId || test.id || 0;
+                      const testName = test.TestName || test.testName || test.name || test.Name || 'Unknown';
+                      const testCategory = test.TestCategory || test.testCategory || test.category || test.Category || '';
+                      const displayTestId = test.DisplayTestId || test.displayTestId || test.displayTestID || '';
+                      
+                      // Display format: "TestName (Category)" or "TestName - DisplayTestId" if available
+                      let displayText = testName;
+                      if (testCategory) {
+                        displayText = `${testName} (${testCategory})`;
+                      } else if (displayTestId) {
+                        displayText = `${testName} - ${displayTestId}`;
+                      }
+                      
+                      return (
+                        <option key={testId} value={testId.toString()}>
+                          {displayText}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+                
+                <div className="dialog-form-field-grid">
+                  <div className="dialog-field-single-column">
+                    <Label htmlFor="add-labtest-priority" className="dialog-label-standard">Priority</Label>
+                    <select
+                      id="add-labtest-priority"
+                      aria-label="Priority"
+                      className="dialog-select-standard"
+                      value={labTestFormData.priority || 'Normal'}
+                      onChange={(e) => setLabTestFormData({ ...labTestFormData, priority: e.target.value as 'Normal' | 'Urgent' | null })}
+                    >
+                      <option value="Normal">Normal</option>
+                      <option value="Urgent">Urgent</option>
+                    </select>
+                  </div>
+                  
+                  <div className="dialog-field-single-column">
+                    <Label htmlFor="add-labtest-testStatus" className="dialog-label-standard">Test Status</Label>
+                    <select
+                      id="add-labtest-testStatus"
+                      aria-label="Test Status"
+                      className="dialog-select-standard"
+                      value={labTestFormData.testStatus || 'Pending'}
+                      onChange={(e) => setLabTestFormData({ ...labTestFormData, testStatus: e.target.value as 'Pending' | 'InProgress' | 'Completed' | null })}
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="InProgress">In Progress</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="dialog-form-field">
+                  <Label htmlFor="add-labtest-labTestDone" className="dialog-label-standard">Lab Test Done</Label>
+                  <select
+                    id="add-labtest-labTestDone"
+                    aria-label="Lab Test Done"
+                    className="dialog-select-standard"
+                    value={labTestFormData.labTestDone}
+                    onChange={(e) => setLabTestFormData({ ...labTestFormData, labTestDone: e.target.value as 'Yes' | 'No' })}
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="dialog-footer-standard">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsAddLabTestDialogOpen(false);
+                  setLabTestFormData({
+                    labTestId: '',
+                    priority: 'Normal',
+                    labTestDone: 'No',
+                    testStatus: 'Pending',
+                  });
+                  setLabTestSearchTerm('');
+                  setShowLabTestList(false);
+                }} 
+                className="dialog-footer-button"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={async () => {
+                  if (!labTestFormData.labTestId) {
+                    alert('Please select a lab test.');
+                    return;
+                  }
+                  
+                  if (!selectedAppointment) {
+                    alert('No appointment selected.');
+                    return;
+                  }
+                  
+                  try {
+                    const payload = {
+                      PatientType: 'OPD',
+                      PatientId: selectedAppointment.patientId,
+                      LabTestId: Number(labTestFormData.labTestId),
+                      AppointmentId: selectedAppointment.id,
+                      RoomAdmissionId: null,
+                      EmergencyBedSlotId: null,
+                      BillId: null,
+                      Priority: labTestFormData.priority || null,
+                      LabTestDone: labTestFormData.labTestDone || 'No',
+                      ReportsUrl: null,
+                      TestStatus: labTestFormData.testStatus || null,
+                      TestDoneDateTime: null,
+                      Status: 'Active',
+                      CreatedBy: null,
+                    };
+                    
+                    await apiRequest('/patient-lab-tests', {
+                      method: 'POST',
+                      body: JSON.stringify(payload),
+                    });
+                    
+                    // Refresh lab tests list
+                    if (selectedAppointment.id) {
+                      await fetchPatientLabTests(selectedAppointment.id);
+                    }
+                    
+                    setIsAddLabTestDialogOpen(false);
+                    setLabTestFormData({
+                      labTestId: '',
+                      priority: 'Normal',
+                      labTestDone: 'No',
+                      testStatus: 'Pending',
+                    });
+                    setLabTestSearchTerm('');
+                    setShowLabTestList(false);
+                    alert('Lab test added successfully!');
+                  } catch (err) {
+                    console.error('Failed to add lab test:', err);
+                    alert('Failed to add lab test. Please try again.');
+                  }
+                }} 
+                className="dialog-footer-button"
+              >
+                Add Lab Test
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Manage Lab Test Dialog */}
+      <Dialog open={isManageLabTestDialogOpen} onOpenChange={setIsManageLabTestDialogOpen}>
+        <DialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
+          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+            <DialogHeader className="dialog-header-standard">
+              <DialogTitle className="dialog-title-standard-view">Manage Lab Test</DialogTitle>
+            </DialogHeader>
+            <div className="dialog-body-content-wrapper">
+              <div className="dialog-form-container">
+                {manageLabTestFormData && selectedLabTest && (
+                  <>
+                    <div className="dialog-form-field-grid">
+                      <div className="dialog-field-single-column">
+                        <Label htmlFor="manage-priority" className="dialog-label-standard">Priority</Label>
+                        <select
+                          id="manage-priority"
+                          aria-label="Priority"
+                          className="dialog-select-standard"
+                          value={manageLabTestFormData.priority || 'Normal'}
+                          onChange={(e) => setManageLabTestFormData({ ...manageLabTestFormData, priority: e.target.value })}
+                        >
+                          <option value="Normal">Normal</option>
+                          <option value="Urgent">Urgent</option>
+                        </select>
+                      </div>
+                      
+                      <div className="dialog-field-single-column">
+                        <Label htmlFor="manage-testStatus" className="dialog-label-standard">Test Status</Label>
+                        <select
+                          id="manage-testStatus"
+                          aria-label="Test Status"
+                          className="dialog-select-standard"
+                          value={manageLabTestFormData.testStatus || 'Pending'}
+                          onChange={(e) => setManageLabTestFormData({ ...manageLabTestFormData, testStatus: e.target.value })}
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="InProgress">In Progress</option>
+                          <option value="Completed">Completed</option>
+                        </select>
+                      </div>
+                    </div>
+                    
+                    <div className="dialog-form-field">
+                      <Label htmlFor="manage-labTestDone" className="dialog-label-standard">Lab Test Done</Label>
+                      <select
+                        id="manage-labTestDone"
+                        aria-label="Lab Test Done"
+                        className="dialog-select-standard"
+                        value={manageLabTestFormData.labTestDone || 'No'}
+                        onChange={(e) => setManageLabTestFormData({ ...manageLabTestFormData, labTestDone: e.target.value })}
+                      >
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                      </select>
+                    </div>
+                    
+                    <div className="dialog-form-field">
+                      <div className="flex items-center gap-3">
+                        <Label htmlFor="manage-status" className="dialog-label-standard">Status</Label>
+                        <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
+                          <Switch
+                            id="manage-status"
+                            checked={manageLabTestFormData.status === 'Active' || manageLabTestFormData.status === undefined}
+                            onCheckedChange={(checked) => setManageLabTestFormData({ ...manageLabTestFormData, status: checked ? 'Active' : 'Inactive' })}
+                            className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
+                            style={{
+                              width: '2.5rem',
+                              height: '1.5rem',
+                              minWidth: '2.5rem',
+                              minHeight: '1.5rem',
+                              display: 'inline-flex',
+                              position: 'relative',
+                              backgroundColor: (manageLabTestFormData.status === 'Active' || manageLabTestFormData.status === undefined) ? '#2563eb' : '#d1d5db',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="dialog-form-field">
+                      <Label htmlFor="manage-reportsUrl" className="dialog-label-standard">Reports URL</Label>
+                      <Input
+                        id="manage-reportsUrl"
+                        className="dialog-input-standard"
+                        value={manageLabTestFormData.reportsUrl || ''}
+                        onChange={(e) => setManageLabTestFormData({ ...manageLabTestFormData, reportsUrl: e.target.value })}
+                        placeholder="Enter report URL (optional)"
+                      />
+                    </div>
+                    
+                    <div className="dialog-form-field">
+                      <Label htmlFor="manage-testDoneDateTime" className="dialog-label-standard">Test Done Date Time</Label>
+                      <Input
+                        id="manage-testDoneDateTime"
+                        type="text"
+                        placeholder="dd-mm-yyyy, hh:mm"
+                        className="dialog-input-standard"
+                        value={manageLabTestFormData.testDoneDateTime || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setManageLabTestFormData({ ...manageLabTestFormData, testDoneDateTime: value });
+                        }}
+                        onBlur={(e) => {
+                          const parsed = parseDateTimeFromInput(e.target.value);
+                          if (parsed) {
+                            // Keep the display format in the input
+                            setManageLabTestFormData({ ...manageLabTestFormData, testDoneDateTime: e.target.value });
+                          } else if (e.target.value) {
+                            // If invalid, try to format it
+                            const formatted = formatDateTimeForInput(e.target.value);
+                            if (formatted) {
+                              setManageLabTestFormData({ ...manageLabTestFormData, testDoneDateTime: formatted });
+                            }
+                          }
+                        }}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Format: dd-mm-yyyy, hh:mm (24-hour format, IST)</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="dialog-footer-standard">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsManageLabTestDialogOpen(false);
+                  setSelectedLabTest(null);
+                  setManageLabTestFormData(null);
+                }} 
+                className="dialog-footer-button"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={async () => {
+                  if (!manageLabTestFormData || !selectedLabTest) return;
+                  
+                  try {
+                    const patientLabTestsId = manageLabTestFormData.patientLabTestsId;
+                    if (!patientLabTestsId) {
+                      alert('Lab Test ID is required.');
+                      return;
+                    }
+                    
+                    const payload: any = {
+                      PatientLabTestsId: patientLabTestsId,
+                      Priority: manageLabTestFormData.priority || null,
+                      TestStatus: manageLabTestFormData.testStatus || null,
+                      LabTestDone: manageLabTestFormData.labTestDone || 'No',
+                      Status: manageLabTestFormData.status || 'Active',
+                    };
+                    
+                    if (manageLabTestFormData.reportsUrl) {
+                      payload.ReportsUrl = manageLabTestFormData.reportsUrl;
+                    }
+                    
+                    if (manageLabTestFormData.testDoneDateTime) {
+                      // Convert datetime from dd-mm-yyyy, hh:mm format to ISO format for API
+                      const testDoneDateTimeISO = parseDateTimeFromInput(manageLabTestFormData.testDoneDateTime);
+                      if (testDoneDateTimeISO) {
+                        payload.TestDoneDateTime = testDoneDateTimeISO;
+                      }
+                    }
+                    
+                    await apiRequest(`/patient-lab-tests/${patientLabTestsId}`, {
+                      method: 'PUT',
+                      body: JSON.stringify(payload),
+                    });
+                    
+                    // Refresh lab tests list
+                    if (selectedAppointment?.id) {
+                      await fetchPatientLabTests(selectedAppointment.id);
+                    }
+                    
+                    setIsManageLabTestDialogOpen(false);
+                    setSelectedLabTest(null);
+                    setManageLabTestFormData(null);
+                    alert('Lab test updated successfully!');
+                  } catch (err) {
+                    console.error('Failed to update lab test:', err);
+                    alert('Failed to update lab test. Please try again.');
+                  }
+                }} 
+                className="dialog-footer-button"
+              >
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,372 @@
+/* Global Dashboard Styles
+ * Apply these classes to dashboard pages throughout the application
+ * Based on FrontDesk.tsx dashboard structure
+ */
+
+/* ============================================
+   Dashboard Container Structure
+   ============================================ */
+
+/* Main dashboard container - outer wrapper */
+.dashboard-container {
+  flex: 1;
+  background-color: rgb(249, 250, 251); /* bg-gray-50 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  max-height: 100vh;
+}
+
+/* Inner scrollable container */
+.dashboard-scrollable-container {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Header section wrapper */
+.dashboard-header-section {
+  padding-left: 1.5rem; /* px-6 */
+  padding-right: 1.5rem;
+  padding-top: 1.5rem; /* pt-6 */
+  padding-bottom: 0; /* pb-0 */
+  flex-shrink: 0;
+}
+
+/* Header content wrapper (contains title and buttons) */
+.dashboard-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem; /* mb-4 */
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Dashboard Typography
+   ============================================ */
+
+/* Dashboard Page Header */
+.dashboard-header {
+  color: rgb(17, 24, 39); /* text-gray-900 */
+  margin-bottom: 0.5rem; /* mb-2 */
+  font-size: 1.125rem; /* text-3xl - 30px */
+  line-height: 1.2;
+  font-weight: 500;
+}
+
+/* Dashboard Page Subheader */
+.dashboard-subheader {
+  color: rgb(107, 114, 128); /* text-gray-500 */
+  font-size: 0.875rem; /* text-xl - 20px */
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+/* ============================================
+   Dashboard Stats Cards
+   ============================================ */
+
+/* Stats card container */
+.dashboard-stats-card {
+  background-color: white;
+  border: 1px solid rgb(229, 231, 235); /* border-gray-200 */
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
+  border-radius: 0.5rem; /* rounded-lg */
+}
+
+/* Stats card content */
+.dashboard-stats-card-content {
+  padding: 2rem; /* p-8 */
+}
+
+/* Stats card icon container */
+.dashboard-stats-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem; /* mb-6 */
+}
+
+/* Stats card icon background */
+.dashboard-stats-icon-bg {
+  padding: 1rem; /* p-4 */
+  border-radius: 0.5rem; /* rounded-lg */
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Stats card number */
+.dashboard-stats-number {
+  font-size: 1.5rem; /* 24px */
+  font-weight: 700; /* font-bold */
+  color: rgb(17, 24, 39); /* text-gray-900 */
+  margin-bottom: 0.5rem; /* mb-2 */
+}
+
+/* Stats card label */
+.dashboard-stats-label {
+  font-size: 1.125rem; /* text-lg - 18px */
+  color: rgb(107, 114, 128); /* text-gray-500 */
+}
+
+/* Stats card status label */
+.dashboard-stats-status-label {
+  font-size: 1rem; /* text-base - 16px */
+  font-weight: 500; /* font-medium */
+  color: rgb(107, 114, 128); /* text-gray-500 */
+}
+
+/* ============================================
+   Dashboard Search
+   ============================================ */
+
+/* Search card */
+.dashboard-search-card {
+  margin-bottom: 1.5rem; /* mb-6 */
+  background-color: white;
+}
+
+/* Search card content */
+.dashboard-search-card-content {
+  padding: 1.5rem; /* p-6 */
+}
+
+/* Search input wrapper */
+.dashboard-search-input-wrapper {
+  position: relative;
+}
+
+/* Search icon */
+.dashboard-search-icon {
+  position: absolute;
+  left: 0.75rem; /* left-3 */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem; /* size-4 */
+  height: 1rem;
+  color: rgb(156, 163, 175); /* text-gray-400 */
+}
+
+/* Search input */
+.dashboard-search-input {
+  padding-left: 2.5rem; /* pl-10 */
+  background-color: rgb(249, 250, 251); /* bg-gray-50 */
+}
+
+/* ============================================
+   Dashboard Table
+   ============================================ */
+
+/* Table card */
+.dashboard-table-card {
+  background-color: white;
+  border: 1px solid rgb(229, 231, 235); /* border-gray-200 */
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
+  border-radius: 0.5rem; /* rounded-lg */
+  margin-bottom: 1rem; /* mb-4 */
+}
+
+/* Table card content */
+.dashboard-table-card-content {
+  padding: 1.5rem; /* p-6 */
+}
+
+/* Table wrapper (for horizontal scroll) */
+.dashboard-table-wrapper {
+  overflow-x: auto;
+}
+
+/* Table */
+.dashboard-table {
+  width: 100%;
+}
+
+/* Table header row */
+.dashboard-table-header-row {
+  border-bottom: 1px solid rgb(229, 231, 235); /* border-b border-gray-200 */
+}
+
+/* Table header cell */
+.dashboard-table-header-cell {
+  text-align: left;
+  padding-top: 1rem; /* py-4 */
+  padding-bottom: 1rem;
+  padding-left: 1.5rem; /* px-6 */
+  padding-right: 1.5rem;
+  color: rgb(55, 65, 81); /* text-gray-700 */
+  font-size: 1.125rem; /* 18px */
+  font-weight: 700; /* font-bold */
+}
+
+/* Table body row */
+.dashboard-table-body-row {
+  border-bottom: 1px solid rgb(243, 244, 246); /* border-b border-gray-100 */
+}
+
+.dashboard-table-body-row:hover {
+  background-color: rgb(249, 250, 251); /* hover:bg-gray-50 */
+}
+
+/* Table body cell */
+.dashboard-table-body-cell {
+  padding-top: 1rem; /* py-4 */
+  padding-bottom: 1rem;
+  padding-left: 1.5rem; /* px-6 */
+  padding-right: 1.5rem;
+  font-size: 1.125rem; /* 18px */
+  white-space: nowrap;
+}
+
+/* Table body cell - primary text */
+.dashboard-table-body-cell-primary {
+  color: rgb(17, 24, 39); /* text-gray-900 */
+  font-family: ui-monospace, monospace; /* font-mono */
+  font-weight: 500; /* font-medium */
+}
+
+/* Table body cell - secondary text */
+.dashboard-table-body-cell-secondary {
+  color: rgb(75, 85, 99); /* text-gray-600 */
+}
+
+/* Table empty state cell */
+.dashboard-table-empty-cell {
+  text-align: center;
+  padding-top: 2rem; /* py-8 */
+  padding-bottom: 2rem;
+  color: rgb(107, 114, 128); /* text-gray-500 */
+  font-size: 1.125rem; /* 18px */
+}
+
+/* Table cell with min width */
+.dashboard-table-cell-min-width {
+  min-width: 120px;
+}
+
+/* ============================================
+   Dashboard Actions
+   ============================================ */
+
+/* Action buttons container */
+.dashboard-actions-container {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem; /* gap-1 */
+  white-space: nowrap;
+}
+
+/* Action button */
+.dashboard-action-button {
+  height: 1.75rem; /* h-7 */
+  width: 1.75rem; /* w-7 */
+  padding: 0; /* p-0 */
+}
+
+/* Action button icon */
+.dashboard-action-button-icon {
+  width: 0.75rem; /* size-3 */
+  height: 0.75rem;
+}
+
+/* Action button - delete variant */
+.dashboard-action-button-delete {
+  color: rgb(220, 38, 38); /* text-red-600 */
+}
+
+.dashboard-action-button-delete:hover {
+  color: rgb(185, 28, 28); /* hover:text-red-700 */
+}
+
+/* ============================================
+   Dashboard Layout
+   ============================================ */
+
+/* Main content area */
+.dashboard-main-content {
+  padding-left: 1.5rem; /* px-6 */
+  padding-right: 1.5rem;
+  padding-top: 1rem; /* pt-4 */
+  padding-bottom: 1rem; /* pb-4 */
+  flex: 1;
+}
+
+/* Stats cards grid */
+.dashboard-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1.5rem; /* gap-6 */
+  margin-bottom: 2rem; /* mb-8 */
+}
+
+@media (min-width: 768px) {
+  .dashboard-stats-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ============================================
+   Dashboard Tabs
+   ============================================ */
+
+/* Tabs container */
+.dashboard-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem; /* space-y-6 */
+}
+
+/* ============================================
+   Switch Toggle Styling
+   ============================================ */
+
+/* Ensure switch thumb is visible and moves correctly */
+[data-slot="switch-thumb"] {
+  background-color: white !important;
+  border: 1px solid rgb(156, 163, 175) !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+  width: 1rem !important;
+  height: 1rem !important;
+  min-width: 1rem !important;
+  min-height: 1rem !important;
+}
+
+/* Ensure switch thumb translates correctly */
+[data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
+  transform: translateX(calc(2.5rem - 1rem - 2px)) !important;
+  transition: transform 0.2s ease-in-out !important;
+}
+
+[data-slot="switch"][data-state="unchecked"] [data-slot="switch-thumb"] {
+  transform: translateX(2px) !important;
+  transition: transform 0.2s ease-in-out !important;
+}
+
+/* ============================================
+   Manage Button Styling
+   ============================================ */
+
+/* Manage button - light grey with dark text */
+.dashboard-manage-button {
+  height: 2rem; /* h-8 */
+  padding-left: 0.75rem; /* px-3 */
+  padding-right: 0.75rem;
+  font-size: 0.875rem; /* text-sm */
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* gap-2 */
+  background-color: rgb(243, 244, 246); /* bg-gray-100 */
+  color: rgb(55, 65, 81); /* text-gray-700 */
+  border: 1px solid rgb(209, 213, 219); /* border-gray-300 */
+}
+
+.dashboard-manage-button:hover {
+  background-color: rgb(229, 231, 235); /* hover:bg-gray-200 */
+  color: rgb(31, 41, 55); /* hover:text-gray-800 */
+}
