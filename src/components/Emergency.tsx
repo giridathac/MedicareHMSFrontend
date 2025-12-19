@@ -1506,7 +1506,7 @@ export function Emergency() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-500">High Priority</p>
-              <div className="size-3 bg-orange-600 rounded-full" />
+              <div className="size-3 bg-orange-500 rounded-full" />
             </div>
             <h3 className="text-orange-900">{highPriorityAdmissions}</h3>
             <p className="text-xs text-orange-600">Urgent care needed</p>
@@ -1686,7 +1686,7 @@ export function Emergency() {
                 <span className="text-gray-600">Critical</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="size-3 rounded-full bg-orange-600" />
+                <span className="size-3 rounded-full bg-orange-500" />
                 <span className="text-gray-600">High</span>
               </div>
               <div className="flex items-center gap-2">
@@ -1731,7 +1731,7 @@ export function Emergency() {
                   const getPriorityColor = (p: string) => {
                     switch (p) {
                       case 'Critical': return { border: 'border-red-300', bg: 'bg-red-50', dot: 'bg-red-600' };
-                      case 'High': return { border: 'border-orange-300', bg: 'bg-orange-50', dot: 'bg-orange-600' };
+                      case 'High': return { border: 'border-orange-300', bg: 'bg-orange-50', dot: 'bg-orange-500' };
                       case 'Medium': return { border: 'border-yellow-300', bg: 'bg-yellow-50', dot: 'bg-yellow-600' };
                       case 'Low': return { border: 'border-green-300', bg: 'bg-green-50', dot: 'bg-green-600' };
                       default: return { border: 'border-gray-300', bg: 'bg-gray-50', dot: 'bg-gray-600' };
@@ -2513,23 +2513,43 @@ function EmergencyAdmissionsList({
                       <td className="py-3 px-4">
                         {(() => {
                           const priority = admission.priority || 'Medium';
-                          const getTriageColor = (p: string) => {
+                          const getTriageBadge = (p: string) => {
                             switch (p) {
-                              case 'Critical': return { dot: 'bg-red-600', badge: 'destructive', label: 'Red' };
-                              case 'High': return { dot: 'bg-orange-600', badge: 'default', label: 'Orange' };
-                              case 'Medium': return { dot: 'bg-yellow-600', badge: 'secondary', label: 'Yellow' };
-                              case 'Low': return { dot: 'bg-green-600', badge: 'outline', label: 'Green' };
-                              default: return { dot: 'bg-gray-600', badge: 'outline', label: 'Gray' };
+                              case 'Critical': return { 
+                                label: 'Critical', 
+                                className: isDischargedOrTransferredStatus 
+                                  ? 'bg-gray-100 text-gray-600 border-gray-300' 
+                                  : 'bg-red-100 text-red-700 border-red-300'
+                              };
+                              case 'High': return { 
+                                label: 'High', 
+                                className: isDischargedOrTransferredStatus 
+                                  ? 'bg-gray-100 text-gray-600 border-gray-300' 
+                                  : 'bg-orange-100 text-orange-700 border-orange-300'
+                              };
+                              case 'Medium': return { 
+                                label: 'Medium', 
+                                className: isDischargedOrTransferredStatus 
+                                  ? 'bg-gray-100 text-gray-600 border-gray-300' 
+                                  : 'bg-yellow-100 text-yellow-700 border-yellow-300'
+                              };
+                              case 'Low': return { 
+                                label: 'Low', 
+                                className: isDischargedOrTransferredStatus 
+                                  ? 'bg-gray-100 text-gray-600 border-gray-300' 
+                                  : 'bg-green-100 text-green-700 border-green-300'
+                              };
+                              default: return { 
+                                label: 'Medium', 
+                                className: 'bg-gray-100 text-gray-600 border-gray-300'
+                              };
                             }
                           };
-                          const triageColors = getTriageColor(priority);
+                          const triageBadge = getTriageBadge(priority);
                           return (
-                            <div className="flex items-center gap-2">
-                              <div className={`size-3 rounded-full ${isDischargedOrTransferredStatus ? 'bg-gray-400' : triageColors.dot}`} />
-                              <Badge variant={isDischargedOrTransferredStatus ? "outline" : triageColors.badge as any}>
-                                {isDischargedOrTransferredStatus ? 'Gray' : triageColors.label}
-                              </Badge>
-                            </div>
+                            <Badge variant="outline" className={triageBadge.className}>
+                              {triageBadge.label}
+                            </Badge>
                           );
                         })()}
                       </td>
