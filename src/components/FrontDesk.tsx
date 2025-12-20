@@ -20,6 +20,8 @@ import { patientsApi } from '../api/patients';
 import { apiRequest } from '../api/base';
 import { Patient, PatientAppointment, Doctor } from '../types';
 import { formatDateIST, getTodayIST } from '../utils/timeUtils';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 export function FrontDesk() {
   const { patientAppointments, loading: appointmentsLoading, error: appointmentsError, fetchPatientAppointments, createPatientAppointment, updatePatientAppointment, deletePatientAppointment } = usePatientAppointments();
@@ -93,10 +95,11 @@ export function FrontDesk() {
   const [isManageLabTestDialogOpen, setIsManageLabTestDialogOpen] = useState(false);
   const [manageLabTestFormData, setManageLabTestFormData] = useState<any>(null);
   
-  // Formatted display values for date and time
-  const [addDateDisplay, setAddDateDisplay] = useState('');
+  // Date picker state
+  const [addAppointmentDate, setAddAppointmentDate] = useState<Date | null>(null);
+  const [editAppointmentDate, setEditAppointmentDate] = useState<Date | null>(null);
+  // Formatted display values for time
   const [addTimeDisplay, setAddTimeDisplay] = useState('');
-  const [editDateDisplay, setEditDateDisplay] = useState('');
   const [editTimeDisplay, setEditTimeDisplay] = useState('');
   const addTimeInputRef = useRef<HTMLInputElement>(null);
 
@@ -235,12 +238,27 @@ export function FrontDesk() {
       });
   }, [staff, roles, departments]);
 
-  // Sync display values with form data
+  // Sync date picker with form data
   useEffect(() => {
     if (addFormData.appointmentDate) {
-      setAddDateDisplay(formatDateToDisplay(addFormData.appointmentDate));
+      try {
+        const dateStr = addFormData.appointmentDate;
+        let date: Date;
+        if (dateStr.includes('T')) {
+          date = new Date(dateStr);
+        } else {
+          date = new Date(dateStr + 'T00:00:00');
+        }
+        if (!isNaN(date.getTime())) {
+          setAddAppointmentDate(date);
+        } else {
+          setAddAppointmentDate(null);
+        }
+      } catch {
+        setAddAppointmentDate(null);
+      }
     } else {
-      setAddDateDisplay('');
+      setAddAppointmentDate(null);
     }
   }, [addFormData.appointmentDate]);
 
@@ -254,9 +272,24 @@ export function FrontDesk() {
 
   useEffect(() => {
     if (editFormData.appointmentDate) {
-      setEditDateDisplay(formatDateToDisplay(editFormData.appointmentDate));
+      try {
+        const dateStr = editFormData.appointmentDate;
+        let date: Date;
+        if (dateStr.includes('T')) {
+          date = new Date(dateStr);
+        } else {
+          date = new Date(dateStr + 'T00:00:00');
+        }
+        if (!isNaN(date.getTime())) {
+          setEditAppointmentDate(date);
+        } else {
+          setEditAppointmentDate(null);
+        }
+      } catch {
+        setEditAppointmentDate(null);
+      }
     } else {
-      setEditDateDisplay('');
+      setEditAppointmentDate(null);
     }
   }, [editFormData.appointmentDate]);
 
@@ -267,6 +300,29 @@ export function FrontDesk() {
       setEditTimeDisplay('');
     }
   }, [editFormData.appointmentTime]);
+
+  // Set default date and time when Add dialog opens
+  useEffect(() => {
+    if (isAddDialogOpen) {
+      // Set default date to today in IST
+      const todayIST = getTodayIST();
+      setAddFormData(prev => ({
+        ...prev,
+        appointmentDate: todayIST,
+      }));
+
+      // Set default time to current time in IST (HH:MM format)
+      const now = new Date();
+      const istNow = convertToIST(now);
+      const hours = String(istNow.getUTCHours()).padStart(2, '0');
+      const minutes = String(istNow.getUTCMinutes()).padStart(2, '0');
+      const currentTimeIST = `${hours}:${minutes}`;
+      setAddFormData(prev => ({
+        ...prev,
+        appointmentTime: currentTimeIST,
+      }));
+    }
+  }, [isAddDialogOpen]);
   
   // Scroll highlighted items into view
   useEffect(() => {
@@ -1036,29 +1092,31 @@ export function FrontDesk() {
                   </div>
                   <div>
                     <Label htmlFor="add-appointmentDate">Appointment Date *</Label>
-                      <Input
-                        id="add-appointmentDate"
-                        type="text"
-                        placeholder="dd-mm-yyyy"
-                        value={addDateDisplay}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setAddDateDisplay(value);
-                          const parsed = parseDateFromDisplay(value);
-                          if (parsed) {
-                            setAddFormData({ ...addFormData, appointmentDate: parsed });
-                          }
-                        }}
-                        onBlur={(e) => {
-                          const parsed = parseDateFromDisplay(e.target.value);
-                          if (parsed) {
-                            setAddDateDisplay(formatDateToDisplay(parsed));
-                            setAddFormData({ ...addFormData, appointmentDate: parsed });
-                          } else if (e.target.value) {
-                            setAddDateDisplay('');
-                          }
-                        }}
-                      />
+                    <DatePicker
+                      id="add-appointmentDate"
+                      selected={addAppointmentDate}
+                      onChange={(date: Date | null) => {
+                        setAddAppointmentDate(date);
+                        if (date) {
+                          const year = date.getFullYear();
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
+                          const dateStr = `${year}-${month}-${day}`;
+                          setAddFormData({ ...addFormData, appointmentDate: dateStr });
+                        } else {
+                          setAddFormData({ ...addFormData, appointmentDate: '' });
+                        }
+                      }}
+                      dateFormat="dd-MM-yyyy"
+                      placeholderText="dd-mm-yyyy"
+                      className="dialog-input-standard w-full"
+                      wrapperClassName="w-full"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={100}
+                      scrollableYearDropdown
+                    />
                   </div>
                   <div>
                     <Label htmlFor="add-appointmentTime">Appointment Time *</Label>
@@ -1224,7 +1282,7 @@ export function FrontDesk() {
                       consultationCharge: 0,
                       status: true,
                     });
-                    setAddDateDisplay('');
+                    setAddAppointmentDate(null);
                     setAddTimeDisplay('');
                     setPatientSearchTerm('');
                     setDoctorSearchTerm('');
@@ -1297,7 +1355,7 @@ export function FrontDesk() {
                           consultationCharge: 0,
                           status: true,
                         });
-                        setAddDateDisplay('');
+                        setAddAppointmentDate(null);
                         setAddTimeDisplay('');
                     setPatientSearchTerm('');
                     setDoctorSearchTerm('');
@@ -1808,28 +1866,30 @@ export function FrontDesk() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="edit-appointmentDate">Appointment Date *</Label>
-                      <Input
+                      <DatePicker
                         id="edit-appointmentDate"
-                        type="text"
-                        placeholder="dd-mm-yyyy"
-                        value={editDateDisplay}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setEditDateDisplay(value);
-                          const parsed = parseDateFromDisplay(value);
-                          if (parsed) {
-                            setEditFormData({ ...editFormData, appointmentDate: parsed });
+                        selected={editAppointmentDate}
+                        onChange={(date: Date | null) => {
+                          setEditAppointmentDate(date);
+                          if (date) {
+                            const year = date.getFullYear();
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            const dateStr = `${year}-${month}-${day}`;
+                            setEditFormData({ ...editFormData, appointmentDate: dateStr });
+                          } else {
+                            setEditFormData({ ...editFormData, appointmentDate: '' });
                           }
                         }}
-                        onBlur={(e) => {
-                          const parsed = parseDateFromDisplay(e.target.value);
-                          if (parsed) {
-                            setEditDateDisplay(formatDateToDisplay(parsed));
-                            setEditFormData({ ...editFormData, appointmentDate: parsed });
-                          } else if (e.target.value) {
-                            setEditDateDisplay('');
-                          }
-                        }}
+                        dateFormat="dd-MM-yyyy"
+                        placeholderText="dd-mm-yyyy"
+                        className="dialog-input-standard w-full"
+                        wrapperClassName="w-full"
+                        showYearDropdown
+                        showMonthDropdown
+                        dropdownMode="select"
+                        yearDropdownItemNumber={100}
+                        scrollableYearDropdown
                       />
                     </div>
                     <div>
@@ -1958,7 +2018,10 @@ export function FrontDesk() {
                 </div>
                 </div>
                 <div className="dialog-footer-standard">
-                  <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="dialog-footer-button">Cancel</Button>
+                  <Button variant="outline" onClick={() => {
+                    setIsEditDialogOpen(false);
+                    setEditAppointmentDate(null);
+                  }} className="dialog-footer-button">Cancel</Button>
                   <Button 
                     onClick={async () => {
                       if (!selectedAppointment) return;
@@ -2016,6 +2079,7 @@ export function FrontDesk() {
                         await fetchPatientAppointments();
                         setIsEditDialogOpen(false);
                         setSelectedAppointment(null);
+                        setEditAppointmentDate(null);
                         setEditPatientSearchTerm('');
                         setEditDoctorSearchTerm('');
                         setEditPatientError('');

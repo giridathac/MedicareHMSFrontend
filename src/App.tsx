@@ -36,6 +36,7 @@ const Roles = lazy(() => import('./components/Roles').then(m => ({ default: m.Ro
 const Departments = lazy(() => import('./components/Departments').then(m => ({ default: m.Departments })));
 const StaffManagement = lazy(() => import('./components/Staff').then(m => ({ default: m.StaffManagement })));
 const RoomBeds = lazy(() => import('./components/RoomBeds').then(m => ({ default: m.RoomBeds })));
+const LabTests = lazy(() => import('./components/LabTests').then(m => ({ default: m.LabTests })));
 const ICUBedsManagement = lazy(() => import('./components/ICUBedsManagement').then(m => ({ default: m.ICUBedsManagement })));
 const EmergencyBedManagement = lazy(() => import('./components/EmergencyBedManagement').then(m => ({ default: m.EmergencyBedManagement })));
 const ManageIPDAdmission = lazy(() => import('./components/ManageIPDAdmission').then(m => ({ default: m.ManageIPDAdmission })));
@@ -70,6 +71,7 @@ export default function App() {
     { path: '/departments', label: 'Departments', icon: Building },
     { path: '/staff', label: 'Staff', icon: Users },
     { path: '/room-beds', label: 'IPD Beds & Rooms', icon: Home },
+    { path: '/lab-tests', label: 'Laboratory Management - Tests Catalog', icon: TestTube },
     { path: '/icu-beds', label: 'ICU Bed Management', icon: HeartPulse },
     { path: '/ot-rooms', label: 'OT Rooms Management', icon: Building2 },
     { path: '/emergency-beds', label: 'Emergency Bed Management', icon: BedDouble },
@@ -158,6 +160,7 @@ export default function App() {
             <Route path="/departments" element={<Departments />} />
             <Route path="/staff" element={<StaffManagement />} />
             <Route path="/room-beds" element={<RoomBeds />} />
+            <Route path="/lab-tests" element={<LabTests />} />
             <Route path="/icu-beds" element={<ICUBedsManagement />} />
             <Route path="/emergency-beds" element={<EmergencyBedManagement />} />
             <Route path="/reports" element={<Reports />} />

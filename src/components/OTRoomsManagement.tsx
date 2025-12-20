@@ -459,7 +459,7 @@ export function OTRoomsManagement() {
                 <Card
                   key={otRoom.id}
                   className="bg-white border border-gray-200 shadow-sm rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => setSelectedOTId(otRoom.otId)}
+                  onClick={() => handleEdit(otRoom)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">

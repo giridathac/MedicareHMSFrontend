@@ -18,6 +18,8 @@ import { labTestsApi } from '../api/labTests';
 import { LabTest } from '../types';
 import { Textarea } from './ui/textarea';
 import { DialogFooter } from './ui/dialog';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 // Fallback room capacity data (used when API data is not available)
 const fallbackRoomCapacity: RoomCapacityOverview = {
@@ -71,6 +73,7 @@ export function Admissions() {
   const [doctorOptions, setDoctorOptions] = useState<any[]>([]);
   const [availableAppointments, setAvailableAppointments] = useState<any[]>([]);
   const [availableEmergencyBedSlots, setAvailableEmergencyBedSlots] = useState<any[]>([]);
+  const [roomAllocationDate, setRoomAllocationDate] = useState<Date | null>(null);
   const [addAdmissionForm, setAddAdmissionForm] = useState({
     patientId: '',
     patientType: '',
@@ -822,14 +825,30 @@ export function Admissions() {
     fetchDashboardMetrics();
   }, [fetchRoomCapacityOverview, fetchDashboardMetrics]);
 
+  // Sync roomAllocationDate state with form data
+  useEffect(() => {
+    if (addAdmissionForm.roomAllocationDate) {
+      try {
+        const dateStr = addAdmissionForm.roomAllocationDate;
+        // Handle YYYY-MM-DD format
+        if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [year, month, day] = dateStr.split('-').map(Number);
+          const date = new Date(year, month - 1, day);
+          if (!isNaN(date.getTime())) {
+            setRoomAllocationDate(date);
+          }
+        }
+      } catch {
+        // If parsing fails, keep current state
+      }
+    } else {
+      setRoomAllocationDate(null);
+    }
+  }, [addAdmissionForm.roomAllocationDate]);
+
   // Load patient, room bed, and doctor options when dialog opens
   useEffect(() => {
     if (isDialogOpen) {
-      // Set default room allocation date to today
-      setAddAdmissionForm(prev => ({
-        ...prev,
-        roomAllocationDate: prev.roomAllocationDate || new Date().toISOString().split('T')[0]
-      }));
       
       const loadOptions = async () => {
         try {
@@ -855,6 +874,9 @@ export function Admissions() {
       setDoctorSearchTerm('');
       setAdmissionError(null);
       setSavingAdmission(false);
+      const today = new Date();
+      setRoomAllocationDate(today);
+      const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
       setAddAdmissionForm({
         patientId: '',
         patientType: '',
@@ -867,7 +889,7 @@ export function Admissions() {
         admittedByDoctorId: '',
         doctorId: '',
         diagnosis: '',
-        roomAllocationDate: '',
+        roomAllocationDate: todayStr,
         admissionStatus: 'Active',
         caseSheet: '',
         caseDetails: '',
@@ -1014,7 +1036,11 @@ export function Admissions() {
                       id="patient-search"
                       placeholder="Search by Patient ID, Name, or Mobile Number..."
                       value={patientSearchTerm}
-                      onChange={(e) => setPatientSearchTerm(e.target.value)}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setPatientSearchTerm(newValue);
+                        // Don't clear patient selection when user edits - allow them to search and replace
+                      }}
                       className="pl-10"
                     />
                 </div>
@@ -1031,9 +1057,13 @@ export function Admissions() {
                         <tbody>
                           {patientOptions
                             .filter((patient: any) => {
+                              const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                              // Exclude patient with ID 8dd9786e from inpatient dropdown
+                              if (patientId && patientId.toLowerCase().includes('8dd9786e')) {
+                                return false;
+                              }
                               if (!patientSearchTerm) return false;
                               const searchLower = patientSearchTerm.toLowerCase();
-                              const patientId = (patient as any).patientId || (patient as any).PatientId || '';
                               const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
                               const patientName = (patient as any).patientName || (patient as any).PatientName || '';
                               const lastName = (patient as any).lastName || (patient as any).LastName || '';
@@ -1068,6 +1098,7 @@ export function Admissions() {
                                     } else if (updatedForm.patientType === 'Emergency' && patientId) {
                                       await fetchPatientEmergencyBedSlots(patientId);
                                     }
+                                    // Keep dropdown open to allow selecting a different patient
                                   }}
                                   className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
                                 >
@@ -1080,9 +1111,13 @@ export function Admissions() {
                         </tbody>
                       </table>
                       {patientOptions.filter((patient: any) => {
+                        const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                        // Exclude patient with ID 8dd9786e from inpatient dropdown
+                        if (patientId && patientId.toLowerCase().includes('8dd9786e')) {
+                          return false;
+                        }
                         if (!patientSearchTerm) return false;
                         const searchLower = patientSearchTerm.toLowerCase();
-                        const patientId = (patient as any).patientId || (patient as any).PatientId || '';
                         const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
                         const patientName = (patient as any).patientName || (patient as any).PatientName || '';
                         const lastName = (patient as any).lastName || (patient as any).LastName || '';
@@ -1094,7 +1129,7 @@ export function Admissions() {
                           fullName.toLowerCase().includes(searchLower) ||
                           phoneNo.includes(patientSearchTerm)
                         );
-                      }).length === 0 && (
+                      }).length === 0 && !addAdmissionForm.patientId && (
                         <div className="text-center py-8 text-sm text-gray-700">
                           No patients found. Try a different search term.
                         </div>
@@ -1429,14 +1464,32 @@ export function Admissions() {
                     </div>
                   )}
               </div>
-              <div>
-                  <Label htmlFor="roomAllocationDate">Room Allocation Date *</Label>
-                  <Input 
-                    id="roomAllocationDate" 
-                    type="date"
-                    value={addAdmissionForm.roomAllocationDate}
-                    onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, roomAllocationDate: e.target.value })}
-                    required
+              <div className="dialog-form-field">
+                  <Label htmlFor="roomAllocationDate" className="dialog-label-standard">Room Allocation Date *</Label>
+                  <DatePicker
+                    id="roomAllocationDate"
+                    selected={roomAllocationDate}
+                    onChange={(date: Date | null) => {
+                      setRoomAllocationDate(date);
+                      if (date) {
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const dateStr = `${year}-${month}-${day}`;
+                        setAddAdmissionForm({ ...addAdmissionForm, roomAllocationDate: dateStr });
+                      } else {
+                        setAddAdmissionForm({ ...addAdmissionForm, roomAllocationDate: '' });
+                      }
+                    }}
+                    dateFormat="dd-MM-yyyy"
+                    placeholderText="dd-mm-yyyy"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
                   />
               </div>
               <div>
@@ -1528,22 +1581,102 @@ export function Admissions() {
                     {/* Patient Selection */}
                     <div className="md:col-span-2">
                       <Label htmlFor="patient-search-edit">Patient *</Label>
-                      <p className="mt-1 text-gray-900 font-medium">
-                        {(() => {
-                          const selectedPatient = patientOptions.find((p: any) => {
-                            const pid = (p as any).patientId || (p as any).PatientId || '';
-                            return pid === addAdmissionForm.patientId;
-                          });
-                          if (selectedPatient) {
-                            const patientNo = (selectedPatient as any).patientNo || (selectedPatient as any).PatientNo || '';
-                            const patientName = (selectedPatient as any).patientName || (selectedPatient as any).PatientName || '';
-                            const lastName = (selectedPatient as any).lastName || (selectedPatient as any).LastName || '';
-                            const fullName = `${patientName} ${lastName}`.trim();
-                            return `${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`;
-                          }
-                          return addAdmissionForm.patientId || 'N/A';
-                        })()}
-                      </p>
+                      <div className="relative mb-2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                        <Input
+                          id="patient-search-edit"
+                          placeholder="Search by Patient ID, Name, or Mobile Number..."
+                          value={patientSearchTerm}
+                          onChange={(e) => setPatientSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                      {patientSearchTerm && (
+                        <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
+                          <table className="w-full">
+                            <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Patient ID</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Mobile</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {patientOptions
+                                .filter((patient: any) => {
+                                  const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                  // Exclude patient with ID 8dd9786e from inpatient dropdown
+                                  if (patientId && patientId.toLowerCase().includes('8dd9786e')) {
+                                    return false;
+                                  }
+                                  if (!patientSearchTerm) return false;
+                                  const searchLower = patientSearchTerm.toLowerCase();
+                                  const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                  const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                  const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                  const fullName = `${patientName} ${lastName}`.trim();
+                                  const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                  return (
+                                    patientId.toLowerCase().includes(searchLower) ||
+                                    patientNo.toLowerCase().includes(searchLower) ||
+                                    fullName.toLowerCase().includes(searchLower) ||
+                                    phoneNo.includes(patientSearchTerm)
+                                  );
+                                })
+                                .map((patient: any) => {
+                                  const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                  const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                  const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                  const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                  const fullName = `${patientName} ${lastName}`.trim();
+                                  const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                  const isSelected = addAdmissionForm.patientId === patientId;
+                                  return (
+                                    <tr
+                                      key={patientId}
+                                      onClick={async () => {
+                                        const updatedForm = { ...addAdmissionForm, patientId };
+                                        setAddAdmissionForm(updatedForm);
+                                        setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                                        
+                                        // If PatientType is already set, fetch conditional data
+                                        if (updatedForm.patientType === 'OPD' && patientId) {
+                                          await fetchPatientAppointments(patientId);
+                                        } else if (updatedForm.patientType === 'Emergency' && patientId) {
+                                          await fetchPatientEmergencyBedSlots(patientId);
+                                        }
+                                        // Keep dropdown open to allow selecting a different patient
+                                      }}
+                                      className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900 font-mono">{patientNo || patientId.substring(0, 8)}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{fullName || 'Unknown'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{phoneNo || '-'}</td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {addAdmissionForm.patientId && (
+                        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-gray-700">
+                          Selected: {(() => {
+                            const selectedPatient = patientOptions.find((p: any) => {
+                              const pid = (p as any).patientId || (p as any).PatientId || '';
+                              return pid === addAdmissionForm.patientId;
+                            });
+                            if (selectedPatient) {
+                              const patientNo = (selectedPatient as any).patientNo || (selectedPatient as any).PatientNo || '';
+                              const patientName = (selectedPatient as any).patientName || (selectedPatient as any).PatientName || '';
+                              const lastName = (selectedPatient as any).lastName || (selectedPatient as any).LastName || '';
+                              const fullName = `${patientName} ${lastName}`.trim();
+                              return `${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`;
+                            }
+                            return 'Unknown';
+                          })()}
+                        </div>
+                      )}
       </div>
 
                     {/* Patient Type */}
