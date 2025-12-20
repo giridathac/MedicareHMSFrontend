@@ -24,16 +24,9 @@ interface DoctorConsultationProps {
 
 export function DoctorConsultation({ onManageAppointment }: DoctorConsultationProps = {}) {
   const { patientAppointments, loading, error, updatePatientAppointment, fetchPatientAppointments } = usePatientAppointments();
-  const { staff, fetchStaff } = useStaff();
-  const { roles, fetchRoles } = useRoles();
-  const { departments, fetchDepartments } = useDepartments();
-  
-  // Fetch data on mount - always from network
-  useEffect(() => {
-    fetchStaff();
-    fetchRoles();
-    fetchDepartments();
-  }, [fetchStaff, fetchRoles, fetchDepartments]);
+  const { staff } = useStaff();
+  const { roles } = useRoles();
+  const { departments } = useDepartments();
   const [searchTerm, setSearchTerm] = useState('');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -392,10 +385,7 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
       }
     };
     fetchPatients();
-    fetchPatientAppointments().catch((err) => {
-      console.error('Error fetching appointments:', err);
-    });
-  }, [fetchPatientAppointments]);
+  }, []);
 
   // Separate active and inactive appointments, and filter based on search term
   const { activeAppointments, inactiveAppointments, filteredActiveAppointments } = useMemo(() => {
@@ -519,54 +509,52 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
         <div className="px-6 pt-4 pb-4 flex-1">
           {/* Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Total Appointments</p>
-                    <h3 className="text-gray-900">{patientAppointments.length}</h3>
+            <Card className="bg-white border border-gray-200 shadow-sm rounded-lg">
+              <CardContent className="p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="bg-gray-500 p-4 rounded-lg shadow-sm flex items-center justify-center">
+                    <Users className="size-7 text-white" strokeWidth={2} />
                   </div>
-                  <Users className="size-8 text-blue-500" />
+                  <span className="text-sm font-medium text-gray-500">Total</span>
                 </div>
+                <h3 className="text-4xl font-bold text-gray-900 mb-2">{patientAppointments.length}</h3>
+                <p className="text-base text-gray-500">Total Appointments</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Waiting</p>
-                    <h3 className="text-gray-900">{getAppointmentsByStatus('Waiting').length}</h3>
+            <Card className="bg-white border border-gray-200 shadow-sm rounded-lg">
+              <CardContent className="p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="bg-orange-500 p-4 rounded-lg shadow-sm flex items-center justify-center">
+                    <Clock className="size-7 text-white" strokeWidth={2} />
                   </div>
-                  <div className="size-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                    <span className="text-yellow-700">⏳</span>
-                  </div>
+                  <span className="text-sm font-medium text-gray-500">Waiting</span>
                 </div>
+                <h3 className="text-4xl font-bold text-gray-900 mb-2">{getAppointmentsByStatus('Waiting').length}</h3>
+                <p className="text-base text-gray-500">Waiting</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Consulting</p>
-                    <h3 className="text-gray-900">{getAppointmentsByStatus('Consulting').length}</h3>
+            <Card className="bg-white border border-gray-200 shadow-sm rounded-lg">
+              <CardContent className="p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="bg-purple-500 p-4 rounded-lg shadow-sm flex items-center justify-center">
+                    <Stethoscope className="size-7 text-white" strokeWidth={2} />
                   </div>
-                  <div className="size-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-blue-700">👨‍⚕️</span>
-                  </div>
+                  <span className="text-sm font-medium text-gray-500">Consulting</span>
                 </div>
+                <h3 className="text-4xl font-bold text-gray-900 mb-2">{getAppointmentsByStatus('Consulting').length}</h3>
+                <p className="text-base text-gray-500">Consulting</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Completed</p>
-                    <h3 className="text-gray-900">{getAppointmentsByStatus('Completed').length}</h3>
+            <Card className="bg-white border border-gray-200 shadow-sm rounded-lg">
+              <CardContent className="p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="bg-green-500 p-4 rounded-lg shadow-sm flex items-center justify-center">
+                    <CheckCircle2 className="size-7 text-white" strokeWidth={2} />
                   </div>
-                  <div className="size-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <span className="text-green-700">✓</span>
-                  </div>
+                  <span className="text-sm font-medium text-gray-500">Completed</span>
                 </div>
+                <h3 className="text-4xl font-bold text-gray-900 mb-2">{getAppointmentsByStatus('Completed').length}</h3>
+                <p className="text-base text-gray-500">Completed</p>
               </CardContent>
             </Card>
           </div>
@@ -601,11 +589,6 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
-                  if (onManageAppointment) {
-                    onManageAppointment(appointment.id);
-                    return;
-                  }
-                  // Fallback to dialog if onManageAppointment is not provided
                   setSelectedAppointment(appointment);
                   setEditFormData({
                     patientId: appointment.patientId,
@@ -638,11 +621,6 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
-                  if (onManageAppointment) {
-                    onManageAppointment(appointment.id);
-                    return;
-                  }
-                  // Fallback to dialog if onManageAppointment is not provided
                   setSelectedAppointment(appointment);
                   setEditFormData({
                     patientId: appointment.patientId,
@@ -675,11 +653,6 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
-                  if (onManageAppointment) {
-                    onManageAppointment(appointment.id);
-                    return;
-                  }
-                  // Fallback to dialog if onManageAppointment is not provided
                   setSelectedAppointment(appointment);
                   setEditFormData({
                     patientId: appointment.patientId,
@@ -712,11 +685,6 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
-                  if (onManageAppointment) {
-                    onManageAppointment(appointment.id);
-                    return;
-                  }
-                  // Fallback to dialog if onManageAppointment is not provided
                   setSelectedAppointment(appointment);
                   setEditFormData({
                     patientId: appointment.patientId,
@@ -1894,11 +1862,10 @@ function AppointmentList({
           <table className="w-full">
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="border-b border-gray-200">
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Token #</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Patient ID</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Patient</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Phone</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Doctor</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Issue Time</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Status</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Admission</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Actions</th>
@@ -1907,7 +1874,7 @@ function AppointmentList({
             <tbody>
               {appointments.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-gray-500">
+                  <td colSpan={7} className="text-center py-8 text-gray-500">
                     No appointments found
                   </td>
                 </tr>
@@ -1932,21 +1899,12 @@ function AppointmentList({
                       ? (patient as any).PatientNo || (patient as any).patientNo || appointment.patientId.substring(0, 8)
                       : appointment.patientId.substring(0, 8);
                     
-                    const tokenNo = appointment.tokenNo || '-';
-                    // Format issue time from appointmentTime (HH:mm format)
-                    const issueTime = appointment.appointmentTime || '-';
-                    
                     return (
                       <tr key={appointment.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-4 px-6 whitespace-nowrap">
-                          <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded">
-                            {tokenNo}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 text-gray-600 break-words" style={{ maxWidth: '200px' }}>{patientName}</td>
+                        <td className="py-4 px-6 text-gray-900 font-mono font-medium whitespace-nowrap">{patientId}</td>
+                        <td className="py-4 px-6 text-gray-600 whitespace-nowrap">{patientName}</td>
                         <td className="py-4 px-6 text-gray-600 whitespace-nowrap">{patientPhone}</td>
                         <td className="py-4 px-6 text-gray-600 whitespace-nowrap">{doctorName}</td>
-                        <td className="py-4 px-6 text-gray-600 whitespace-nowrap">{issueTime}</td>
                         <td className="py-4 px-6">{getStatusBadge(appointment.appointmentStatus)}</td>
                         <td className="py-4 px-6">
                           {appointment.toBeAdmitted ? (
@@ -1959,9 +1917,10 @@ function AppointmentList({
                         </td>
                         <td className="py-4 px-6 whitespace-nowrap">
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             onClick={() => onManage(appointment)}
+                            className="dashboard-manage-button"
                             title="Manage Appointment"
                           >
                             Manage

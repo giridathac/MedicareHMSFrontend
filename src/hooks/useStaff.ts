@@ -5,34 +5,31 @@ import { Staff, CreateUserDto, UpdateUserDto } from '../types/staff';
 
 export function useStaff() {
   const [staff, setStaff] = useState<Staff[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Always fetch fresh from network - no caching
   const fetchStaff = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await staffApi.getAll();
       setStaff(data);
-      return data;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch staff';
-      setError(errorMessage);
-      setStaff([]);
-      throw err;
+      setError(err instanceof Error ? err.message : 'Failed to fetch staff');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // No auto-fetch on mount - component must call fetchStaff explicitly
+  useEffect(() => {
+    fetchStaff();
+  }, [fetchStaff]);
 
   const createStaff = useCallback(async (data: CreateUserDto) => {
     try {
       setError(null);
       const newStaff = await staffApi.create(data);
-      // Don't update local state - always fetch fresh from network
+      setStaff(prev => [...prev, newStaff]);
       return newStaff;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create staff';
@@ -45,7 +42,7 @@ export function useStaff() {
     try {
       setError(null);
       const updatedStaff = await staffApi.update(data);
-      // Don't update local state - always fetch fresh from network
+      setStaff(prev => prev.map(s => s.UserId === data.UserId ? updatedStaff : s));
       return updatedStaff;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update staff';
@@ -58,7 +55,7 @@ export function useStaff() {
     try {
       setError(null);
       await staffApi.delete(id);
-      // Don't update local state - always fetch fresh from network
+      setStaff(prev => prev.filter(s => s.UserId !== id));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete staff';
       setError(errorMessage);

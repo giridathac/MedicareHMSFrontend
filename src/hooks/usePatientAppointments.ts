@@ -12,11 +12,7 @@ export function usePatientAppointments() {
     try {
       setLoading(true);
       setError(null);
-      // Fetch all appointments by using a large limit (or fetch page by page)
-      // For backward compatibility, we'll fetch the first page with a large limit
-      const response = await patientAppointmentsApi.getAll({ page: 1, limit: 1000 });
-      // Handle both old array response and new paginated response
-      const data = Array.isArray(response) ? response : response.data;
+      const data = await patientAppointmentsApi.getAll();
       setPatientAppointments(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch patient appointments');

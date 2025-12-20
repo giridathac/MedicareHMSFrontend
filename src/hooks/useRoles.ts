@@ -5,47 +5,45 @@ import { Role } from '../types/roles';
 
 export function useRoles() {
   const [roles, setRoles] = useState<Role[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Always fetch fresh from network - no caching
   const fetchRoles = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await rolesApi.getAll();
       setRoles(data);
-      return data;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch roles';
-      setError(errorMessage);
-      setRoles([]);
-      throw err;
+      setError(err instanceof Error ? err.message : 'Failed to fetch roles');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // No auto-fetch on mount - component must call fetchRoles explicitly
+  useEffect(() => {
+    fetchRoles();
+  }, [fetchRoles]);
 
   const createRole = useCallback(async (data: CreateRoleDto) => {
     try {
       setError(null);
       const newRole = await rolesApi.create(data);
-      // Don't update local state - always fetch fresh from network
+      // Refresh the roles list after creation
+      await fetchRoles();
       return newRole;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create role';
       setError(errorMessage);
       throw err;
     }
-  }, []);
+  }, [fetchRoles]);
 
   const updateRole = useCallback(async (data: UpdateRoleDto) => {
     try {
       setError(null);
       const updatedRole = await rolesApi.update(data);
-      // Don't update local state - always fetch fresh from network
+      setRoles(prev => prev.map(r => r.id === data.id ? updatedRole : r));
       return updatedRole;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update role';
@@ -58,7 +56,7 @@ export function useRoles() {
     try {
       setError(null);
       await rolesApi.delete(id);
-      // Don't update local state - always fetch fresh from network
+      setRoles(prev => prev.filter(r => r.id !== id));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete role';
       setError(errorMessage);
