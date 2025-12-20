@@ -377,6 +377,7 @@ export function Dashboard() {
       </Card>
 
       {/* Emergency Admissions */}
+      {/*
       <Card className="mb-8">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -447,8 +448,9 @@ export function Dashboard() {
           )}
         </CardContent>
       </Card>
-
+        */}
       {/* Departments Overview */}
+      {/*}
       <Card className="mb-4">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -520,7 +522,7 @@ export function Dashboard() {
           )}
         </CardContent>
       </Card>
-
+        */}
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

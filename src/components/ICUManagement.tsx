@@ -81,6 +81,7 @@ export function ICUManagement() {
     patientCondition: string;
     onVentilator: string;
     icuAdmissionStatus: string;
+    patientType: string;
   }>({
     patientId: '',
     icuId: '',
@@ -94,6 +95,7 @@ export function ICUManagement() {
     patientCondition: '',
     onVentilator: 'No',
     icuAdmissionStatus: 'Occupied',
+    patientType: '',
   });
 
   // Load ICU patient admissions from API
@@ -474,6 +476,22 @@ export function ICUManagement() {
       setAddICUAdmissionError(null);
       setPatientSearchTerm(''); // Reset search term when opening dialog
       setIcuBedSearchTerm(''); // Reset ICU bed search term when opening dialog
+      // Reset form to initial state
+      setAddICUAdmissionForm({
+        patientId: '',
+        icuId: '',
+        icuBedId: '',
+        icuBedNo: '',
+        icuPatientStatus: '',
+        icuAllocationFromDate: '',
+        icuAllocationToDate: '',
+        diagnosis: '',
+        treatmentDetails: '',
+        patientCondition: '',
+        onVentilator: 'No',
+        icuAdmissionStatus: 'Occupied',
+        patientType: '',
+      });
       // Preload dropdowns
       const patientsList = await admissionsApi.getPatientRegistrations();
       setPatientOptions(patientsList || []);
@@ -583,6 +601,7 @@ export function ICUManagement() {
         PatientCondition: addICUAdmissionForm.patientCondition,
         OnVentilator: addICUAdmissionForm.onVentilator,
         ICUAdmissionStatus: addICUAdmissionForm.icuAdmissionStatus,
+        PatientType: addICUAdmissionForm.patientType || '',
       };
 
       console.log('Saving ICU admission with payload:', payload);
@@ -1091,8 +1110,6 @@ export function ICUManagement() {
       ], 'Not Specified'),
       ventilatorSupport: ventilatorSupport,
     };
-    
-    return patient;
   };
 
   // Function to fetch latest vitals for an ICU admission
@@ -1141,26 +1158,24 @@ export function ICUManagement() {
   }, [selectedPatient?.patientICUAdmissionId]);
 
   return (
-    <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
-      <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
-        <div className="px-6 pt-6 pb-0 flex-shrink-0">
-          <div className="flex items-center justify-between mb-4 flex-shrink-0">
-            <div>
-              <h1 className="text-gray-900 mb-2">ICU Management</h1>
-              <p className="text-gray-500">Intensive Care Unit monitoring and management</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <Button
-                onClick={openAddICUAdmission}
-                className="flex items-center gap-2"
-              >
-                <Plus className="size-4" />
-                Add New ICU Admission
-              </Button>
-            </div>
+    <div className="dashboard-container">
+      <div className="dashboard-scrollable-container">
+        <div className="dashboard-header-section">
+          <div className="dashboard-header-content">
+          <div>
+              <h1 className="dashboard-header">ICU Management</h1>
+              <p className="dashboard-subheader">Intensive Care Unit monitoring and management</p>
           </div>
+            <Button
+              onClick={openAddICUAdmission}
+              className="flex items-center gap-2"
+            >
+              <Plus className="size-4" />
+              Add New ICU Admission
+            </Button>
         </div>
-        <div className="px-6 pt-4 pb-4 flex-1">
+      </div>
+        <div className="dashboard-main-content">
       <Dialog open={showAddICUAdmission} onOpenChange={setShowAddICUAdmission}>
         <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
           <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
@@ -1386,6 +1401,26 @@ export function ICUManagement() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <Label>Patient Type</Label>
+                  <Select
+                    onValueChange={(val) => {
+                      console.log('Patient Type selected:', val);
+                      setAddICUAdmissionForm(prev => ({ ...prev, patientType: val }));
+                    }}
+                    value={addICUAdmissionForm.patientType || ''}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Patient Type" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[99999] !pointer-events-auto" position="popper">
+                      <SelectItem value="IPD">IPD</SelectItem>
+                      <SelectItem value="OPD">OPD</SelectItem>
+                      <SelectItem value="Emergency">Emergency</SelectItem>
+                      <SelectItem value="Direct">Direct</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
                   <Label>ICU Patient Status</Label>
                   <Select
                     onValueChange={(val) => {
@@ -1500,65 +1535,60 @@ export function ICUManagement() {
         </TabsList>
 
         <TabsContent value="patients" className="dashboard-tabs">
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Total Patients</p>
-                    <h3 className="text-gray-900">{occupancy.occupiedBeds}/{occupancy.totalBeds}</h3>
-                  </div>
-                  <HeartPulse className="size-8 text-red-500" />
+          {/* Stats Grid */}
+          <div className="dashboard-stats-grid">
+            <Card className="dashboard-stats-card">
+              <CardContent className="dashboard-stats-card-content">
+                <div className="dashboard-stats-icon-container">
+                  <HeartPulse className="size-7 text-white bg-red-500 p-4 rounded-lg shadow-sm" />
+                  <span className="dashboard-stats-status-label">Occupied beds</span>
                 </div>
+                <h3 className="dashboard-stats-number">{occupancy.occupiedBeds}/{occupancy.totalBeds}</h3>
+                <p className="dashboard-stats-label">Total Patients</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Critical Patients</p>
-                    <h3 className="text-gray-900">{criticalPatientsCount}</h3>
-                  </div>
-                  <div className="size-8 bg-red-100 rounded-full flex items-center justify-center">
-                    <span className="text-red-700">⚠️</span>
-                  </div>
+
+            <Card className="dashboard-stats-card">
+              <CardContent className="dashboard-stats-card-content">
+                <div className="dashboard-stats-icon-container">
+                  <Badge variant="destructive">{criticalPatientsCount}</Badge>
+                  <span className="dashboard-stats-status-label">Require immediate attention</span>
                 </div>
+                <h3 className="dashboard-stats-number">{criticalPatientsCount}</h3>
+                <p className="dashboard-stats-label">Critical Patients</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">On Ventilator</p>
-                    <h3 className="text-gray-900">{onVentilatorCount}</h3>
-                  </div>
-                  <Wind className="size-8 text-blue-500" />
+
+            <Card className="dashboard-stats-card">
+              <CardContent className="dashboard-stats-card-content">
+                <div className="dashboard-stats-icon-container">
+                  <Wind className="size-7 text-white bg-blue-500 p-4 rounded-lg shadow-sm" />
+                  <span className="dashboard-stats-status-label">Ventilator support</span>
                 </div>
+                <h3 className="dashboard-stats-number">{onVentilatorCount}</h3>
+                <p className="dashboard-stats-label">On Ventilator</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Available Beds</p>
-                    <h3 className="text-gray-900">{availableBedsCount}</h3>
-                  </div>
-                  <div className="size-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <span className="text-green-700">✓</span>
-                  </div>
+
+            <Card className="dashboard-stats-card">
+              <CardContent className="dashboard-stats-card-content">
+                <div className="dashboard-stats-icon-container">
+                  <span className="text-green-600 text-2xl">●</span>
+                  <span className="dashboard-stats-status-label">Ready for admission</span>
                 </div>
+                <h3 className="dashboard-stats-number">{availableBedsCount}</h3>
+                <p className="dashboard-stats-label">Available Beds</p>
               </CardContent>
             </Card>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* ICU Bed Layout */}
-            <Card>
+            <Card className="dashboard-table-card">
               <CardHeader>
                 <CardTitle>ICU Bed Layout and Status</CardTitle>
               </CardHeader>
-              <CardContent className="p-6">
+              <CardContent className="dashboard-table-card-content">
                 <div className="grid grid-cols-3 gap-3">
                   {icuBeds.map((bed, index) => {
                     // Ensure we have a valid icuBedId - try to extract it if missing
@@ -1572,9 +1602,11 @@ export function ICUManagement() {
                     }
                     
                     // Create click handler - using async/await properly
-                    const handleBedClick = async (e: React.MouseEvent) => {
-                      e.preventDefault();
-                      e.stopPropagation();
+                    const handleBedClick = async (e?: React.MouseEvent | React.KeyboardEvent) => {
+                      if (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }
                       
                       // Set selected bed ID first
                       setSelectedICUBedId(bedId);
@@ -1808,46 +1840,46 @@ export function ICUManagement() {
           </div>
 
           {/* All ICU Patients List */}
-          <Card>
+          <Card className="dashboard-table-card">
             <CardHeader>
               <CardTitle>All ICU Patients</CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent className="dashboard-table-card-content">
               {loading ? (
-                <div className="text-center py-12 text-gray-500">Loading ICU patients...</div>
+                <div className="dashboard-table-empty-cell">Loading ICU patients...</div>
               ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="dashboard-table-wrapper">
+                <table className="dashboard-table">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 text-gray-700">Bed</th>
-                      <th className="text-left py-3 px-4 text-gray-700">Patient</th>
-                      <th className="text-left py-3 px-4 text-gray-700">Condition</th>
-                      <th className="text-left py-3 px-4 text-gray-700">Severity</th>
-                      <th className="text-left py-3 px-4 text-gray-700">Doctor</th>
-                      <th className="text-left py-3 px-4 text-gray-700">Ventilator</th>
-                      <th className="text-left py-3 px-4 text-gray-700">Action</th>
+                    <tr className="dashboard-table-header-row">
+                      <th className="dashboard-table-header-cell">Bed</th>
+                      <th className="dashboard-table-header-cell">Patient</th>
+                      <th className="dashboard-table-header-cell">Condition</th>
+                      <th className="dashboard-table-header-cell">Severity</th>
+                      <th className="dashboard-table-header-cell">Doctor</th>
+                      <th className="dashboard-table-header-cell">Ventilator</th>
+                      <th className="dashboard-table-header-cell">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                       {patients.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="text-center py-12 text-gray-500">
+                          <td colSpan={7} className="dashboard-table-empty-cell">
                             No ICU patients found
                           </td>
                         </tr>
                       ) : (
                         patients.map((patient) => (
-                      <tr key={patient.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 px-4">
+                      <tr key={patient.id} className="dashboard-table-body-row">
+                        <td className="dashboard-table-body-cell">
                           <Badge>{patient.bedNumber}</Badge>
                         </td>
-                        <td className="py-3 px-4">
-                          <p className="text-gray-900">{patient.patientName}</p>
-                          <p className="text-gray-600 text-xs">{patient.age}Y / {patient.gender}</p>
+                        <td className="dashboard-table-body-cell">
+                          <p className="dashboard-table-body-cell-primary">{patient.patientName}</p>
+                          <p className="dashboard-table-body-cell-secondary text-xs">{patient.age}Y / {patient.gender}</p>
                         </td>
-                        <td className="py-3 px-4 text-gray-600">{patient.condition}</td>
-                        <td className="py-3 px-4">
+                        <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.condition}</td>
+                        <td className="dashboard-table-body-cell">
                           <Badge variant={
                             patient.severity === 'Critical' ? 'destructive' :
                             patient.severity === 'Serious' ? 'default' : 'secondary'
@@ -1855,8 +1887,8 @@ export function ICUManagement() {
                             {patient.severity}
                           </Badge>
                         </td>
-                        <td className="py-3 px-4 text-gray-600">{patient.attendingDoctor}</td>
-                        <td className="py-3 px-4">
+                        <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.attendingDoctor}</td>
+                        <td className="dashboard-table-body-cell">
                           {patient.ventilatorSupport ? (
                             <Badge variant="secondary">
                               <Wind className="size-3 mr-1" />
@@ -1866,10 +1898,11 @@ export function ICUManagement() {
                             <span className="text-gray-500">No</span>
                           )}
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="dashboard-table-body-cell">
                           <Button
                             variant="outline"
                             size="sm"
+                            className="dashboard-manage-button"
                             onClick={() => {
                               console.log('========================================');
                               console.log('Manage ICU Case button clicked');

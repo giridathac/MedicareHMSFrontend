@@ -1,5 +1,5 @@
 // RoomBeds Management Component - Separated UI from logic
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -39,7 +39,12 @@ const roomTypeOptions = ['Special', 'Special Shared', 'Regular'];
 const statusOptions: RoomBed['status'][] = ['Active', 'Inactive'];
 
 export function RoomBeds() {
-  const { roomBeds, loading, error, createRoomBed, updateRoomBed, deleteRoomBed } = useRoomBeds();
+  const { roomBeds, loading, error, fetchRoomBeds, createRoomBed, updateRoomBed, deleteRoomBed } = useRoomBeds();
+
+  // Fetch room beds from API on component mount
+  useEffect(() => {
+    fetchRoomBeds();
+  }, [fetchRoomBeds]);
 
   const handleCreateRoomBed = async (data: {
     bedNo: string;
@@ -53,6 +58,8 @@ export function RoomBeds() {
   }) => {
     try {
       await createRoomBed(data);
+      // Refresh the room beds table after creating
+      await fetchRoomBeds();
     } catch (err) {
       console.error('Failed to create room bed:', err);
       throw err;
@@ -70,6 +77,8 @@ export function RoomBeds() {
   }>) => {
     try {
       await updateRoomBed({ roomBedId, ...data });
+      // Refresh the room beds table after updating
+      await fetchRoomBeds();
     } catch (err) {
       console.error('Failed to update room bed:', err);
       throw err;
@@ -80,6 +89,8 @@ export function RoomBeds() {
     if (confirm('Are you sure you want to delete this room bed? This action cannot be undone.')) {
       try {
         await deleteRoomBed(roomBedId);
+        // Refresh the room beds table after deleting
+        await fetchRoomBeds();
       } catch (err) {
         console.error('Failed to delete room bed:', err);
       }
@@ -184,7 +195,14 @@ function RoomBedsView({
         status: 'Active',
       });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create room bed. Please try again.';
+      let errorMessage = 'Failed to create room bed. Please try again.';
+      if (err instanceof Error) {
+        if (err.message.includes('BedNo already exists') || err.message.includes('Bed numbers must be unique')) {
+          errorMessage = 'Please select the valid Bed No as it should be unique';
+        } else {
+          errorMessage = err.message;
+        }
+      }
       setSubmitError(errorMessage);
       console.error('Failed to create room bed:', err);
     }
@@ -313,17 +331,16 @@ function RoomBedsView({
         <div className="px-6 pt-6 pb-0 flex-shrink-0">
           <div className="flex items-center justify-between mb-4 flex-shrink-0">
             <div>
-              <h1 className="text-gray-900 mb-2">IPD Room & Beds Management</h1>
-              <p className="text-gray-500">Manage hospital rooms and beds</p>
+              <h1 className="dashboard-header">IPD Room & Beds Management</h1>
+              <p className="dashboard-subheader">Manage hospital rooms and beds</p>
             </div>
-            <div className="flex items-center gap-4">
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="flex items-center gap-2">
-                    <Plus className="size-4" />
-                    Add New Room Bed
-                  </Button>
-                </DialogTrigger>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="size-4" />
+              Add New Room Bed
+            </Button>
+          </DialogTrigger>
           <DialogContent className="p-0 gap-0 large-dialog bg-white">
             <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0 bg-white">
               <DialogTitle className="text-gray-700" style={{ fontSize: '1.25rem' }}>Add New Room Bed</DialogTitle>
@@ -413,8 +430,9 @@ function RoomBedsView({
             </div>
           </DialogContent>
         </Dialog>
-              </div>
-            </div>
+          </div>
+        </div>
+        <div className="px-6 pt-4 pb-4 flex-1">
           {/* Search */}
           <Card className="mb-6 bg-white">
             <CardContent className="p-6">
@@ -501,6 +519,8 @@ function RoomBedsView({
           </div>
         </CardContent>
       </Card>
+        </div>
+      </div>
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -635,9 +655,6 @@ function RoomBedsView({
           </div>
         </DialogContent>
       </Dialog>
-        </div>
-      </div>
     </div>
   );
 }
-
