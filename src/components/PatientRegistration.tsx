@@ -524,7 +524,7 @@ export function PatientRegistration() {
               <div className="flex items-center gap-4">
                 <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button className="flex items-center gap-2">
+                    <Button className="dialog-trigger-button">
                       <Plus className="size-4" />
                       Add New Patient
                     </Button>
@@ -591,9 +591,9 @@ export function PatientRegistration() {
                           </div>
                           <div className="dialog-form-field-grid">
                             <div className="dialog-form-field">
-                              <Label htmlFor="adhaarID" className="dialog-label-standard flex items-center gap-2">
+                              <Label htmlFor="adhaarID" className="dialog-label-standard dialog-label-with-icon">
                                 Adhaar ID
-                                <span className="text-xs text-orange-500">(Important)</span>
+                                <span className="dialog-label-important">(Important)</span>
                               </Label>
                               <Input
                                 id="adhaarID"
@@ -604,10 +604,10 @@ export function PatientRegistration() {
                                 onChange={(e) => handleAdhaarChange(e.target.value)}
                                 placeholder="Enter 12-digit Aadhaar number"
                                 maxLength={12}
-                                className={`dialog-input-standard ${adhaarError ? 'border-red-300' : ''}`}
+                                className={`dialog-input-standard ${adhaarError ? 'dialog-input-error' : ''}`}
                               />
                               {adhaarError && (
-                                <p className="text-sm text-red-600 mt-1">{adhaarError}</p>
+                                <p className="dialog-error-text">{adhaarError}</p>
                               )}
                             </div>
                             <div className="dialog-form-field">
@@ -738,7 +738,7 @@ export function PatientRegistration() {
                               />
                             </div>
                           </div>
-                          <div className="flex justify-end gap-2 mt-4">
+                          <div className="dialog-footer-buttons">
                             <Button 
                               type="button"
                               variant="outline" 

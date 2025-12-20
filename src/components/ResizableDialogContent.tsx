@@ -93,9 +93,9 @@ export function ResizableDialogContent({
       const element = findAndUpdateDialogElement();
       if (!element) return;
 
-      // Allow full width and height - use viewport dimensions
-      const effectiveMaxWidth = window.innerWidth - 40;
-      const effectiveMaxHeight = window.innerHeight - 40;
+      // Allow full width and height - use viewport dimensions or maxWidth prop
+      const effectiveMaxWidth = Math.min(maxWidth, window.innerWidth - 40);
+      const effectiveMaxHeight = Math.min((window.innerHeight * maxHeight) / 100, window.innerHeight - 40);
 
       // Apply styles with !important to override CSS
       element.style.setProperty('width', `${dimensions.width}px`, 'important');

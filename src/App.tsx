@@ -61,18 +61,18 @@ export default function App() {
     { path: '/patient-registration', label: 'Patient Registration', icon: UserPlus },
     { path: '/consultation', label: 'Doctor Consultation', icon: Stethoscope },
     { path: '/laboratory', label: 'Laboratory', icon: TestTube },
-    { path: '/emergency', label: 'Emergency', icon: Siren },
     { path: '/admissions', label: 'Admissions (IPD)', icon: BedDouble },
+    { path: '/emergency', label: 'Emergency', icon: Siren },
     { path: '/ot', label: 'OT Management', icon: Scissors },
-    { path: '/ot-rooms', label: 'OT Rooms Management', icon: Building2 },
     { path: '/icu', label: 'ICU Management', icon: HeartPulse },
-    { path: '/reports', label: 'Reports', icon: FileBarChart },
     { path: '/roles', label: 'Roles', icon: Shield },
     { path: '/departments', label: 'Departments', icon: Building },
     { path: '/staff', label: 'Staff', icon: Users },
     { path: '/room-beds', label: 'IPD Beds & Rooms', icon: Home },
     { path: '/icu-beds', label: 'ICU Bed Management', icon: HeartPulse },
+    { path: '/ot-rooms', label: 'OT Rooms Management', icon: Building2 },
     { path: '/emergency-beds', label: 'Emergency Bed Management', icon: BedDouble },
+    { path: '/reports', label: 'Reports', icon: FileBarChart },
   ];
 
   return (
@@ -147,19 +147,19 @@ export default function App() {
             <Route path="/patient-registration" element={<PatientRegistration />} />
             <Route path="/consultation" element={<DoctorConsultation onManageAppointment={(id) => navigate(`/consultation/${id}`)} />} />
             <Route path="/consultation/:id" element={<ManageConsultationRoute />} />
+            <Route path="/laboratory" element={<Laboratory />} />
             <Route path="/admissions" element={<Admissions />} />
+            <Route path="/emergency" element={<Emergency />} />
             <Route path="/ot" element={<OTManagement />} />
             <Route path="/ot-rooms" element={<OTRoomsManagement />} />
             <Route path="/icu" element={<ICUManagement />} />
-            <Route path="/laboratory" element={<Laboratory />} />
-            <Route path="/emergency" element={<Emergency />} />
-            <Route path="/reports" element={<Reports />} />
             <Route path="/roles" element={<Roles />} />
             <Route path="/departments" element={<Departments />} />
             <Route path="/staff" element={<StaffManagement />} />
             <Route path="/room-beds" element={<RoomBeds />} />
             <Route path="/icu-beds" element={<ICUBedsManagement />} />
             <Route path="/emergency-beds" element={<EmergencyBedManagement />} />
+            <Route path="/reports" element={<Reports />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Suspense>

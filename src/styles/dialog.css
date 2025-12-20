@@ -190,7 +190,7 @@
 /* Helper text (small text below inputs) */
 .dialog-helper-text {
   font-size: 0.75rem; /* text-xs */
-  color: rgb(55, 65, 81); /* text-gray-700 */
+  color: rgb(107, 114, 128); /* text-gray-500 */
   margin-top: 0.25rem; /* mt-1 */
 }
 
@@ -239,7 +239,22 @@
    Large Dialog Styling
    ============================================ */
 
-/* Override dialog for large popup windows */
+/* 
+ * Default Large Dialog Styling
+ * 
+ * Standard large dialogs use a max-width of 550px.
+ * This is the default size for most dialogs in the application.
+ * 
+ * To make a dialog wider, use one of these approaches:
+ * 1. Use ResizableDialogContent with initialWidth, maxWidth, and minWidth props
+ *    (inline styles with !important will override CSS)
+ * 2. Add the .dialog-extra-wide class for dialogs that need more space
+ * 
+ * IMPORTANT: Only make dialogs wider when explicitly requested.
+ * The default 550px size is sufficient for most use cases.
+ */
+
+/* Override dialog for large popup windows - DEFAULT SIZE */
 [data-slot="dialog-content"].large-dialog {
   width: 55vw !important;
   max-width: 550px !important;
@@ -261,6 +276,18 @@
   z-index: 9999 !important;
 }
 
+/* Extra wide dialog - use only when explicitly needed */
+/* This class allows dialogs to be wider than the default 550px */
+/* Apply this class only when the dialog content requires more horizontal space */
+[data-slot="dialog-content"].large-dialog.dialog-extra-wide {
+  max-width: 95vw !important;
+  min-width: 800px !important;
+}
+
+/* Note: ResizableDialogContent with custom props will override these CSS rules
+ * via inline styles with !important. Use ResizableDialogContent props when you
+ * need precise control over dialog dimensions.
+ */
 
 @media (width >= 40rem) {
   [data-slot="dialog-content"].large-dialog {
@@ -438,7 +465,7 @@
   padding-bottom: 0.75rem;
   padding-left: 1rem; /* px-4 */
   padding-right: 1rem;
-  font-size: 0.75rem; /* text-xs */
+  font-size: 1rem; /* text-base - matches OT Rooms Management table */
   font-weight: 500; /* font-medium */
   color: rgb(55, 65, 81); /* text-gray-700 */
 }
@@ -470,6 +497,7 @@
 /* Table body cell - primary text */
 .dialog-table-body-cell-primary {
   color: rgb(17, 24, 39); /* text-gray-900 */
+  font-weight: 500; /* font-medium */
 }
 
 /* Table body cell - secondary text */
@@ -480,5 +508,71 @@
 /* Table body cell - monospace */
 .dialog-table-body-cell-mono {
   font-family: ui-monospace, monospace; /* font-mono */
-  color: rgb(75, 85, 99); /* text-gray-600 */
+  color: rgb(17, 24, 39); /* text-gray-900 - matches OT Rooms Management table */
+  font-weight: 500; /* font-medium */
+}
+
+/* ============================================
+   Add New Patient Dialog Styling
+   ============================================ */
+
+/* Error message container */
+.dialog-error-message {
+  background-color: rgb(254, 242, 242); /* bg-red-50 */
+  border: 1px solid rgb(254, 226, 226); /* border-red-200 */
+  color: rgb(185, 28, 28); /* text-red-700 */
+  padding-left: 1rem; /* px-4 */
+  padding-right: 1rem;
+  padding-top: 0.75rem; /* py-3 */
+  padding-bottom: 0.75rem;
+  border-radius: 0.375rem; /* rounded-md */
+}
+
+/* Error text below inputs */
+.dialog-error-text {
+  font-size: 0.875rem; /* text-sm */
+  color: rgb(220, 38, 38); /* text-red-600 */
+  margin-top: 0.25rem; /* mt-1 */
+}
+
+/* Label with flex layout for icons/badges */
+.dialog-label-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* gap-2 */
+}
+
+/* Important label badge */
+.dialog-label-important {
+  font-size: 0.75rem; /* text-xs */
+  color: rgb(249, 115, 22); /* text-orange-500 */
+}
+
+/* Input with error border */
+.dialog-input-error {
+  border-color: rgb(252, 165, 165) !important; /* border-red-300 */
+}
+
+/* Dialog footer buttons container */
+.dialog-footer-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem; /* gap-2 */
+  margin-top: 1rem; /* mt-4 */
+}
+
+/* Dialog trigger button */
+.dialog-trigger-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* gap-2 */
+}
+
+/* ============================================
+   Dialog Switch Container
+   ============================================ */
+
+/* Switch container with z-index */
+.dialog-switch-container {
+  z-index: 1 !important;
 }

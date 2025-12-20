@@ -54,15 +54,20 @@
 .dashboard-header {
   color: rgb(17, 24, 39); /* text-gray-900 */
   margin-bottom: 0.5rem; /* mb-2 */
-  font-size: 1.125rem; /* text-3xl - 30px */
+  font-size: 1.5rem; /* 24px */
   line-height: 1.2;
   font-weight: 500;
+}
+
+/* ICU Management specific header size */
+.dashboard-header-icu {
+  font-size: 1.5625rem; /* 25px */
 }
 
 /* Dashboard Page Subheader */
 .dashboard-subheader {
   color: rgb(107, 114, 128); /* text-gray-500 */
-  font-size: 0.875rem; /* text-xl - 20px */
+  font-size: 1rem; /* matches FrontDesk p default size */
   line-height: 1.5;
   font-weight: 400;
 }
@@ -369,4 +374,287 @@
 .dashboard-manage-button:hover {
   background-color: rgb(229, 231, 235); /* hover:bg-gray-200 */
   color: rgb(31, 41, 55); /* hover:text-gray-800 */
+}
+
+/* ============================================
+   FrontDesk Dashboard Styling
+   ============================================ */
+
+/* Quick Stats Cards - FrontDesk style */
+.dashboard-quick-stats-card {
+  /* Card component - no additional styling needed, uses default Card */
+}
+
+.dashboard-quick-stats-card-content {
+  padding: 1.5rem; /* p-6 */
+}
+
+.dashboard-quick-stats-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dashboard-quick-stats-label {
+  font-size: 0.875rem; /* text-sm */
+  color: rgb(107, 114, 128); /* text-gray-500 */
+  margin-bottom: 0.25rem; /* mb-1 */
+}
+
+.dashboard-quick-stats-value {
+  color: rgb(17, 24, 39); /* text-gray-900 */
+}
+
+.dashboard-quick-stats-icon {
+  width: 2rem; /* size-8 */
+  height: 2rem;
+  color: rgb(59, 130, 246); /* text-blue-500 */
+}
+
+.dashboard-quick-stats-icon-badge {
+  width: 2rem; /* size-8 */
+  height: 2rem;
+  border-radius: 9999px; /* rounded-full */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-quick-stats-icon-badge-yellow {
+  background-color: rgb(254, 249, 195); /* bg-yellow-100 */
+  color: rgb(161, 98, 7); /* text-yellow-700 */
+}
+
+.dashboard-quick-stats-icon-badge-blue {
+  background-color: rgb(219, 234, 254); /* bg-blue-100 */
+  color: rgb(29, 78, 216); /* text-blue-700 */
+}
+
+.dashboard-quick-stats-icon-badge-green {
+  background-color: rgb(220, 252, 231); /* bg-green-100 */
+  color: rgb(21, 128, 61); /* text-green-700 */
+}
+
+/* Status Badges - FrontDesk style */
+.dashboard-status-badge {
+  padding-left: 0.75rem; /* px-3 */
+  padding-right: 0.75rem;
+  padding-top: 0.25rem; /* py-1 */
+  padding-bottom: 0.25rem;
+  border-radius: 9999px; /* rounded-full */
+  font-size: 0.75rem; /* text-xs */
+}
+
+.dashboard-status-badge-waiting {
+  background-color: rgb(254, 249, 195); /* bg-yellow-100 */
+  color: rgb(161, 98, 7); /* text-yellow-700 */
+}
+
+.dashboard-status-badge-consulting {
+  background-color: rgb(219, 234, 254); /* bg-blue-100 */
+  color: rgb(29, 78, 216); /* text-blue-700 */
+}
+
+.dashboard-status-badge-completed {
+  background-color: rgb(220, 252, 231); /* bg-green-100 */
+  color: rgb(21, 128, 61); /* text-green-700 */
+}
+
+.dashboard-status-badge-error {
+  background-color: rgb(254, 226, 226); /* bg-red-100 */
+  color: rgb(185, 28, 28); /* text-red-700 */
+}
+
+/* Token Badge - FrontDesk style */
+.dashboard-token-badge {
+  padding-left: 0.75rem; /* px-3 */
+  padding-right: 0.75rem;
+  padding-top: 0.25rem; /* py-1 */
+  padding-bottom: 0.25rem;
+  background-color: rgb(243, 244, 246); /* bg-gray-100 */
+  color: rgb(17, 24, 39); /* text-gray-900 */
+  border-radius: 0.25rem; /* rounded */
+}
+
+/* FrontDesk Table Styling */
+.dashboard-frontdesk-table {
+  width: 100%;
+}
+
+.dashboard-frontdesk-table-header-row {
+  border-bottom: 1px solid rgb(229, 231, 235); /* border-b border-gray-200 */
+}
+
+.dashboard-frontdesk-table-header-cell {
+  text-align: left;
+  padding-top: 0.75rem; /* py-3 */
+  padding-bottom: 0.75rem;
+  padding-left: 1rem; /* px-4 */
+  padding-right: 1rem;
+  color: rgb(55, 65, 81); /* text-gray-700 */
+}
+
+.dashboard-frontdesk-table-body-row {
+  border-bottom: 1px solid rgb(243, 244, 246); /* border-b border-gray-100 */
+}
+
+.dashboard-frontdesk-table-body-row:hover {
+  background-color: rgb(249, 250, 251); /* hover:bg-gray-50 */
+}
+
+.dashboard-frontdesk-table-body-row-inactive {
+  opacity: 0.5; /* opacity-50 */
+  background-color: rgb(249, 250, 251); /* bg-gray-50 */
+}
+
+.dashboard-frontdesk-table-body-cell {
+  padding-top: 0.75rem; /* py-3 */
+  padding-bottom: 0.75rem;
+  padding-left: 1rem; /* px-4 */
+  padding-right: 1rem;
+}
+
+.dashboard-frontdesk-table-body-cell-inactive {
+  color: rgb(156, 163, 175); /* text-gray-400 */
+}
+
+.dashboard-frontdesk-table-body-cell-primary {
+  color: rgb(17, 24, 39); /* text-gray-900 */
+}
+
+.dashboard-frontdesk-table-body-cell-secondary {
+  color: rgb(75, 85, 99); /* text-gray-600 */
+}
+
+.dashboard-frontdesk-table-empty-cell {
+  text-align: center;
+  padding-top: 3rem; /* py-12 */
+  padding-bottom: 3rem;
+  color: rgb(107, 114, 128); /* text-gray-500 */
+}
+
+/* FrontDesk Dropdown Tables (Patient/Doctor Search) */
+.dashboard-dropdown-table-container {
+  border: 1px solid rgb(229, 231, 235); /* border border-gray-200 */
+  border-radius: 0.375rem; /* rounded-md */
+  max-height: 15rem; /* max-h-60 */
+  overflow-y: auto;
+}
+
+.dashboard-dropdown-table {
+  width: 100%;
+}
+
+.dashboard-dropdown-table-header {
+  position: sticky;
+  top: 0;
+  background-color: rgb(249, 250, 251); /* bg-gray-50 */
+  border-bottom: 1px solid rgb(229, 231, 235); /* border-b border-gray-200 */
+}
+
+.dashboard-dropdown-table-header-cell {
+  text-align: left;
+  padding-top: 0.5rem; /* py-2 */
+  padding-bottom: 0.5rem;
+  padding-left: 0.75rem; /* px-3 */
+  padding-right: 0.75rem;
+  font-size: 0.75rem; /* text-xs */
+  font-weight: 700; /* font-bold */
+  color: rgb(55, 65, 81); /* text-gray-700 */
+}
+
+.dashboard-dropdown-table-body-row {
+  cursor: pointer;
+}
+
+.dashboard-dropdown-table-body-row:hover {
+  background-color: rgb(249, 250, 251); /* hover:bg-gray-100 */
+}
+
+.dashboard-dropdown-table-body-row-selected {
+  background-color: rgb(239, 246, 255); /* bg-blue-50 */
+}
+
+.dashboard-dropdown-table-body-row-highlighted {
+  background-color: rgb(249, 250, 251); /* bg-gray-50 */
+}
+
+.dashboard-dropdown-table-body-row-selected.dashboard-dropdown-table-body-row-highlighted {
+  background-color: rgb(239, 246, 255); /* bg-blue-50 takes precedence */
+}
+
+.dashboard-dropdown-table-body-cell {
+  padding-top: 0.5rem; /* py-2 */
+  padding-bottom: 0.5rem;
+  padding-left: 0.75rem; /* px-3 */
+  padding-right: 0.75rem;
+  font-size: 0.875rem; /* text-sm */
+}
+
+.dashboard-dropdown-table-body-cell-primary {
+  color: rgb(17, 24, 39); /* text-gray-900 */
+  font-family: ui-monospace, monospace; /* font-mono */
+}
+
+.dashboard-dropdown-table-body-cell-secondary {
+  color: rgb(75, 85, 99); /* text-gray-600 */
+}
+
+/* FrontDesk Page Header */
+.dashboard-frontdesk-header {
+  color: rgb(17, 24, 39); /* text-gray-900 */
+  margin-bottom: 0.5rem; /* mb-2 */
+}
+
+.dashboard-frontdesk-subheader {
+  color: rgb(107, 114, 128); /* text-gray-500 */
+}
+
+/* FrontDesk Search Input with Icon */
+.dashboard-frontdesk-search-wrapper {
+  position: relative;
+}
+
+.dashboard-frontdesk-search-icon {
+  position: absolute;
+  left: 0.75rem; /* left-3 */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem; /* size-4 */
+  height: 1rem;
+  color: rgb(156, 163, 175); /* text-gray-400 */
+}
+
+.dashboard-frontdesk-search-input {
+  padding-left: 2.5rem; /* pl-10 */
+}
+
+.dashboard-frontdesk-search-input-error {
+  border-color: rgb(239, 68, 68) !important; /* border-red-500 */
+}
+
+.dashboard-frontdesk-error-text {
+  font-size: 0.875rem; /* text-sm */
+  color: rgb(220, 38, 38); /* text-red-600 */
+  margin-top: 0.25rem; /* mt-1 */
+}
+
+/* FrontDesk Doctor Type Badge */
+.dashboard-doctor-type-badge {
+  padding-left: 0.5rem; /* px-2 */
+  padding-right: 0.5rem;
+  padding-top: 0.125rem; /* py-0.5 */
+  padding-bottom: 0.125rem;
+  border-radius: 0.25rem; /* rounded */
+  font-size: 0.75rem; /* text-xs */
+}
+
+.dashboard-doctor-type-badge-regular {
+  background-color: rgb(243, 244, 246); /* bg-gray-100 */
+  color: rgb(55, 65, 81); /* text-gray-700 */
+}
+
+.dashboard-doctor-type-badge-visiting {
+  background-color: rgb(243, 232, 255); /* bg-purple-100 */
+  color: rgb(126, 34, 206); /* text-purple-700 */
 }

@@ -493,18 +493,20 @@ export function OTManagement() {
               Schedule Surgery
             </Button>
           </DialogTrigger>
-          <DialogContent className="p-0 gap-0 max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-            <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
-              <DialogTitle>Add New Patient OT Allocation</DialogTitle>
-            </DialogHeader>
-            <div className="overflow-y-auto flex-1 px-6 pb-4 space-y-4">
-                <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded-md border border-gray-200">
-                  <p className="font-medium mb-1">Patient Source (Select one):</p>
-                  <p className="text-xs">Choose either Patient (Direct OT), Room Admission (IPD), Patient Appointment (OPD), or Emergency Bed</p>
-                </div>
-                
-                <div>
-                  <Label htmlFor="add-patientId" className="text-sm font-medium text-gray-700">Patient (Direct OT - Optional)</Label>
+          <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
+            <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+              <DialogHeader className="dialog-header-standard">
+                <DialogTitle className="dialog-title-standard">Add New Patient OT Allocation</DialogTitle>
+              </DialogHeader>
+              <div className="dialog-body-content-wrapper">
+                <div className="dialog-form-container space-y-4">
+                  <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded-md border border-gray-200">
+                    <p className="font-medium mb-1">Patient Source (Select one):</p>
+                    <p className="text-xs">Choose either Patient (Direct OT), Room Admission (IPD), Patient Appointment (OPD), or Emergency Bed</p>
+                  </div>
+                  
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-patientId" className="dialog-label-standard">Patient (Direct OT - Optional)</Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                     <Input
@@ -561,7 +563,7 @@ export function OTManagement() {
                           setPatientHighlightIndex(-1);
                         }
                       }}
-                      className="pl-10 mt-1"
+                      className="dialog-input-standard pl-10"
                     />
                   </div>
                   {patientSearchTerm && (() => {
@@ -627,53 +629,52 @@ export function OTManagement() {
                       </div>
                     ) : null;
                   })()}
-                  {formData.patientId && (
-                    <p className="text-xs text-gray-500 mt-1">Selected Patient ID: {formData.patientId}</p>
-                  )}
-                </div>
+                    {formData.patientId && (
+                      <p className="text-xs text-gray-500 mt-1">Selected Patient ID: {formData.patientId}</p>
+                    )}
+                  </div>
 
-                <div>
-                  <Label htmlFor="add-roomAdmissionId" className="text-sm font-medium text-gray-700">Room Admission (IPD - Optional)</Label>
-                  <Input
-                    id="add-roomAdmissionId"
-                    placeholder="Enter Room Admission ID"
-                    value={formData.roomAdmissionId}
-                    onChange={(e) => setFormData({ ...formData, roomAdmissionId: e.target.value, patientId: '', patientAppointmentId: '', emergencyBedSlotId: '' })}
-                    className="mt-1"
-                  />
-                </div>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-roomAdmissionId" className="dialog-label-standard">Room Admission (IPD - Optional)</Label>
+                    <Input
+                      id="add-roomAdmissionId"
+                      placeholder="Enter Room Admission ID"
+                      value={formData.roomAdmissionId}
+                      onChange={(e) => setFormData({ ...formData, roomAdmissionId: e.target.value, patientId: '', patientAppointmentId: '', emergencyBedSlotId: '' })}
+                      className="dialog-input-standard"
+                    />
+                  </div>
 
-                <div>
-                  <Label htmlFor="add-patientAppointmentId" className="text-sm font-medium text-gray-700">Patient Appointment (OPD - Optional)</Label>
-                  <Input
-                    id="add-patientAppointmentId"
-                    placeholder="Enter Patient Appointment ID"
-                    value={formData.patientAppointmentId}
-                    onChange={(e) => setFormData({ ...formData, patientAppointmentId: e.target.value, patientId: '', roomAdmissionId: '', emergencyBedSlotId: '' })}
-                    className="mt-1"
-                  />
-                </div>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-patientAppointmentId" className="dialog-label-standard">Patient Appointment (OPD - Optional)</Label>
+                    <Input
+                      id="add-patientAppointmentId"
+                      placeholder="Enter Patient Appointment ID"
+                      value={formData.patientAppointmentId}
+                      onChange={(e) => setFormData({ ...formData, patientAppointmentId: e.target.value, patientId: '', roomAdmissionId: '', emergencyBedSlotId: '' })}
+                      className="dialog-input-standard"
+                    />
+                  </div>
 
-                <div>
-                  <Label htmlFor="add-emergencyBedSlotId" className="text-sm font-medium text-gray-700">Emergency Bed Slot (Optional)</Label>
-                  <Input
-                    id="add-emergencyBedSlotId"
-                    type="number"
-                    placeholder="Enter Emergency Bed Slot ID"
-                    value={formData.emergencyBedSlotId}
-                    onChange={(e) => setFormData({ ...formData, emergencyBedSlotId: e.target.value, patientId: '', roomAdmissionId: '', patientAppointmentId: '' })}
-                    className="mt-1"
-                  />
-                </div>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-emergencyBedSlotId" className="dialog-label-standard">Emergency Bed Slot (Optional)</Label>
+                    <Input
+                      id="add-emergencyBedSlotId"
+                      type="number"
+                      placeholder="Enter Emergency Bed Slot ID"
+                      value={formData.emergencyBedSlotId}
+                      onChange={(e) => setFormData({ ...formData, emergencyBedSlotId: e.target.value, patientId: '', roomAdmissionId: '', patientAppointmentId: '' })}
+                      className="dialog-input-standard"
+                    />
+                  </div>
 
-                <div className="border-t pt-4">
-                  <div>
-                    <Label htmlFor="add-otAllocationDate" className="text-sm font-medium text-gray-700">OT Allocation Date *</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-otAllocationDate" className="dialog-label-standard">OT Allocation Date *</Label>
                     <Popover open={addOtAllocationDatePickerOpen} onOpenChange={setAddOtAllocationDatePickerOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full justify-start text-left font-normal mt-1"
+                          className="w-full justify-start text-left font-normal"
                         >
                           <Calendar className="mr-2 size-4" />
                           {formData.otAllocationDate ? formatDateToDisplay(formData.otAllocationDate) : 'Pick a date'}
@@ -697,11 +698,11 @@ export function OTManagement() {
                     </Popover>
                   </div>
 
-                  <div className="mt-4">
-                    <Label htmlFor="add-otId" className="text-sm font-medium text-gray-700">OT *</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-otId" className="dialog-label-standard">OT *</Label>
                     <select
                       id="add-otId"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md mt-1"
+                      className="dialog-select-standard"
                       value={formData.otId}
                       onChange={(e) => {
                         setSelectedOTId(e.target.value);
@@ -717,8 +718,8 @@ export function OTManagement() {
                     </select>
                   </div>
 
-                  <div className="mt-4">
-                    <Label className="text-sm font-medium text-gray-700">OT Slots (Optional)</Label>
+                  <div className="dialog-form-field">
+                    <Label className="dialog-label-standard">OT Slots (Optional)</Label>
                     <div className="border border-gray-200 rounded-md p-3 max-h-48 overflow-y-auto mt-1">
                       {!formData.otId ? (
                         <p className="text-sm text-gray-500">Please select an OT first</p>
@@ -761,174 +762,175 @@ export function OTManagement() {
                       <p className="text-xs text-gray-500 mt-1">Selected: {formData.otSlotIds.length} slot(s)</p>
                     )}
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="add-leadSurgeonId" className="text-sm font-medium text-gray-700">Lead Surgeon *</Label>
+                  <div className="dialog-form-field-grid">
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="add-leadSurgeonId" className="dialog-label-standard">Lead Surgeon *</Label>
+                      <Input
+                        id="add-leadSurgeonId"
+                        type="number"
+                        placeholder="Enter Lead Surgeon ID"
+                        value={formData.leadSurgeonId}
+                        onChange={(e) => setFormData({ ...formData, leadSurgeonId: e.target.value })}
+                        className="dialog-input-standard"
+                      />
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="add-assistantDoctorId" className="dialog-label-standard">Assistant Doctor (Optional)</Label>
+                      <Input
+                        id="add-assistantDoctorId"
+                        type="number"
+                        placeholder="Enter Assistant Doctor ID"
+                        value={formData.assistantDoctorId}
+                        onChange={(e) => setFormData({ ...formData, assistantDoctorId: e.target.value })}
+                        className="dialog-input-standard"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="dialog-form-field-grid">
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="add-anaesthetistId" className="dialog-label-standard">Anaesthetist (Optional)</Label>
+                      <Input
+                        id="add-anaesthetistId"
+                        type="number"
+                        placeholder="Enter Anaesthetist ID"
+                        value={formData.anaesthetistId}
+                        onChange={(e) => setFormData({ ...formData, anaesthetistId: e.target.value })}
+                        className="dialog-input-standard"
+                      />
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="add-nurseId" className="dialog-label-standard">Nurse (Optional)</Label>
+                      <Input
+                        id="add-nurseId"
+                        type="number"
+                        placeholder="Enter Nurse ID"
+                        value={formData.nurseId}
+                        onChange={(e) => setFormData({ ...formData, nurseId: e.target.value })}
+                        className="dialog-input-standard"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-duration" className="dialog-label-standard">Duration (Optional, in minutes)</Label>
                     <Input
-                      id="add-leadSurgeonId"
+                      id="add-duration"
                       type="number"
-                      placeholder="Enter Lead Surgeon ID"
-                      value={formData.leadSurgeonId}
-                      onChange={(e) => setFormData({ ...formData, leadSurgeonId: e.target.value })}
-                      className="mt-1"
+                      placeholder="e.g., 120"
+                      value={formData.duration}
+                      onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                      className="dialog-input-standard"
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="add-assistantDoctorId" className="text-sm font-medium text-gray-700">Assistant Doctor (Optional)</Label>
+
+                  <div className="dialog-form-field-grid">
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="add-otActualStartTime" className="dialog-label-standard">OT Actual Start Time (Optional)</Label>
+                      <Input
+                        id="add-otActualStartTime"
+                        type="time"
+                        value={formData.otActualStartTime}
+                        onChange={(e) => setFormData({ ...formData, otActualStartTime: e.target.value })}
+                        className="dialog-input-standard"
+                      />
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="add-otActualEndTime" className="dialog-label-standard">OT Actual End Time (Optional)</Label>
+                      <Input
+                        id="add-otActualEndTime"
+                        type="time"
+                        value={formData.otActualEndTime}
+                        onChange={(e) => setFormData({ ...formData, otActualEndTime: e.target.value })}
+                        className="dialog-input-standard"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-operationDescription" className="dialog-label-standard">Operation Description (Optional)</Label>
+                    <Textarea
+                      id="add-operationDescription"
+                      placeholder="Enter operation description..."
+                      value={formData.operationDescription}
+                      onChange={(e) => setFormData({ ...formData, operationDescription: e.target.value })}
+                      rows={3}
+                      className="dialog-textarea-standard"
+                    />
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-operationStatus" className="dialog-label-standard">Operation Status</Label>
+                    <select
+                      id="add-operationStatus"
+                      className="dialog-select-standard"
+                      value={formData.operationStatus}
+                      onChange={(e) => setFormData({ ...formData, operationStatus: e.target.value as PatientOTAllocation['operationStatus'] })}
+                    >
+                      <option value="Scheduled">Scheduled</option>
+                      <option value="InProgress">In Progress</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Cancelled">Cancelled</option>
+                      <option value="Postponed">Postponed</option>
+                    </select>
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-preOperationNotes" className="dialog-label-standard">Pre Operation Notes (Optional)</Label>
+                    <Textarea
+                      id="add-preOperationNotes"
+                      placeholder="e.g., ICU bed reserved post-surgery"
+                      value={formData.preOperationNotes}
+                      onChange={(e) => setFormData({ ...formData, preOperationNotes: e.target.value })}
+                      rows={2}
+                      className="dialog-textarea-standard"
+                    />
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-postOperationNotes" className="dialog-label-standard">Post Operation Notes (Optional)</Label>
+                    <Textarea
+                      id="add-postOperationNotes"
+                      placeholder="Enter post operation notes..."
+                      value={formData.postOperationNotes}
+                      onChange={(e) => setFormData({ ...formData, postOperationNotes: e.target.value })}
+                      rows={2}
+                      className="dialog-textarea-standard"
+                    />
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-otDocuments" className="dialog-label-standard">OT Documents URL (Optional)</Label>
                     <Input
-                      id="add-assistantDoctorId"
+                      id="add-otDocuments"
+                      type="url"
+                      placeholder="https://documents.example.com/..."
+                      value={formData.otDocuments}
+                      onChange={(e) => setFormData({ ...formData, otDocuments: e.target.value })}
+                      className="dialog-input-standard"
+                    />
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-billId" className="dialog-label-standard">Bill ID (Optional)</Label>
+                    <Input
+                      id="add-billId"
                       type="number"
-                      placeholder="Enter Assistant Doctor ID"
-                      value={formData.assistantDoctorId}
-                      onChange={(e) => setFormData({ ...formData, assistantDoctorId: e.target.value })}
-                      className="mt-1"
+                      placeholder="Enter Bill ID"
+                      value={formData.billId}
+                      onChange={(e) => setFormData({ ...formData, billId: e.target.value })}
+                      className="dialog-input-standard"
                     />
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="add-anaesthetistId" className="text-sm font-medium text-gray-700">Anaesthetist (Optional)</Label>
-                    <Input
-                      id="add-anaesthetistId"
-                      type="number"
-                      placeholder="Enter Anaesthetist ID"
-                      value={formData.anaesthetistId}
-                      onChange={(e) => setFormData({ ...formData, anaesthetistId: e.target.value })}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="add-nurseId" className="text-sm font-medium text-gray-700">Nurse (Optional)</Label>
-                    <Input
-                      id="add-nurseId"
-                      type="number"
-                      placeholder="Enter Nurse ID"
-                      value={formData.nurseId}
-                      onChange={(e) => setFormData({ ...formData, nurseId: e.target.value })}
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="add-duration" className="text-sm font-medium text-gray-700">Duration (Optional, in minutes)</Label>
-                  <Input
-                    id="add-duration"
-                    type="number"
-                    placeholder="e.g., 120"
-                    value={formData.duration}
-                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="add-otActualStartTime" className="text-sm font-medium text-gray-700">OT Actual Start Time (Optional)</Label>
-                    <Input
-                      id="add-otActualStartTime"
-                      type="time"
-                      value={formData.otActualStartTime}
-                      onChange={(e) => setFormData({ ...formData, otActualStartTime: e.target.value })}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="add-otActualEndTime" className="text-sm font-medium text-gray-700">OT Actual End Time (Optional)</Label>
-                    <Input
-                      id="add-otActualEndTime"
-                      type="time"
-                      value={formData.otActualEndTime}
-                      onChange={(e) => setFormData({ ...formData, otActualEndTime: e.target.value })}
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="add-operationDescription" className="text-sm font-medium text-gray-700">Operation Description (Optional)</Label>
-                  <Textarea
-                    id="add-operationDescription"
-                    placeholder="Enter operation description..."
-                    value={formData.operationDescription}
-                    onChange={(e) => setFormData({ ...formData, operationDescription: e.target.value })}
-                    rows={3}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="add-operationStatus" className="text-sm font-medium text-gray-700">Operation Status</Label>
-                  <select
-                    id="add-operationStatus"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md mt-1"
-                    value={formData.operationStatus}
-                    onChange={(e) => setFormData({ ...formData, operationStatus: e.target.value as PatientOTAllocation['operationStatus'] })}
-                  >
-                    <option value="Scheduled">Scheduled</option>
-                    <option value="InProgress">In Progress</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Cancelled">Cancelled</option>
-                    <option value="Postponed">Postponed</option>
-                  </select>
-                </div>
-
-                <div>
-                  <Label htmlFor="add-preOperationNotes" className="text-sm font-medium text-gray-700">Pre Operation Notes (Optional)</Label>
-                  <Textarea
-                    id="add-preOperationNotes"
-                    placeholder="e.g., ICU bed reserved post-surgery"
-                    value={formData.preOperationNotes}
-                    onChange={(e) => setFormData({ ...formData, preOperationNotes: e.target.value })}
-                    rows={2}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="add-postOperationNotes" className="text-sm font-medium text-gray-700">Post Operation Notes (Optional)</Label>
-                  <Textarea
-                    id="add-postOperationNotes"
-                    placeholder="Enter post operation notes..."
-                    value={formData.postOperationNotes}
-                    onChange={(e) => setFormData({ ...formData, postOperationNotes: e.target.value })}
-                    rows={2}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="add-otDocuments" className="text-sm font-medium text-gray-700">OT Documents URL (Optional)</Label>
-                  <Input
-                    id="add-otDocuments"
-                    type="url"
-                    placeholder="https://documents.example.com/..."
-                    value={formData.otDocuments}
-                    onChange={(e) => setFormData({ ...formData, otDocuments: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="add-billId" className="text-sm font-medium text-gray-700">Bill ID (Optional)</Label>
-                  <Input
-                    id="add-billId"
-                    type="number"
-                    placeholder="Enter Bill ID"
-                    value={formData.billId}
-                    onChange={(e) => setFormData({ ...formData, billId: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-200">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="dialog-footer-button">Cancel</Button>
+                <Button onClick={handleAddOTAllocation} className="dialog-footer-button">Add OT Allocation</Button>
+              </div>
             </div>
-            <div className="flex justify-end gap-2 px-6 pb-4 pt-4 border-t flex-shrink-0">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddOTAllocation}>Add OT Allocation</Button>
-            </div>
-          </DialogContent>
+          </ResizableDialogContent>
         </Dialog>
           </div>
         </div>

@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from './ui/dialog';
+import { ResizableDialogContent } from './ResizableDialogContent';
 import { Textarea } from './ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Switch } from './ui/switch';
@@ -777,11 +778,13 @@ export function FrontDesk() {
                 Add Appointment
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Patient Appointment</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
+            <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
+              <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+                <DialogHeader className="dialog-header-standard">
+                  <DialogTitle className="dialog-title-standard">Add New Patient Appointment</DialogTitle>
+                </DialogHeader>
+                <div className="dialog-body-content-wrapper">
+                  <div className="dialog-form-container space-y-4">
                   <div>
                     <Label htmlFor="add-patient-search">Patient *</Label>
                     <div className="relative mb-2">
@@ -1208,9 +1211,9 @@ export function FrontDesk() {
                       onChange={(e) => setAddFormData({ ...addFormData, consultationCharge: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => {
+                  </div>
+                  <div className="dialog-footer-standard">
+                    <Button variant="outline" onClick={() => {
                     setIsAddDialogOpen(false);
                     setAddFormData({
                       patientId: '',
@@ -1310,9 +1313,11 @@ export function FrontDesk() {
                     }}
                 >
                   Create Appointment
-                </Button>
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </DialogContent>
+            </ResizableDialogContent>
           </Dialog>
             </div>
           </div>
@@ -1535,16 +1540,15 @@ export function FrontDesk() {
 
       {/* Edit Appointment Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent 
-          className="max-h-[90vh] overflow-y-auto"
-          style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
-        >
-          {selectedAppointment && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Edit Patient Appointment</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
+        <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
+          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+            {selectedAppointment && (
+              <>
+                <DialogHeader className="dialog-header-standard">
+                  <DialogTitle className="dialog-title-standard">Edit Patient Appointment</DialogTitle>
+                </DialogHeader>
+                <div className="dialog-body-content-wrapper">
+                  <div className="dialog-form-container space-y-4">
                   <div>
                     <Label>Token No</Label>
                     <Input value={selectedAppointment.tokenNo} disabled className="bg-gray-50" />
@@ -1951,10 +1955,11 @@ export function FrontDesk() {
                       rows={2}
                     />
                   </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
-                <Button 
+                </div>
+                </div>
+                <div className="dialog-footer-standard">
+                  <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="dialog-footer-button">Cancel</Button>
+                  <Button 
                     onClick={async () => {
                       if (!selectedAppointment) return;
                       // Validate patient is selected from the list
@@ -2026,10 +2031,11 @@ export function FrontDesk() {
                   >
                     Update Appointment
                   </Button>
-              </div>
-            </>
-          )}
-        </DialogContent>
+                </div>
+              </>
+            )}
+          </div>
+        </ResizableDialogContent>
       </Dialog>
       
       {/* Add Lab Test Dialog */}

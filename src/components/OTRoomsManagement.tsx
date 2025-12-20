@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { ResizableDialogContent } from './ResizableDialogContent';
 import { Textarea } from './ui/textarea';
 import { Scissors, Plus, Clock, Edit, Trash2, CheckCircle2, XCircle, ArrowLeft, Search } from 'lucide-react';
 import { Switch } from './ui/switch';
@@ -859,7 +860,7 @@ export function OTRoomsManagement() {
                   <div className="dialog-form-field">
                     <div className="flex items-center gap-3">
                       <Label htmlFor="manage-status" className="dialog-label-standard">Status</Label>
-                      <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
+                      <div className="flex-shrink-0 relative dialog-switch-container">
                         <Switch
                           id="manage-status"
                           checked={formData.status === 'active'}
@@ -1238,7 +1239,12 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="p-0 gap-0 large-dialog dialog-content-standard max-w-4xl max-h-[90vh]">
+      <ResizableDialogContent 
+        className="p-0 gap-0 large-dialog dialog-content-standard"
+        initialWidth={1400}
+        maxWidth={1800}
+        minWidth={800}
+      >
         <div className="dialog-scrollable-wrapper dialog-content-scrollable">
           <DialogHeader className="dialog-header-standard">
             <div className="flex items-center justify-between">
@@ -1246,11 +1252,11 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
                 <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
                   <ArrowLeft className="size-4" />
                 </Button>
-                <DialogTitle className="dialog-title-standard-view">
+                <DialogTitle className="dialog-title-standard">
                   {otRoom ? `OT Slots for ${otRoom.otName} (${otId})` : `OT Slots for ${otId}`}
                 </DialogTitle>
               </div>
-              <Button className="flex items-center gap-2" onClick={(e) => {
+              <Button className="dialog-trigger-button" onClick={(e) => {
                 e.stopPropagation();
                 setIsAddDialogOpen(true);
               }}>
@@ -1278,16 +1284,16 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
                   <tbody className="dialog-table-body">
                     {otSlots.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="text-center py-8 text-gray-500 text-sm">
+                        <td colSpan={7} className="dialog-table-body-cell text-center py-8 text-gray-500">
                           No OT slots found. Add a new OT slot to get started.
                         </td>
                       </tr>
                     ) : (
                       otSlots.map((otSlot) => (
                         <tr key={otSlot.id} className="dialog-table-body-row">
-                          <td className="dialog-table-body-cell dialog-table-body-cell-mono">{otSlot.otSlotId}</td>
-                          <td className="dialog-table-body-cell dialog-table-body-cell-mono">{otSlot.otId}</td>
-                          <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{otSlot.otSlotNo}</td>
+                          <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{otSlot.otSlotId}</td>
+                          <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{otSlot.otId}</td>
+                          <td className="dialog-table-body-cell dialog-table-body-cell-primary">{otSlot.otSlotNo}</td>
                           <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{formatTimeToIST(otSlot.slotStartTime)}</td>
                           <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{formatTimeToIST(otSlot.slotEndTime)}</td>
                           <td className="dialog-table-body-cell">{getStatusBadge(otSlot.status)}</td>
@@ -1318,7 +1324,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
           <DialogContent className="p-0 gap-0 large-dialog dialog-content-standard max-w-2xl max-h-[90vh]">
             <div className="dialog-scrollable-wrapper dialog-content-scrollable">
               <DialogHeader className="dialog-header-standard">
-                <DialogTitle className="dialog-title-standard-view">Add New OT Slot</DialogTitle>
+                <DialogTitle className="dialog-title-standard">Add New OT Slot</DialogTitle>
               </DialogHeader>
               <div className="dialog-body-content-wrapper">
                 <div className="dialog-form-container">
@@ -1334,7 +1340,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
                   </div>
                   <div className="dialog-form-field-grid">
                     <div className="dialog-form-field">
-                      <Label htmlFor="slotStartTime" className="dialog-label-standard flex items-center gap-2">
+                      <Label htmlFor="slotStartTime" className="dialog-label-standard dialog-label-with-icon">
                         <Clock className="size-4" />
                         Slot Start Time * (HH:MM AM/PM)
                       </Label>
@@ -1347,7 +1353,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
                       />
                     </div>
                     <div className="dialog-form-field">
-                      <Label htmlFor="slotEndTime" className="dialog-label-standard flex items-center gap-2">
+                      <Label htmlFor="slotEndTime" className="dialog-label-standard dialog-label-with-icon">
                         <Clock className="size-4" />
                         Slot End Time * (HH:MM AM/PM)
                       </Label>
@@ -1387,7 +1393,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
                         disabled
                         className="dialog-input-standard dialog-input-disabled"
                       />
-                      <p className="text-xs text-gray-500 mt-1">OT Slot ID is auto-generated and cannot be changed</p>
+                      <p className="dialog-helper-text">OT Slot ID is auto-generated and cannot be changed</p>
                     </div>
                   )}
                   <div className="dialog-form-field">
@@ -1402,7 +1408,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
                   </div>
                   <div className="dialog-form-field-grid">
                     <div className="dialog-form-field">
-                      <Label htmlFor="edit-slotStartTime" className="dialog-label-standard flex items-center gap-2">
+                      <Label htmlFor="edit-slotStartTime" className="dialog-label-standard dialog-label-with-icon">
                         <Clock className="size-4" />
                         Slot Start Time * (HH:MM AM/PM)
                       </Label>
@@ -1415,7 +1421,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
                       />
                     </div>
                     <div className="dialog-form-field">
-                      <Label htmlFor="edit-slotEndTime" className="dialog-label-standard flex items-center gap-2">
+                      <Label htmlFor="edit-slotEndTime" className="dialog-label-standard dialog-label-with-icon">
                         <Clock className="size-4" />
                         Slot End Time * (HH:MM AM/PM)
                       </Label>
@@ -1456,7 +1462,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
           <DialogContent className="p-0 gap-0 large-dialog dialog-content-standard max-w-2xl max-h-[90vh]">
             <div className="dialog-scrollable-wrapper dialog-content-scrollable">
               <DialogHeader className="dialog-header-standard">
-                <DialogTitle className="dialog-title-standard-view">Manage OT Slot</DialogTitle>
+                <DialogTitle className="dialog-title-standard">Manage OT Slot</DialogTitle>
               </DialogHeader>
               <div className="dialog-body-content-wrapper">
                 <div className="dialog-form-container">
@@ -1468,7 +1474,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
                         disabled
                         className="dialog-input-standard dialog-input-disabled"
                       />
-                      <p className="text-xs text-gray-500 mt-1">OT Slot ID is auto-generated and cannot be changed</p>
+                      <p className="dialog-helper-text">OT Slot ID is auto-generated and cannot be changed</p>
                     </div>
                   )}
                   <div className="dialog-form-field">
@@ -1483,7 +1489,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
                   </div>
                   <div className="dialog-form-field-grid">
                     <div className="dialog-form-field">
-                      <Label htmlFor="manage-slotStartTime" className="dialog-label-standard flex items-center gap-2">
+                      <Label htmlFor="manage-slotStartTime" className="dialog-label-standard dialog-label-with-icon">
                         <Clock className="size-4" />
                         Slot Start Time * (HH:MM AM/PM)
                       </Label>
@@ -1496,7 +1502,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
                       />
                     </div>
                     <div className="dialog-form-field">
-                      <Label htmlFor="manage-slotEndTime" className="dialog-label-standard flex items-center gap-2">
+                      <Label htmlFor="manage-slotEndTime" className="dialog-label-standard dialog-label-with-icon">
                         <Clock className="size-4" />
                         Slot End Time * (HH:MM AM/PM)
                       </Label>
@@ -1512,7 +1518,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
                   <div className="dialog-form-field">
                     <div className="flex items-center gap-3">
                       <Label htmlFor="manage-status" className="dialog-label-standard">Status</Label>
-                      <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
+                      <div className="flex-shrink-0 relative dialog-switch-container">
                         <Switch
                           id="manage-status"
                           checked={formData.status === 'Active'}
@@ -1572,7 +1578,7 @@ function OTSlotsManagement({ otId, otRoom, onClose }: { otId: string; otRoom: OT
             </div>
           </DialogContent>
         </Dialog>
-      </DialogContent>
+      </ResizableDialogContent>
     </Dialog>
   );
 }

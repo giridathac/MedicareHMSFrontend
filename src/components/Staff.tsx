@@ -72,9 +72,11 @@ export function StaffManagement() {
 
   if (loading) {
     return (
-      <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0">
-        <div className="px-6 pt-6 pb-0 flex-shrink-0">
-          <div className="text-center py-12 text-gray-600">Loading staff...</div>
+      <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
+        <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
+          <div className="px-6 pt-6 pb-0 flex-shrink-0">
+            <div className="text-center py-12 text-gray-600">Loading staff...</div>
+          </div>
         </div>
       </div>
     );
@@ -82,9 +84,11 @@ export function StaffManagement() {
 
   if (error) {
     return (
-      <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0">
-        <div className="px-6 pt-6 pb-0 flex-shrink-0">
-          <div className="text-center py-12 text-red-500">Error: {error}</div>
+      <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
+        <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
+          <div className="px-6 pt-6 pb-0 flex-shrink-0">
+            <div className="text-center py-12 text-red-500">Error: {error}</div>
+          </div>
         </div>
       </div>
     );
@@ -601,7 +605,7 @@ function StaffView({
   );
 
   return (
-    <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0">
+    <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
       <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
         <div className="px-6 pt-6 pb-0 flex-shrink-0">
           <div className="flex items-center justify-between mb-4 flex-shrink-0">
@@ -609,7 +613,7 @@ function StaffView({
               <h1 className="text-gray-900 mb-2 text-2xl">Staff Management</h1>
               <p className="text-gray-500 text-base">Manage hospital staff members</p>
             </div>
-            {headerActions && <div className="flex-shrink-0">{headerActions}</div>}
+            {headerActions && <div className="flex items-center gap-4">{headerActions}</div>}
           </div>
 
           {/* Status Filter Tabs */}

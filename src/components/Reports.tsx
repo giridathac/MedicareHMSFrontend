@@ -83,10 +83,10 @@ export function Reports() {
 
   return (
     <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Reports & Analytics</h1>
-          <p className="text-gray-500">Comprehensive hospital performance reports</p>
+          <h1 className="text-gray-900 mb-2 text-2xl">Reports & Analytics</h1>
+          <p className="text-gray-500 text-base">Comprehensive hospital performance reports</p>
         </div>
         <div className="flex gap-2">
           <Button

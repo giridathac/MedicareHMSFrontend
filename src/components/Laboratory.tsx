@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { ResizableDialogContent } from './ResizableDialogContent';
 import { Badge } from './ui/badge';
 import { TestTube, Search, FileText, Clock, CheckCircle, AlertCircle, Download, Edit } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -1643,20 +1644,21 @@ export function Laboratory() {
             }
           }}>
             <DialogTrigger asChild>
-              <Button className="gap-2" onClick={handleOpenNewLabOrderDialog}>
+              <Button className="dialog-trigger-button" onClick={handleOpenNewLabOrderDialog}>
                 <TestTube className="size-4" />
                 New Lab Order
               </Button>
             </DialogTrigger>
-            <DialogContent className="p-0 gap-0 large-dialog max-w-4xl bg-white">
-              <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0 bg-white">
-                <DialogTitle>New Lab Order</DialogTitle>
-              </DialogHeader>
-              <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0 bg-white">
-                <div className="space-y-4 py-4">
+            <ResizableDialogContent className="p-0 gap-0 large-dialog max-w-4xl dialog-content-standard">
+              <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+                <DialogHeader className="dialog-header-standard">
+                  <DialogTitle className="dialog-title-standard">New Lab Order</DialogTitle>
+                </DialogHeader>
+                <div className="dialog-body-content-wrapper">
+                  <div className="dialog-form-container">
                   {/* Patient Selection - Searchable */}
-                  <div>
-                    <Label htmlFor="patientId">Patient *</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="patientId" className="dialog-label-standard">Patient *</Label>
                     <div className="relative">
                       <Input
                         id="patientId"
@@ -1667,81 +1669,84 @@ export function Laboratory() {
                           setShowPatientList(true);
                         }}
                         onFocus={() => setShowPatientList(true)}
+                        className="dialog-input-standard"
                       />
                       {showPatientList && availablePatients.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                          <table className="w-full text-sm">
-                            <thead className="bg-gray-50 sticky top-0">
-                              <tr>
-                                <th className="py-2 px-3 text-left text-xs font-medium text-gray-700">Patient No</th>
-                                <th className="py-2 px-3 text-left text-xs font-medium text-gray-700">Name</th>
-                                <th className="py-2 px-3 text-left text-xs font-medium text-gray-700">Phone</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {availablePatients.filter((patient: any) => {
-                                if (!patientSearchTerm) return true;
-                                const searchLower = patientSearchTerm.toLowerCase();
-                                const patientId = (patient as any).patientId || (patient as any).PatientId || '';
-                                const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
-                                const patientName = (patient as any).patientName || (patient as any).PatientName || '';
-                                const lastName = (patient as any).lastName || (patient as any).LastName || '';
-                                const fullName = `${patientName} ${lastName}`.trim();
-                                const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
-                                return (
-                                  patientId.toLowerCase().includes(searchLower) ||
-                                  patientNo.toLowerCase().includes(searchLower) ||
-                                  fullName.toLowerCase().includes(searchLower) ||
-                                  phoneNo.includes(patientSearchTerm)
-                                );
-                              }).map((patient: any) => {
-                                const patientId = (patient as any).patientId || (patient as any).PatientId || '';
-                                const patientNo = (patient as any).patientNo || (patient as any).PatientNo || patientId.substring(0, 8);
-                                const patientName = (patient as any).patientName || (patient as any).PatientName || '';
-                                const lastName = (patient as any).lastName || (patient as any).LastName || '';
-                                const fullName = `${patientName} ${lastName}`.trim();
-                                const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
-                                const isSelected = newLabOrderFormData.patientId === patientId;
-                                return (
-                                  <tr
-                                    key={patientId}
-                                    onClick={async () => {
-                                      const updatedFormData = { ...newLabOrderFormData, patientId };
-                                      setNewLabOrderFormData(updatedFormData);
-                                      setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
-                                      setShowPatientList(false);
-                                      
-                                      // If PatientType is OPD, fetch appointments for this patient
-                                      if (updatedFormData.patientType === 'OPD' && patientId) {
-                                        await fetchPatientAppointments(patientId);
-                                      }
-                                      // If PatientType is IPD, fetch room admissions for this patient
-                                      if (updatedFormData.patientType === 'IPD' && patientId) {
-                                        await fetchPatientRoomAdmissions(patientId);
-                                      }
-                                      // If PatientType is Emergency, fetch emergency admissions for this patient
-                                      if (updatedFormData.patientType === 'Emergency' && patientId) {
-                                        await fetchPatientEmergencyAdmissions(patientId);
-                                      }
-                                    }}
-                                    className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
-                                  >
-                                    <td className="py-2 px-3 text-sm text-gray-900 font-mono">{patientNo}</td>
-                                    <td className="py-2 px-3 text-sm text-gray-600">{fullName || 'Unknown'}</td>
-                                    <td className="py-2 px-3 text-sm text-gray-600">{phoneNo || '-'}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                        <div className="absolute z-50 w-full mt-1 dialog-dropdown-container shadow-lg max-h-60 overflow-y-auto">
+                          <div className="dialog-table-container">
+                            <table className="dialog-table">
+                              <thead>
+                                <tr className="dialog-table-header-row">
+                                  <th className="dialog-table-header-cell">Patient No</th>
+                                  <th className="dialog-table-header-cell">Name</th>
+                                  <th className="dialog-table-header-cell">Phone</th>
+                                </tr>
+                              </thead>
+                              <tbody className="dialog-table-body">
+                                {availablePatients.filter((patient: any) => {
+                                  if (!patientSearchTerm) return true;
+                                  const searchLower = patientSearchTerm.toLowerCase();
+                                  const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                  const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                  const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                  const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                  const fullName = `${patientName} ${lastName}`.trim();
+                                  const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                  return (
+                                    patientId.toLowerCase().includes(searchLower) ||
+                                    patientNo.toLowerCase().includes(searchLower) ||
+                                    fullName.toLowerCase().includes(searchLower) ||
+                                    phoneNo.includes(patientSearchTerm)
+                                  );
+                                }).map((patient: any) => {
+                                  const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                  const patientNo = (patient as any).patientNo || (patient as any).PatientNo || patientId.substring(0, 8);
+                                  const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                  const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                  const fullName = `${patientName} ${lastName}`.trim();
+                                  const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                  const isSelected = newLabOrderFormData.patientId === patientId;
+                                  return (
+                                    <tr
+                                      key={patientId}
+                                      onClick={async () => {
+                                        const updatedFormData = { ...newLabOrderFormData, patientId };
+                                        setNewLabOrderFormData(updatedFormData);
+                                        setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                                        setShowPatientList(false);
+                                        
+                                        // If PatientType is OPD, fetch appointments for this patient
+                                        if (updatedFormData.patientType === 'OPD' && patientId) {
+                                          await fetchPatientAppointments(patientId);
+                                        }
+                                        // If PatientType is IPD, fetch room admissions for this patient
+                                        if (updatedFormData.patientType === 'IPD' && patientId) {
+                                          await fetchPatientRoomAdmissions(patientId);
+                                        }
+                                        // If PatientType is Emergency, fetch emergency admissions for this patient
+                                        if (updatedFormData.patientType === 'Emergency' && patientId) {
+                                          await fetchPatientEmergencyAdmissions(patientId);
+                                        }
+                                      }}
+                                      className={`dialog-table-body-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
+                                    >
+                                      <td className="dialog-table-body-cell dialog-table-body-cell-primary font-mono">{patientNo}</td>
+                                      <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{fullName || 'Unknown'}</td>
+                                      <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{phoneNo || '-'}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
 
                   {/* Lab Test Selection - Searchable */}
-                  <div>
-                    <Label htmlFor="labTestId">Lab Test *</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="labTestId" className="dialog-label-standard">Lab Test *</Label>
                     <div className="relative">
                       <Input
                         id="labTestId"
@@ -1752,63 +1757,66 @@ export function Laboratory() {
                           setShowLabTestList(true);
                         }}
                         onFocus={() => setShowLabTestList(true)}
+                        className="dialog-input-standard"
                       />
                       {showLabTestList && availableLabTests.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                          <table className="w-full text-sm">
-                            <thead className="bg-gray-50 sticky top-0">
-                              <tr>
-                                <th className="py-2 px-3 text-left text-xs font-medium text-gray-700">Display Test ID</th>
-                                <th className="py-2 px-3 text-left text-xs font-medium text-gray-700">Test Name</th>
-                                <th className="py-2 px-3 text-left text-xs font-medium text-gray-700">Category</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {availableLabTests.filter((test: any) => {
-                                if (!labTestSearchTerm) return true;
-                                const searchLower = labTestSearchTerm.toLowerCase();
-                                const displayTestId = test.displayTestId || test.DisplayTestId || test.displayTestID || test.DisplayTestID || '';
-                                const testName = test.testName || test.TestName || test.labTestName || test.LabTestName || test.name || test.Name || '';
-                                const category = test.testCategory || test.TestCategory || test.category || test.Category || '';
-                                return displayTestId.toLowerCase().includes(searchLower) ||
-                                       testName.toLowerCase().includes(searchLower) ||
-                                       category.toLowerCase().includes(searchLower);
-                              }).map((test: any) => {
-                                const testId = test.labTestId || test.LabTestId || test.id || test.Id || '';
-                                const displayTestId = test.displayTestId || test.DisplayTestId || test.displayTestID || test.DisplayTestID || '';
-                                const testName = test.testName || test.TestName || test.labTestName || test.LabTestName || test.name || test.Name || '';
-                                const category = test.testCategory || test.TestCategory || test.category || test.Category || '';
-                                const isSelected = newLabOrderFormData.labTestId === String(testId);
-                                const displayText = `${displayTestId}, ${testName} (${category})`;
-                                return (
-                                  <tr
-                                    key={testId}
-                                    onClick={() => {
-                                      setNewLabOrderFormData({ ...newLabOrderFormData, labTestId: String(testId) });
-                                      setLabTestSearchTerm(displayText);
-                                      setShowLabTestList(false);
-                                    }}
-                                    className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
-                                  >
-                                    <td className="py-2 px-3 text-sm text-gray-900 font-mono">{displayTestId || '-'}</td>
-                                    <td className="py-2 px-3 text-sm text-gray-900">{testName || '-'}</td>
-                                    <td className="py-2 px-3 text-sm text-gray-600">{category || '-'}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                        <div className="absolute z-50 w-full mt-1 dialog-dropdown-container shadow-lg max-h-60 overflow-y-auto">
+                          <div className="dialog-table-container">
+                            <table className="dialog-table">
+                              <thead>
+                                <tr className="dialog-table-header-row">
+                                  <th className="dialog-table-header-cell">Display Test ID</th>
+                                  <th className="dialog-table-header-cell">Test Name</th>
+                                  <th className="dialog-table-header-cell">Category</th>
+                                </tr>
+                              </thead>
+                              <tbody className="dialog-table-body">
+                                {availableLabTests.filter((test: any) => {
+                                  if (!labTestSearchTerm) return true;
+                                  const searchLower = labTestSearchTerm.toLowerCase();
+                                  const displayTestId = test.displayTestId || test.DisplayTestId || test.displayTestID || test.DisplayTestID || '';
+                                  const testName = test.testName || test.TestName || test.labTestName || test.LabTestName || test.name || test.Name || '';
+                                  const category = test.testCategory || test.TestCategory || test.category || test.Category || '';
+                                  return displayTestId.toLowerCase().includes(searchLower) ||
+                                         testName.toLowerCase().includes(searchLower) ||
+                                         category.toLowerCase().includes(searchLower);
+                                }).map((test: any) => {
+                                  const testId = test.labTestId || test.LabTestId || test.id || test.Id || '';
+                                  const displayTestId = test.displayTestId || test.DisplayTestId || test.displayTestID || test.DisplayTestID || '';
+                                  const testName = test.testName || test.TestName || test.labTestName || test.LabTestName || test.name || test.Name || '';
+                                  const category = test.testCategory || test.TestCategory || test.category || test.Category || '';
+                                  const isSelected = newLabOrderFormData.labTestId === String(testId);
+                                  const displayText = `${displayTestId}, ${testName} (${category})`;
+                                  return (
+                                    <tr
+                                      key={testId}
+                                      onClick={() => {
+                                        setNewLabOrderFormData({ ...newLabOrderFormData, labTestId: String(testId) });
+                                        setLabTestSearchTerm(displayText);
+                                        setShowLabTestList(false);
+                                      }}
+                                      className={`dialog-table-body-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
+                                    >
+                                      <td className="dialog-table-body-cell dialog-table-body-cell-primary font-mono">{displayTestId || '-'}</td>
+                                      <td className="dialog-table-body-cell dialog-table-body-cell-primary">{testName || '-'}</td>
+                                      <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{category || '-'}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
 
                   {/* Patient Type */}
-                  <div>
-                    <Label htmlFor="patientType">Patient Type *</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="patientType" className="dialog-label-standard">Patient Type *</Label>
                     <select
                       id="patientType"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                      className="dialog-select-standard"
                       value={newLabOrderFormData.patientType}
                       onChange={(e) => handlePatientTypeChange(e.target.value as 'IPD' | 'OPD' | 'Emergency' | '')}
                     >
@@ -1821,11 +1829,11 @@ export function Laboratory() {
 
                   {/* Conditional Fields based on PatientType */}
                   {newLabOrderFormData.patientType === 'IPD' && (
-                    <div>
-                      <Label htmlFor="roomAdmissionId">Room Admission ID (BedNo_RoomAllocationDate) *</Label>
+                    <div className="dialog-form-field">
+                      <Label htmlFor="roomAdmissionId" className="dialog-label-standard">Room Admission ID (BedNo_RoomAllocationDate) *</Label>
                       <select
                         id="roomAdmissionId"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                        className="dialog-select-standard"
                         value={newLabOrderFormData.roomAdmissionId}
                         onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, roomAdmissionId: e.target.value })}
                       >
@@ -1872,11 +1880,11 @@ export function Laboratory() {
                   )}
 
                   {newLabOrderFormData.patientType === 'OPD' && (
-                    <div>
-                      <Label htmlFor="appointmentId">Appointment ID (TokenNo_AppointmentDateTime) *</Label>
+                    <div className="dialog-form-field">
+                      <Label htmlFor="appointmentId" className="dialog-label-standard">Appointment ID (TokenNo_AppointmentDateTime) *</Label>
                       <select
                         id="appointmentId"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                        className="dialog-select-standard"
                         value={newLabOrderFormData.appointmentId}
                         onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, appointmentId: e.target.value })}
                       >
@@ -1944,11 +1952,11 @@ export function Laboratory() {
                   )}
 
                   {newLabOrderFormData.patientType === 'Emergency' && (
-                    <div>
-                      <Label htmlFor="emergencyBedSlotId"> (SlotNo_EmergencyAdmissionDateTime) *</Label>
+                    <div className="dialog-form-field">
+                      <Label htmlFor="emergencyBedSlotId" className="dialog-label-standard"> (SlotNo_EmergencyAdmissionDateTime) *</Label>
                       <select
                         id="emergencyBedSlotId"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                        className="dialog-select-standard"
                         value={newLabOrderFormData.emergencyBedSlotId}
                         onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, emergencyBedSlotId: e.target.value })}
                       >
@@ -2006,11 +2014,11 @@ export function Laboratory() {
                   )}
 
                   {/* Priority */}
-                  <div>
-                    <Label htmlFor="priority">Priority *</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="priority" className="dialog-label-standard">Priority *</Label>
                     <select
                       id="priority"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                      className="dialog-select-standard"
                       value={newLabOrderFormData.priority}
                       onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, priority: e.target.value as 'Normal' | 'Urgent' })}
                     >
@@ -2020,11 +2028,11 @@ export function Laboratory() {
                   </div>
 
                   {/* Test Status */}
-                  <div>
-                    <Label htmlFor="testStatus">Test Status *</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="testStatus" className="dialog-label-standard">Test Status *</Label>
                     <select
                       id="testStatus"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                      className="dialog-select-standard"
                       value={newLabOrderFormData.testStatus}
                       onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, testStatus: e.target.value as 'Pending' | 'InProgress' | 'Completed' })}
                     >
@@ -2035,11 +2043,11 @@ export function Laboratory() {
                   </div>
 
                   {/* Lab Test Done */}
-                  <div>
-                    <Label htmlFor="labTestDone">Lab Test Done *</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="labTestDone" className="dialog-label-standard">Lab Test Done *</Label>
                     <select
                       id="labTestDone"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                      className="dialog-select-standard"
                       value={newLabOrderFormData.labTestDone}
                       onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, labTestDone: e.target.value as 'Yes' | 'No' })}
                     >
@@ -2049,31 +2057,32 @@ export function Laboratory() {
                   </div>
 
                   {/* Test Done Date */}
-                  <div>
-                    <Label htmlFor="testDoneDate">Test Done Date</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="testDoneDate" className="dialog-label-standard">Test Done Date</Label>
                     <Input
                       id="testDoneDate"
                       type="date"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                      className="dialog-input-standard"
                       value={newLabOrderFormData.testDoneDate}
                       onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, testDoneDate: e.target.value })}
                     />
                   </div>
 
                   {/* Report URL */}
-                  <div>
-                    <Label htmlFor="reportsUrl">Report URL</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="reportsUrl" className="dialog-label-standard">Report URL</Label>
                     <Input
                       id="reportsUrl"
                       placeholder="Enter report URL (optional)"
+                      className="dialog-input-standard"
                       value={newLabOrderFormData.reportsUrl}
                       onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, reportsUrl: e.target.value })}
                     />
                   </div>
 
                   {/* Ordered By Doctor - Searchable */}
-                  <div>
-                    <Label htmlFor="orderedByDoctorId">Ordered By Doctor *</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="orderedByDoctorId" className="dialog-label-standard">Ordered By Doctor *</Label>
                     <div className="relative">
                       <Input
                         id="orderedByDoctorId"
@@ -2084,48 +2093,51 @@ export function Laboratory() {
                           setShowDoctorList(true);
                         }}
                         onFocus={() => setShowDoctorList(true)}
+                        className="dialog-input-standard"
                       />
                       {showDoctorList && availableDoctors.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                          <table className="w-full text-sm">
-                            <thead className="bg-gray-50 sticky top-0">
-                              <tr>
-                                <th className="py-2 px-3 text-left text-xs font-medium text-gray-700">Doctor Name</th>
-                                <th className="py-2 px-3 text-left text-xs font-medium text-gray-700">Specialization</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {availableDoctors.filter((doctor: any) => {
-                                if (!doctorSearchTerm) return true;
-                                const searchLower = doctorSearchTerm.toLowerCase();
-                                const doctorName = doctor.name || doctor.Name || doctor.doctorName || doctor.DoctorName || '';
-                                const specialization = doctor.specialization || doctor.Specialization || doctor.speciality || doctor.Speciality || '';
-                                return (
-                                  doctorName.toLowerCase().includes(searchLower) ||
-                                  specialization.toLowerCase().includes(searchLower)
-                                );
-                              }).map((doctor: any) => {
-                                const doctorId = doctor.id || doctor.Id || doctor.doctorId || doctor.DoctorId || '';
-                                const doctorName = doctor.name || doctor.Name || doctor.doctorName || doctor.DoctorName || '';
-                                const specialization = doctor.specialization || doctor.Specialization || doctor.speciality || doctor.Speciality || '';
-                                const isSelected = newLabOrderFormData.orderedByDoctorId === String(doctorId);
-                                return (
-                                  <tr
-                                    key={doctorId}
-                                    onClick={() => {
-                                      setNewLabOrderFormData({ ...newLabOrderFormData, orderedByDoctorId: String(doctorId) });
-                                      setDoctorSearchTerm(doctorName);
-                                      setShowDoctorList(false);
-                                    }}
-                                    className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
-                                  >
-                                    <td className="py-2 px-3 text-sm text-gray-900">{doctorName}</td>
-                                    <td className="py-2 px-3 text-sm text-gray-600">{specialization || '-'}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                        <div className="absolute z-50 w-full mt-1 dialog-dropdown-container shadow-lg max-h-60 overflow-y-auto">
+                          <div className="dialog-table-container">
+                            <table className="dialog-table">
+                              <thead>
+                                <tr className="dialog-table-header-row">
+                                  <th className="dialog-table-header-cell">Doctor Name</th>
+                                  <th className="dialog-table-header-cell">Specialization</th>
+                                </tr>
+                              </thead>
+                              <tbody className="dialog-table-body">
+                                {availableDoctors.filter((doctor: any) => {
+                                  if (!doctorSearchTerm) return true;
+                                  const searchLower = doctorSearchTerm.toLowerCase();
+                                  const doctorName = doctor.name || doctor.Name || doctor.doctorName || doctor.DoctorName || '';
+                                  const specialization = doctor.specialization || doctor.Specialization || doctor.speciality || doctor.Speciality || '';
+                                  return (
+                                    doctorName.toLowerCase().includes(searchLower) ||
+                                    specialization.toLowerCase().includes(searchLower)
+                                  );
+                                }).map((doctor: any) => {
+                                  const doctorId = doctor.id || doctor.Id || doctor.doctorId || doctor.DoctorId || '';
+                                  const doctorName = doctor.name || doctor.Name || doctor.doctorName || doctor.DoctorName || '';
+                                  const specialization = doctor.specialization || doctor.Specialization || doctor.speciality || doctor.Speciality || '';
+                                  const isSelected = newLabOrderFormData.orderedByDoctorId === String(doctorId);
+                                  return (
+                                    <tr
+                                      key={doctorId}
+                                      onClick={() => {
+                                        setNewLabOrderFormData({ ...newLabOrderFormData, orderedByDoctorId: String(doctorId) });
+                                        setDoctorSearchTerm(doctorName);
+                                        setShowDoctorList(false);
+                                      }}
+                                      className={`dialog-table-body-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
+                                    >
+                                      <td className="dialog-table-body-cell dialog-table-body-cell-primary">{doctorName}</td>
+                                      <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{specialization || '-'}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -2133,21 +2145,22 @@ export function Laboratory() {
 
                   {/* Error Message */}
                   {newLabOrderSubmitError && (
-                    <div className="text-red-600 text-sm bg-red-50 p-3 rounded-md">
+                    <div className="dialog-error-message">
                       {newLabOrderSubmitError}
                     </div>
                   )}
+                  </div>
                 </div>
+                <DialogFooter className="dialog-footer-standard">
+                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="dialog-footer-button">
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveNewLabOrder} disabled={newLabOrderSubmitting} className="dialog-footer-button">
+                    {newLabOrderSubmitting ? 'Saving...' : 'Save Lab Order'}
+                  </Button>
+                </DialogFooter>
               </div>
-              <DialogFooter className="px-6 py-3 flex-shrink-0 border-t bg-white">
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSaveNewLabOrder} disabled={newLabOrderSubmitting}>
-                  {newLabOrderSubmitting ? 'Saving...' : 'Save Lab Order'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
+            </ResizableDialogContent>
           </Dialog>
             </div>
           </div>
@@ -2155,79 +2168,75 @@ export function Laboratory() {
         <div className="px-6 pt-4 pb-4 flex-1">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card className="dashboard-stats-card">
-          <CardContent className="dashboard-stats-card-content">
-            <div className="flex items-center justify-between mb-2">
-              <p className="dashboard-stats-status-label">Total Tests Today</p>
-              <TestTube className="size-5 text-blue-600" />
-            </div>
-            {countsLoading ? (
-              <div className="animate-pulse">
-                <div className="h-8 bg-gray-200 rounded w-16"></div>
+        <Card className="gap-0">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Total Tests Today</p>
+                {countsLoading ? (
+                  <div className="animate-pulse">
+                    <div className="h-6 bg-gray-200 rounded w-16"></div>
+                  </div>
+                ) : (
+                  <h3 className="text-gray-900">{totalCount}</h3>
+                )}
               </div>
-            ) : (
-              <>
-                <h3 className="dashboard-stats-number">{totalCount}</h3>
-                <p className="dashboard-stats-label">Active orders</p>
-              </>
-            )}
+              <TestTube className="size-8 text-blue-500" />
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="dashboard-stats-card">
-          <CardContent className="dashboard-stats-card-content">
-            <div className="flex items-center justify-between mb-2">
-              <p className="dashboard-stats-status-label">Pending</p>
-              <Clock className="size-5 text-orange-600" />
-            </div>
-            {countsLoading ? (
-              <div className="animate-pulse">
-                <div className="h-8 bg-gray-200 rounded w-16"></div>
+        <Card className="gap-0">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Pending</p>
+                {countsLoading ? (
+                  <div className="animate-pulse">
+                    <div className="h-6 bg-gray-200 rounded w-16"></div>
+                  </div>
+                ) : (
+                  <h3 className="text-gray-900">{pendingCount}</h3>
+                )}
               </div>
-            ) : (
-              <>
-                <h3 className="dashboard-stats-number">{pendingCount}</h3>
-                <p className="dashboard-stats-label">Awaiting sample</p>
-              </>
-            )}
+              <Clock className="size-8 text-orange-500" />
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="dashboard-stats-card">
-          <CardContent className="dashboard-stats-card-content">
-            <div className="flex items-center justify-between mb-2">
-              <p className="dashboard-stats-status-label">In Progress</p>
-              <AlertCircle className="size-5 text-blue-600" />
-            </div>
-            {countsLoading ? (
-              <div className="animate-pulse">
-                <div className="h-8 bg-gray-200 rounded w-16"></div>
+        <Card className="gap-0">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">In Progress</p>
+                {countsLoading ? (
+                  <div className="animate-pulse">
+                    <div className="h-6 bg-gray-200 rounded w-16"></div>
+                  </div>
+                ) : (
+                  <h3 className="text-gray-900">{inProgressCount}</h3>
+                )}
               </div>
-            ) : (
-              <>
-                <h3 className="dashboard-stats-number">{inProgressCount}</h3>
-                <p className="dashboard-stats-label">Being processed</p>
-              </>
-            )}
+              <AlertCircle className="size-8 text-blue-500" />
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="dashboard-stats-card">
-          <CardContent className="dashboard-stats-card-content">
-            <div className="flex items-center justify-between mb-2">
-              <p className="dashboard-stats-status-label">Completed</p>
-              <CheckCircle className="size-5 text-green-600" />
-            </div>
-            {countsLoading ? (
-              <div className="animate-pulse">
-                <div className="h-8 bg-gray-200 rounded w-16"></div>
+        <Card className="gap-0">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Completed</p>
+                {countsLoading ? (
+                  <div className="animate-pulse">
+                    <div className="h-6 bg-gray-200 rounded w-16"></div>
+                  </div>
+                ) : (
+                  <h3 className="text-gray-900">{completedCount}</h3>
+                )}
               </div>
-            ) : (
-              <>
-                <h3 className="dashboard-stats-number">{completedCount}</h3>
-                <p className="dashboard-stats-label">Reports ready</p>
-              </>
-            )}
+              <CheckCircle className="size-8 text-green-500" />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -2765,121 +2774,128 @@ export function Laboratory() {
 
       {/* Edit PatientLabTest Dialog */}
       <Dialog open={isEditPatientLabTestDialogOpen} onOpenChange={setIsEditPatientLabTestDialogOpen}>
-        <DialogContent className="p-0 gap-0 large-dialog max-w-4xl max-h-[90vh]">
-          <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
-            <DialogTitle className="flex items-center gap-2">
-              <Edit className="size-5" />
-              Edit Patient Lab Test
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
-            {editPatientLabTestFormData && (
-              <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="editPatientNo">Patient No</Label>
-                    <Input
-                      id="editPatientNo"
-                      value={editPatientLabTestFormData?.patientNo ? String(editPatientLabTestFormData.patientNo) : 'N/A'}
-                      disabled
-                      className="bg-gray-100"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editTestName">Lab Name</Label>
-                    <Input
-                      id="editTestName"
-                      value={editPatientLabTestFormData?.testName ? String(editPatientLabTestFormData.testName) : 'N/A'}
-                      disabled
-                      className="bg-gray-100"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editPatientType">PatientType *</Label>
-                    <select
-                      id="editPatientType"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                      value={editPatientLabTestFormData.patientType}
-                      onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, patientType: e.target.value })}
-                    >
-                      <option value="OPD">OPD</option>
-                      <option value="IPD">IPD</option>
-                      <option value="Emergency">Emergency</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="editPriority">Priority *</Label>
-                    <select
-                      id="editPriority"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                      value={editPatientLabTestFormData.priority}
-                      onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, priority: e.target.value })}
-                    >
-                      <option value="Normal">Normal</option>
-                      <option value="Urgent">Urgent</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="editTestStatus">TestStatus *</Label>
-                    <select
-                      id="editTestStatus"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                      value={editPatientLabTestFormData.testStatus}
-                      onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, testStatus: e.target.value })}
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="InProgress">InProgress</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="editLabTestDone">LabTestDone *</Label>
-                    <select
-                      id="editLabTestDone"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                      value={editPatientLabTestFormData.labTestDone}
-                      onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, labTestDone: e.target.value })}
-                    >
-                      <option value="No">No</option>
-                      <option value="Yes">Yes</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="editReportsUrl">ReportsUrl</Label>
-                    <Input
-                      id="editReportsUrl"
-                      value={editPatientLabTestFormData.reportsUrl}
-                      onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, reportsUrl: e.target.value })}
-                      placeholder="Enter report URL"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editTestDoneDateTime">TestDoneDateTime</Label>
-                    <Input
-                      id="editTestDoneDateTime"
-                      type="datetime-local"
-                      value={editPatientLabTestFormData.testDoneDateTime ? new Date(editPatientLabTestFormData.testDoneDateTime).toISOString().slice(0, 16) : ''}
-                      onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, testDoneDateTime: e.target.value })}
-                    />
+        <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
+          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+            <DialogHeader className="dialog-header-standard">
+              <DialogTitle className="dialog-title-standard-view">Edit Patient Lab Test</DialogTitle>
+            </DialogHeader>
+            <div className="dialog-body-content-wrapper">
+              {editPatientLabTestFormData && (
+                <div className="dialog-form-container">
+                  {editPatientLabTestSubmitError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+                      {editPatientLabTestSubmitError}
+                    </div>
+                  )}
+                  <div className="dialog-form-field-grid">
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="editPatientNo" className="dialog-label-standard">Patient No</Label>
+                      <Input
+                        id="editPatientNo"
+                        value={editPatientLabTestFormData?.patientNo ? String(editPatientLabTestFormData.patientNo) : 'N/A'}
+                        disabled
+                        className="dialog-input-standard"
+                        style={{ fontWeight: 'normal' }}
+                      />
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="editTestName" className="dialog-label-standard">Lab Name</Label>
+                      <Input
+                        id="editTestName"
+                        value={editPatientLabTestFormData?.testName ? String(editPatientLabTestFormData.testName) : 'N/A'}
+                        disabled
+                        className="dialog-input-standard"
+                        style={{ fontWeight: 'normal' }}
+                      />
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="editPatientType" className="dialog-label-standard">PatientType *</Label>
+                      <select
+                        id="editPatientType"
+                        aria-label="PatientType"
+                        className="dialog-select-standard"
+                        value={editPatientLabTestFormData.patientType}
+                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, patientType: e.target.value })}
+                      >
+                        <option value="OPD">OPD</option>
+                        <option value="IPD">IPD</option>
+                        <option value="Emergency">Emergency</option>
+                      </select>
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="editPriority" className="dialog-label-standard">Priority *</Label>
+                      <select
+                        id="editPriority"
+                        aria-label="Priority"
+                        className="dialog-select-standard"
+                        value={editPatientLabTestFormData.priority}
+                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, priority: e.target.value })}
+                      >
+                        <option value="Normal">Normal</option>
+                        <option value="Urgent">Urgent</option>
+                      </select>
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="editTestStatus" className="dialog-label-standard">TestStatus *</Label>
+                      <select
+                        id="editTestStatus"
+                        aria-label="TestStatus"
+                        className="dialog-select-standard"
+                        value={editPatientLabTestFormData.testStatus}
+                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, testStatus: e.target.value })}
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="InProgress">InProgress</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="editLabTestDone" className="dialog-label-standard">LabTestDone *</Label>
+                      <select
+                        id="editLabTestDone"
+                        aria-label="LabTestDone"
+                        className="dialog-select-standard"
+                        value={editPatientLabTestFormData.labTestDone}
+                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, labTestDone: e.target.value })}
+                      >
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                      </select>
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="editReportsUrl" className="dialog-label-standard">ReportsUrl</Label>
+                      <Input
+                        id="editReportsUrl"
+                        value={editPatientLabTestFormData.reportsUrl}
+                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, reportsUrl: e.target.value })}
+                        placeholder="Enter report URL"
+                        className="dialog-input-standard"
+                      />
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="editTestDoneDateTime" className="dialog-label-standard">TestDoneDateTime</Label>
+                      <Input
+                        id="editTestDoneDateTime"
+                        type="datetime-local"
+                        value={editPatientLabTestFormData.testDoneDateTime ? new Date(editPatientLabTestFormData.testDoneDateTime).toISOString().slice(0, 16) : ''}
+                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, testDoneDateTime: e.target.value })}
+                        className="dialog-input-standard"
+                      />
+                    </div>
                   </div>
                 </div>
-                {editPatientLabTestSubmitError && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                    {editPatientLabTestSubmitError}
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
+            <div className="dialog-footer-standard">
+              <Button variant="outline" onClick={() => setIsEditPatientLabTestDialogOpen(false)} className="dialog-footer-button">
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEditPatientLabTest} disabled={editPatientLabTestSubmitting} className="dialog-footer-button">
+                {editPatientLabTestSubmitting ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
           </div>
-          <DialogFooter className="px-6 pb-4 flex-shrink-0">
-            <Button variant="outline" onClick={() => setIsEditPatientLabTestDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveEditPatientLabTest} disabled={editPatientLabTestSubmitting}>
-              {editPatientLabTestSubmitting ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+        </ResizableDialogContent>
       </Dialog>
       </div>
       </div>
@@ -2897,111 +2913,114 @@ function TestsList({
   onEditTest: (test: any) => void;
 }) {
   return (
-    <Card className="mb-4 bg-white">
-      <CardContent className="p-6 bg-white">
-        <div className="overflow-x-auto bg-white">
-          <table className="w-full border-collapse bg-white">
-            <thead>
+    <Card className="mb-4 bg-white border border-gray-200 shadow-sm rounded-lg">
+      <CardContent className="p-0">
+        <div className="overflow-x-auto border border-gray-200 rounded">
+          <table className="w-full">
+            <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">PatientNo</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">PatientName</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">TestName</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">PatientType</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">DisplayTestId</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">TestCategory</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">Priority</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">LabTestDone</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">ReportsUrl</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">TestStatus</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">TestDoneDateTime</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">Status</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">Charges</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">CreatedDate</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-700">Actions</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">PatientNo</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">PatientName</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">TestName</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">PatientType</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">DisplayTestId</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">TestCategory</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Priority</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">LabTestDone</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">ReportsUrl</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">TestStatus</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">TestDoneDateTime</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Status</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Charges</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">CreatedDate</th>
+                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white">
-              {tests.map((test: any) => (
-                <tr key={test.id} className="border-b border-gray-100 hover:bg-gray-50 bg-white">
-                  <td className="py-3 px-4 text-sm text-gray-600 font-mono">{test.patientNo || 'N/A'}</td>
-                  <td className="py-3 px-4 text-sm text-gray-900">{test.patientName || 'N/A'}</td>
-                  <td className="py-3 px-4 text-sm text-gray-900">{test.testName || 'N/A'}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">
-                    <Badge variant="outline">{test.patientType || 'N/A'}</Badge>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-600 font-mono">{test.displayTestId || test.testId || 'N/A'}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">
-                    <Badge variant="outline">{test.testCategory || test.category || 'N/A'}</Badge>
-                  </td>
-                  <td className="py-3 px-4 text-sm">
-                    <Badge variant={
-                      test.priority === 'Emergency' || test.priority === 'Urgent' ? 'destructive' :
-                      test.priority === 'Urgent' ? 'default' : 'secondary'
-                    }>
-                      {test.priority || 'N/A'}
-                    </Badge>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">
-                    <Badge variant={test.labTestDone === 'Yes' || test.labTestDone === true ? 'default' : 'outline'}>
-                      {test.labTestDone === 'Yes' || test.labTestDone === true ? 'Yes' : 'No'}
-                    </Badge>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">
-                    {test.reportsUrl ? (
-                      <a href={test.reportsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                        View Report
-                      </a>
-                    ) : 'N/A'}
-                  </td>
-                  <td className="py-3 px-4 text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs ${
-                      test.testStatus === 'Completed' || test.testStatus === 'completed' ? 'bg-green-100 text-green-700' :
-                      test.testStatus === 'In Progress' || test.testStatus === 'InProgress' || test.testStatus === 'in_progress' ? 'bg-blue-100 text-blue-700' :
-                      'bg-orange-100 text-orange-700'
-                    }`}>
-                      {test.testStatus || test.status || 'N/A'}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">
-                    {test.testDoneDateTime ? (() => {
-                      try {
-                        const date = new Date(test.testDoneDateTime);
-                        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
-                      } catch (e) {
-                        return 'N/A';
-                      }
-                    })() : 'N/A'}
-                  </td>
-                  <td className="py-3 px-4 text-sm">
-                    <Badge variant={(test as any).statusValue === 'Active' || (test as any).statusValue === 'active' ? 'default' : 'outline'}>
-                      {(test as any).statusValue || test.status || 'N/A'}
-                    </Badge>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">₹{test.charges || 0}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">
-                    {test.createdDate ? new Date(test.createdDate).toLocaleDateString() : 'N/A'}
-                  </td>
-                  <td className="py-3 px-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1"
-                      onClick={() => onEditTest(test)}
-                      title="View & Edit Patient Lab Test"
-                    >
-                      <Edit className="h-3 w-3" />
-                      View & Edit
-                    </Button>
+            <tbody>
+              {tests.length === 0 ? (
+                <tr>
+                  <td colSpan={15} className="text-center py-8 text-gray-500">
+                    No lab tests found
                   </td>
                 </tr>
-              ))}
+              ) : (
+                <>
+                  {tests.map((test: any) => (
+                    <tr key={test.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-4 px-6 text-gray-600 whitespace-nowrap font-mono">{test.patientNo || 'N/A'}</td>
+                      <td className="py-4 px-6 text-gray-600 break-words" style={{ maxWidth: '200px' }}>{test.patientName || 'N/A'}</td>
+                      <td className="py-4 px-6 text-gray-600 break-words" style={{ maxWidth: '200px' }}>{test.testName || 'N/A'}</td>
+                      <td className="py-4 px-6 whitespace-nowrap">
+                        <Badge variant="outline">{test.patientType || 'N/A'}</Badge>
+                      </td>
+                      <td className="py-4 px-6 text-gray-600 whitespace-nowrap font-mono">{test.displayTestId || test.testId || 'N/A'}</td>
+                      <td className="py-4 px-6 whitespace-nowrap">
+                        <Badge variant="outline">{test.testCategory || test.category || 'N/A'}</Badge>
+                      </td>
+                      <td className="py-4 px-6 whitespace-nowrap">
+                        <Badge variant={
+                          test.priority === 'Emergency' || test.priority === 'Urgent' ? 'destructive' :
+                          test.priority === 'Urgent' ? 'default' : 'secondary'
+                        }>
+                          {test.priority || 'N/A'}
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-6 whitespace-nowrap">
+                        <Badge variant={test.labTestDone === 'Yes' || test.labTestDone === true ? 'default' : 'outline'}>
+                          {test.labTestDone === 'Yes' || test.labTestDone === true ? 'Yes' : 'No'}
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-6 text-gray-600 whitespace-nowrap">
+                        {test.reportsUrl ? (
+                          <a href={test.reportsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                            View Report
+                          </a>
+                        ) : 'N/A'}
+                      </td>
+                      <td className="py-4 px-6 whitespace-nowrap">
+                        <span className={`px-2 py-1 rounded-full text-xs ${
+                          test.testStatus === 'Completed' || test.testStatus === 'completed' ? 'bg-green-100 text-green-700' :
+                          test.testStatus === 'In Progress' || test.testStatus === 'InProgress' || test.testStatus === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                          'bg-orange-100 text-orange-700'
+                        }`}>
+                          {test.testStatus || test.status || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-gray-600 whitespace-nowrap">
+                        {test.testDoneDateTime ? (() => {
+                          try {
+                            const date = new Date(test.testDoneDateTime);
+                            return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
+                          } catch (e) {
+                            return 'N/A';
+                          }
+                        })() : 'N/A'}
+                      </td>
+                      <td className="py-4 px-6 whitespace-nowrap">
+                        <Badge variant={(test as any).statusValue === 'Active' || (test as any).statusValue === 'active' ? 'default' : 'outline'}>
+                          {(test as any).statusValue || test.status || 'N/A'}
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-6 text-gray-600 whitespace-nowrap">₹{test.charges || 0}</td>
+                      <td className="py-4 px-6 text-gray-600 whitespace-nowrap">
+                        {test.createdDate ? new Date(test.createdDate).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="py-4 px-6 whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEditTest(test)}
+                          title="Manage Patient Lab Test"
+                        >
+                          Manage
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
             </tbody>
           </table>
-          {tests.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              No lab tests found
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>

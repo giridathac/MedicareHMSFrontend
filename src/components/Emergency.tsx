@@ -1250,7 +1250,7 @@ export function Emergency() {
                         onChange={(e) => setEmergencyFormData({ ...emergencyFormData, transferToIPDOTICU: e.target.checked, transferTo: e.target.checked ? emergencyFormData.transferTo : undefined })}
                         className="rounded"
                       />
-                      <Label htmlFor="add-transferToIPDOTICU" className="dialog-checkbox-label-standard cursor-pointer">Transfer To IPD/OT/ICU</Label>
+                      <Label htmlFor="add-transferToIPDOTICU" className="dialog-label-standard cursor-pointer">Transfer To IPD/OT/ICU</Label>
                     </div>
                   </div>
 
@@ -2077,7 +2077,7 @@ export function Emergency() {
                       onChange={(e) => setEditFormData({ ...editFormData, transferToIPDOTICU: e.target.checked, transferTo: e.target.checked ? editFormData.transferTo : undefined })}
                       className="rounded"
                     />
-                    <Label htmlFor="edit-transferToIPDOTICU" className="dialog-checkbox-label-standard cursor-pointer">Transfer To IPD/OT/ICU</Label>
+                    <Label htmlFor="edit-transferToIPDOTICU" className="dialog-label-standard cursor-pointer">Transfer To IPD/OT/ICU</Label>
                   </div>
                 </div>
 
