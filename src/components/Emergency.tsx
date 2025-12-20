@@ -11,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar as CalendarComponent } from './ui/calendar';
 import { Siren, Plus, Ambulance, AlertTriangle, BedDouble, ArrowRight, Clock, Search, Calendar, ChevronUp } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 import { patientsApi } from '../api/patients';
 import { Patient, EmergencyAdmission } from '../types';
 import { useEmergencyBedSlots } from '../hooks/useEmergencyBedSlots';
@@ -175,8 +177,8 @@ export function Emergency() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
-  const [addDatePickerOpen, setAddDatePickerOpen] = useState(false);
-  const [editDatePickerOpen, setEditDatePickerOpen] = useState(false);
+  const [addEmergencyAdmissionDate, setAddEmergencyAdmissionDate] = useState<Date | null>(null);
+  const [editEmergencyAdmissionDate, setEditEmergencyAdmissionDate] = useState<Date | null>(null);
   const [isUnoccupiedBedsExpanded, setIsUnoccupiedBedsExpanded] = useState(false);
   
   // Hooks for emergency admission data
@@ -262,7 +264,7 @@ export function Emergency() {
     patientCondition: 'Stable' as EmergencyAdmission['patientCondition'],
     priority: 'Medium',
     transferToIPDOTICU: false,
-    transferTo: undefined as 'IPD Room Admission' | 'ICU' | 'OT' | undefined,
+    transferTo: undefined as 'IPD' | 'ICU' | 'OT' | undefined,
     transferDetails: '',
     status: 'Active' as EmergencyAdmission['status'],
   });
@@ -281,7 +283,7 @@ export function Emergency() {
     patientCondition: 'Stable' as EmergencyAdmission['patientCondition'],
     priority: 'Medium',
     transferToIPDOTICU: false,
-    transferTo: undefined as 'IPD Room Admission' | 'ICU' | 'OT' | undefined,
+    transferTo: undefined as 'IPD' | 'ICU' | 'OT' | undefined,
     transferDetails: '',
     status: 'Active' as EmergencyAdmission['status'],
   });
@@ -523,6 +525,39 @@ export function Emergency() {
     return `${day}-${month}-${year}`;
   }, []);
 
+  // Sync DatePicker with form data for Add dialog
+  useEffect(() => {
+    if (emergencyFormData.emergencyAdmissionDate) {
+      const dateObj = getDateFromDDMMYYYY(emergencyFormData.emergencyAdmissionDate);
+      setAddEmergencyAdmissionDate(dateObj || null);
+    } else {
+      setAddEmergencyAdmissionDate(null);
+    }
+  }, [emergencyFormData.emergencyAdmissionDate, getDateFromDDMMYYYY]);
+
+  // Sync DatePicker with form data for Edit dialog
+  useEffect(() => {
+    if (editFormData.emergencyAdmissionDate) {
+      const dateObj = getDateFromDDMMYYYY(editFormData.emergencyAdmissionDate);
+      setEditEmergencyAdmissionDate(dateObj || null);
+    } else {
+      setEditEmergencyAdmissionDate(null);
+    }
+  }, [editFormData.emergencyAdmissionDate, getDateFromDDMMYYYY]);
+
+  // Set default date when Add dialog opens
+  useEffect(() => {
+    if (isAddDialogOpen) {
+      const today = new Date();
+      setAddEmergencyAdmissionDate(today);
+      const formattedDate = getDDMMYYYYFromDate(today);
+      setEmergencyFormData(prev => ({
+        ...prev,
+        emergencyAdmissionDate: formattedDate,
+      }));
+    }
+  }, [isAddDialogOpen, getDDMMYYYYFromDate]);
+
   
   const getStatusBadge = useCallback((status: EmergencyAdmission['emergencyStatus']) => {
     switch (status) {
@@ -673,6 +708,14 @@ export function Emergency() {
       setIsEditDialogOpen(true);
       setUpdateError(null);
       setUpdateSuccess(false);
+      
+      // Set DatePicker state for edit
+      if (formattedDate) {
+        const dateObj = getDateFromDDMMYYYY(formattedDate);
+        setEditEmergencyAdmissionDate(dateObj || null);
+      } else {
+        setEditEmergencyAdmissionDate(null);
+      }
     } catch (error) {
       console.error('Error fetching admission details:', error);
       setUpdateError(error instanceof Error ? error.message : 'Failed to fetch admission details. Please try again.');
@@ -853,7 +896,7 @@ export function Emergency() {
                             doctor.name.toLowerCase().includes(searchLower) ||
                             doctor.role.toLowerCase().includes(searchLower)
                           );
-                        }).length === 0 && (
+                        }).length === 0 && !emergencyFormData.doctorId && (
                           <div className="text-center py-8 text-sm text-gray-700">
                             No doctors found. Try a different search term.
                           </div>
@@ -884,14 +927,7 @@ export function Emergency() {
                           setPatientSearchTerm(newValue);
                           setPatientHighlightIndex(-1);
                           setShowPatientDropdown(true);
-                          // Clear patient selection if user edits the search term
-                          if (selectedPatientId) {
-                            setSelectedPatientId('');
-                            setEmergencyFormData({
-                              ...emergencyFormData,
-                              patientId: '',
-                            });
-                          }
+                          // Don't clear patient selection when user edits - allow them to search and replace
                           // Clear error when user starts typing
                           if (patientError) {
                             setPatientError('');
@@ -956,7 +992,7 @@ export function Emergency() {
                             });
                             setPatientError('');
                             setPatientHighlightIndex(-1);
-                            setShowPatientDropdown(false);
+                            // Keep dropdown open to allow selecting a different patient
                           }
                         }}
                         className="dialog-input-standard pl-10"
@@ -1006,7 +1042,7 @@ export function Emergency() {
                                       setEmergencyFormData({ ...emergencyFormData, patientId });
                                       setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
                                       setPatientError('');
-                                      setShowPatientDropdown(false);
+                                      // Keep dropdown open to allow selecting a different patient
                                     }}
                                     className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-gray-100' : ''}`}
                                   >
@@ -1033,7 +1069,7 @@ export function Emergency() {
                             fullName.toLowerCase().includes(searchLower) ||
                             phoneNo.includes(patientSearchTerm)
                           );
-                        }).length === 0 && (
+                        }).length === 0 && !emergencyFormData.patientId && (
                           <div className="text-center py-8 text-sm text-gray-700">
                             No patients found. Try a different search term.
                           </div>
@@ -1082,80 +1118,29 @@ export function Emergency() {
                   </div>
 
                   <div className="dialog-form-field">
-                    <Label htmlFor="add-emergencyAdmissionDate" className="dialog-label-standard">Emergency Admission Date * (DD-MM-YYYY)</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="add-emergencyAdmissionDate"
-                        type="text"
-                        placeholder="DD-MM-YYYY"
-                        value={emergencyFormData.emergencyAdmissionDate}
-                        onChange={(e) => {
-                          let value = e.target.value;
-                          // Allow only digits and dashes
-                          value = value.replace(/[^\d-]/g, '');
-                          // Auto-format as user types: DD-MM-YYYY
-                          if (value.length <= 10) {
-                            // Remove existing dashes and add them at correct positions
-                            const digits = value.replace(/-/g, '');
-                            let formatted = '';
-                            for (let i = 0; i < digits.length; i++) {
-                              if (i === 2 || i === 4) {
-                                formatted += '-';
-                              }
-                              formatted += digits[i];
-                            }
-                            setEmergencyFormData({ ...emergencyFormData, emergencyAdmissionDate: formatted });
-                          }
-                        }}
-                        onBlur={(e) => {
-                          // Validate and format on blur
-                          const value = e.target.value;
-                          const dateRegex = /^(\d{2})-(\d{2})-(\d{4})$/;
-                          if (dateRegex.test(value)) {
-                            const [, day, month, year] = value.match(dateRegex)!;
-                            const dayNum = parseInt(day, 10);
-                            const monthNum = parseInt(month, 10);
-                            const yearNum = parseInt(year, 10);
-                            // Validate date
-                            if (dayNum >= 1 && dayNum <= 31 && monthNum >= 1 && monthNum <= 12 && yearNum >= 1900 && yearNum <= 2100) {
-                              const date = new Date(yearNum, monthNum - 1, dayNum);
-                              if (date.getDate() === dayNum && date.getMonth() === monthNum - 1 && date.getFullYear() === yearNum) {
-                                // Valid date, keep as is
-                                return;
-                              }
-                            }
-                          }
-                          // If invalid, show error or reset
-                        }}
-                        className="dialog-input-standard flex-1"
-                        maxLength={10}
-                      />
-                      <Popover open={addDatePickerOpen} onOpenChange={setAddDatePickerOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="px-3"
-                          >
-                            <Calendar className="size-4" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <CalendarComponent
-                            mode="single"
-                            selected={getDateFromDDMMYYYY(emergencyFormData.emergencyAdmissionDate)}
-                            onSelect={(date) => {
-                              if (date) {
-                                const formattedDate = getDDMMYYYYFromDate(date);
-                                setEmergencyFormData({ ...emergencyFormData, emergencyAdmissionDate: formattedDate });
-                                setAddDatePickerOpen(false);
-                              }
-                            }}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    <Label htmlFor="add-emergencyAdmissionDate" className="dialog-label-standard">Emergency Admission Date *</Label>
+                    <DatePicker
+                      id="add-emergencyAdmissionDate"
+                      selected={addEmergencyAdmissionDate}
+                      onChange={(date: Date | null) => {
+                        setAddEmergencyAdmissionDate(date);
+                        if (date) {
+                          const formattedDate = getDDMMYYYYFromDate(date);
+                          setEmergencyFormData({ ...emergencyFormData, emergencyAdmissionDate: formattedDate });
+                        } else {
+                          setEmergencyFormData({ ...emergencyFormData, emergencyAdmissionDate: '' });
+                        }
+                      }}
+                      dateFormat="dd-MM-yyyy"
+                      placeholderText="dd-mm-yyyy"
+                      className="dialog-input-standard w-full"
+                      wrapperClassName="w-full"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={100}
+                      scrollableYearDropdown
+                    />
                   </div>
 
                   <div className="dialog-form-field">
@@ -1263,10 +1248,10 @@ export function Emergency() {
                           aria-label="Transfer To"
                           className="dialog-select-standard"
                           value={emergencyFormData.transferTo || ''}
-                          onChange={(e) => setEmergencyFormData({ ...emergencyFormData, transferTo: e.target.value as 'IPD Room Admission' | 'ICU' | 'OT' })}
+                          onChange={(e) => setEmergencyFormData({ ...emergencyFormData, transferTo: e.target.value as 'IPD' | 'ICU' | 'OT' })}
                         >
                           <option value="">Select Transfer Destination</option>
-                          <option value="IPD Room Admission">IPD Room Admission</option>
+                          <option value="IPD">IPD</option>
                           <option value="ICU">ICU</option>
                           <option value="OT">OT</option>
                         </select>
@@ -1377,7 +1362,7 @@ export function Emergency() {
 
                         try {
                           // Map transferToIPDOTICU checkbox to individual transfer fields
-                          const transferToIPD = emergencyFormData.transferToIPDOTICU && emergencyFormData.transferTo === 'IPD Room Admission' ? 'Yes' : 'No';
+                          const transferToIPD = emergencyFormData.transferToIPDOTICU && emergencyFormData.transferTo === 'IPD' ? 'Yes' : 'No';
                           const transferToOT = emergencyFormData.transferToIPDOTICU && emergencyFormData.transferTo === 'OT' ? 'Yes' : 'No';
                           const transferToICU = emergencyFormData.transferToIPDOTICU && emergencyFormData.transferTo === 'ICU' ? 'Yes' : 'No';
 
@@ -1741,7 +1726,8 @@ export function Emergency() {
                   return (
                     <div
                       key={admission.emergencyAdmissionId}
-                      className={`p-3 border-2 rounded-lg ${colors.border} ${colors.bg}`}
+                      onClick={() => handleEditAdmission(admission)}
+                      className={`p-3 border-2 rounded-lg cursor-pointer hover:shadow-md transition-shadow ${colors.border} ${colors.bg}`}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs text-gray-500">#{index + 1}</span>
@@ -1871,7 +1857,7 @@ export function Emergency() {
                           doctor.name.toLowerCase().includes(searchLower) ||
                           doctor.role.toLowerCase().includes(searchLower)
                         );
-                      }).length === 0 && (
+                      }).length === 0 && !editFormData.doctorId && (
                         <div className="text-center py-8 text-sm text-gray-700">
                           No doctors found. Try a different search term.
                         </div>
@@ -1909,80 +1895,29 @@ export function Emergency() {
                 </div>
 
                 <div className="dialog-form-field">
-                  <Label htmlFor="edit-emergencyAdmissionDate" className="dialog-label-standard">Emergency Admission Date * (DD-MM-YYYY)</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="edit-emergencyAdmissionDate"
-                      type="text"
-                      placeholder="DD-MM-YYYY"
-                      value={editFormData.emergencyAdmissionDate}
-                      onChange={(e) => {
-                        let value = e.target.value;
-                        // Allow only digits and dashes
-                        value = value.replace(/[^\d-]/g, '');
-                        // Auto-format as user types: DD-MM-YYYY
-                        if (value.length <= 10) {
-                          // Remove existing dashes and add them at correct positions
-                          const digits = value.replace(/-/g, '');
-                          let formatted = '';
-                          for (let i = 0; i < digits.length; i++) {
-                            if (i === 2 || i === 4) {
-                              formatted += '-';
-                            }
-                            formatted += digits[i];
-                          }
-                          setEditFormData({ ...editFormData, emergencyAdmissionDate: formatted });
-                        }
-                      }}
-                      onBlur={(e) => {
-                        // Validate and format on blur
-                        const value = e.target.value;
-                        const dateRegex = /^(\d{2})-(\d{2})-(\d{4})$/;
-                        if (dateRegex.test(value)) {
-                          const [, day, month, year] = value.match(dateRegex)!;
-                          const dayNum = parseInt(day, 10);
-                          const monthNum = parseInt(month, 10);
-                          const yearNum = parseInt(year, 10);
-                          // Validate date
-                          if (dayNum >= 1 && dayNum <= 31 && monthNum >= 1 && monthNum <= 12 && yearNum >= 1900 && yearNum <= 2100) {
-                            const date = new Date(yearNum, monthNum - 1, dayNum);
-                            if (date.getDate() === dayNum && date.getMonth() === monthNum - 1 && date.getFullYear() === yearNum) {
-                              // Valid date, keep as is
-                              return;
-                            }
-                          }
-                        }
-                        // If invalid, show error or reset
-                      }}
-                      className="dialog-input-standard flex-1"
-                      maxLength={10}
-                    />
-                    <Popover open={editDatePickerOpen} onOpenChange={setEditDatePickerOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="px-3"
-                        >
-                          <Calendar className="size-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <CalendarComponent
-                          mode="single"
-                          selected={getDateFromDDMMYYYY(editFormData.emergencyAdmissionDate)}
-                          onSelect={(date) => {
-                            if (date) {
-                              const formattedDate = getDDMMYYYYFromDate(date);
-                              setEditFormData({ ...editFormData, emergencyAdmissionDate: formattedDate });
-                              setEditDatePickerOpen(false);
-                            }
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                  <Label htmlFor="edit-emergencyAdmissionDate" className="dialog-label-standard">Emergency Admission Date *</Label>
+                  <DatePicker
+                    id="edit-emergencyAdmissionDate"
+                    selected={editEmergencyAdmissionDate}
+                    onChange={(date: Date | null) => {
+                      setEditEmergencyAdmissionDate(date);
+                      if (date) {
+                        const formattedDate = getDDMMYYYYFromDate(date);
+                        setEditFormData({ ...editFormData, emergencyAdmissionDate: formattedDate });
+                      } else {
+                        setEditFormData({ ...editFormData, emergencyAdmissionDate: '' });
+                      }
+                    }}
+                    dateFormat="dd-MM-yyyy"
+                    placeholderText="dd-mm-yyyy"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
+                  />
                 </div>
 
                 <div className="dialog-form-field">
@@ -2090,10 +2025,10 @@ export function Emergency() {
                         aria-label="Transfer To"
                         className="dialog-select-standard"
                         value={editFormData.transferTo || ''}
-                        onChange={(e) => setEditFormData({ ...editFormData, transferTo: e.target.value as 'IPD Room Admission' | 'ICU' | 'OT' })}
+                        onChange={(e) => setEditFormData({ ...editFormData, transferTo: e.target.value as 'IPD' | 'ICU' | 'OT' })}
                       >
                         <option value="">Select Transfer Destination</option>
-                        <option value="IPD Room Admission">IPD Room Admission</option>
+                        <option value="IPD">IPD</option>
                         <option value="ICU">ICU</option>
                         <option value="OT">OT</option>
                       </select>
@@ -2191,7 +2126,7 @@ export function Emergency() {
 
                       try {
                         // Map transferToIPDOTICU checkbox to individual transfer fields
-                        const transferToIPD = editFormData.transferToIPDOTICU && editFormData.transferTo === 'IPD Room Admission' ? 'Yes' : 'No';
+                        const transferToIPD = editFormData.transferToIPDOTICU && editFormData.transferTo === 'IPD' ? 'Yes' : 'No';
                         const transferToOT = editFormData.transferToIPDOTICU && editFormData.transferTo === 'OT' ? 'Yes' : 'No';
                         const transferToICU = editFormData.transferToIPDOTICU && editFormData.transferTo === 'ICU' ? 'Yes' : 'No';
 

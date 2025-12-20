@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { ResizableDialogContent } from './ResizableDialogContent';
 import { Plus, Trash2, Edit, TestTube, Tag, CheckCircle2, XCircle, FileText, Search } from 'lucide-react';
 import { useLabTests } from '../hooks/useLabTests';
 import { LabTest } from '../types';
@@ -260,84 +261,82 @@ function LabTestsView({
               Add New Lab Test
             </Button>
           </DialogTrigger>
-          <DialogContent className="p-0 gap-0 large-dialog bg-white">
-            <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0 bg-white">
-              <DialogTitle className="text-gray-700" style={{ fontSize: '1.25rem' }}>Add New Lab Test</DialogTitle>
-            </DialogHeader>
-            <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0 bg-white">
-              <div className="space-y-4 py-4">
-                {submitError && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-                    {submitError}
-                  </div>
-                )}
-                <div>
-                  <Label htmlFor="testName" className="text-gray-600" style={{ fontSize: '1.125rem' }}>Test Name</Label>
-                  <Input
-                    id="testName"
-                    placeholder="e.g., Complete Blood Count, ECG, Blood Sugar"
-                    value={formData.testName}
-                    onChange={(e) => setFormData({ ...formData, testName: e.target.value })}
-                    className="text-gray-700 bg-gray-100"
-                    style={{ fontSize: '1.125rem' }}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="testCategory" className="text-gray-600" style={{ fontSize: '1.125rem' }}>Test Category</Label>
-                    <select
-                      id="testCategory"
-                      aria-label="Test Category"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-gray-700 bg-gray-100"
-                      value={formData.testCategory}
-                      onChange={(e) => setFormData({ ...formData, testCategory: e.target.value })}
-                      style={{ fontSize: '1.125rem' }}
-                    >
-                      {testCategoryOptions.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="charges" className="text-gray-600" style={{ fontSize: '1.125rem' }}>Charges (₹)</Label>
+          <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
+            <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+              <DialogHeader className="dialog-header-standard">
+                <DialogTitle className="dialog-title-standard">Add New Lab Test</DialogTitle>
+              </DialogHeader>
+              <div className="dialog-body-content-wrapper">
+                <div className="dialog-form-container">
+                  {submitError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4">
+                      {submitError}
+                    </div>
+                  )}
+                  <div className="dialog-form-field">
+                    <Label htmlFor="testName" className="dialog-label-standard">Test Name</Label>
                     <Input
-                      id="charges"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="e.g., 500"
-                      value={formData.charges}
-                      onChange={(e) => setFormData({ ...formData, charges: parseFloat(e.target.value) || 0 })}
-                      className="text-gray-700 bg-gray-100"
-                      style={{ fontSize: '1.125rem' }}
+                      id="testName"
+                      placeholder="e.g., Complete Blood Count, ECG, Blood Sugar"
+                      value={formData.testName}
+                      onChange={(e) => setFormData({ ...formData, testName: e.target.value })}
+                      className="dialog-input-standard"
+                    />
+                  </div>
+                  <div className="dialog-form-field-grid">
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="testCategory" className="dialog-label-standard">Test Category</Label>
+                      <select
+                        id="testCategory"
+                        aria-label="Test Category"
+                        className="dialog-select-standard"
+                        value={formData.testCategory}
+                        onChange={(e) => setFormData({ ...formData, testCategory: e.target.value })}
+                      >
+                        {testCategoryOptions.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="charges" className="dialog-label-standard">Charges (₹)</Label>
+                      <Input
+                        id="charges"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="e.g., 500"
+                        value={formData.charges}
+                        onChange={(e) => setFormData({ ...formData, charges: parseFloat(e.target.value) || 0 })}
+                        className="dialog-input-standard"
+                      />
+                    </div>
+                  </div>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="description" className="dialog-label-standard">Description</Label>
+                    <Textarea
+                      id="description"
+                      placeholder="Enter test description..."
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      rows={3}
+                      className="dialog-textarea-standard"
                     />
                   </div>
                 </div>
-                <div>
-                  <Label htmlFor="description" className="text-gray-600" style={{ fontSize: '1.125rem' }}>Description</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Enter test description..."
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={3}
-                    className="text-gray-700 bg-gray-100"
-                    style={{ fontSize: '1.125rem' }}
-                  />
-                </div>
+              </div>
+              <div className="dialog-footer-standard">
+                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="dialog-footer-button">Cancel</Button>
+                <Button onClick={handleAddSubmit} className="dialog-footer-button">Add Lab Test</Button>
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-4 border-t bg-white px-6 pb-4">
-              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddSubmit}>Add Lab Test</Button>
-            </div>
-          </DialogContent>
+          </ResizableDialogContent>
         </Dialog>
           </div>
         </div>
         <div className="px-6 pt-4 pb-4 flex-1">
           {/* Search */}
-          <Card className="mb-6">
+          <Card className="mb-6 bg-white">
             <CardContent className="p-6">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
@@ -352,19 +351,11 @@ function LabTestsView({
           </Card>
 
           {/* Lab Tests Table */}
-          <Card className="mb-4">
+          <Card className="bg-white border border-gray-200 shadow-sm rounded-lg mb-4">
             <CardContent className="p-6">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 text-gray-700" colSpan={6}>
-                        <div className="flex items-center gap-2">
-                          <TestTube className="size-5" />
-                          <span>Lab Tests List ({filteredLabTests.length})</span>
-                        </div>
-                      </th>
-                    </tr>
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-3 px-4 text-gray-700">Test Name</th>
                       <th className="text-left py-3 px-4 text-gray-700">Category</th>
@@ -378,26 +369,25 @@ function LabTestsView({
                   {filteredLabTests.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="text-center py-12 text-gray-500">
-                        {searchTerm ? 'No lab tests found matching your search.' : 'No lab tests found. Add a new lab test to get started.'}
+                        {searchTerm ? `No lab tests found matching "${searchTerm}"` : 'No lab tests found. Add a new lab test to get started.'}
                       </td>
                     </tr>
                   ) : (
                     filteredLabTests.map((labTest) => (
                       <tr key={labTest.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 px-4 text-gray-900">{labTest.testName}</td>
-                        <td className="py-3 px-4">{getCategoryBadge(labTest.testCategory)}</td>
-                        <td className="py-3 px-4 text-gray-600 max-w-xs truncate" title={labTest.description}>{labTest.description || '-'}</td>
-                        <td className="py-3 px-4 text-gray-600">₹{labTest.charges.toLocaleString()}</td>
-                        <td className="py-3 px-4">{getStatusBadge(labTest.status)}</td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
+                        <td className="py-3 px-4 text-gray-900 font-medium whitespace-nowrap">{labTest.testName}</td>
+                        <td className="py-3 px-4 whitespace-nowrap">{getCategoryBadge(labTest.testCategory)}</td>
+                        <td className="py-3 px-4 text-gray-600 max-w-xs break-words whitespace-normal">{labTest.description || '-'}</td>
+                        <td className="py-3 px-4 text-gray-600 whitespace-nowrap">₹{labTest.charges.toLocaleString()}</td>
+                        <td className="py-3 px-4 whitespace-nowrap">{getStatusBadge(labTest.status)}</td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <div className="dashboard-actions-container">
                             <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="gap-1"
+                              size="sm"
                               onClick={() => handleEdit(labTest)}
+                              className="dashboard-manage-button"
+                              title="Manage Lab Test"
                             >
-                              <Edit className="size-3" />
                               Manage
                             </Button>
                           </div>
@@ -414,15 +404,15 @@ function LabTestsView({
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
+        <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
           <div className="dialog-scrollable-wrapper dialog-content-scrollable">
             <DialogHeader className="dialog-header-standard">
-              <DialogTitle className="dialog-title-standard-view">Edit Lab Test</DialogTitle>
+              <DialogTitle className="dialog-title-standard">Edit Lab Test</DialogTitle>
             </DialogHeader>
             <div className="dialog-body-content-wrapper">
               <div className="dialog-form-container">
                 {submitError && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4">
                     {submitError}
                   </div>
                 )}
@@ -497,7 +487,7 @@ function LabTestsView({
               <Button onClick={handleEditSubmit} className="dialog-footer-button">Update Lab Test</Button>
             </div>
           </div>
-        </DialogContent>
+        </ResizableDialogContent>
       </Dialog>
       </div>
     </div>

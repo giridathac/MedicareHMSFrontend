@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from './ui/dialog';
-import { Search, Plus, Pencil } from 'lucide-react';
+import { Search, Plus, Pencil, Calendar } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { usePatients } from '../hooks';
 import { usePatientsPaginated } from '../hooks/usePatientsPaginated';
@@ -19,6 +19,8 @@ import { Patient } from '../types';
 import { formatDateToDDMMYYYY } from '../utils/timeUtils';
 import { ScrollableDialog, StickySectionHeader } from './ScrollableDialog';
 import { ResizableDialogContent } from './ResizableDialogContent';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 export function PatientRegistration() {
   // Use paginated hook for table, but keep regular hook for search/forms
@@ -52,7 +54,7 @@ export function PatientRegistration() {
     registeredBy: '',
   });
   const [registeredDateDisplay, setRegisteredDateDisplay] = useState('');
-  const [editRegisteredDateDisplay, setEditRegisteredDateDisplay] = useState('');
+  const [editRegisteredDate, setEditRegisteredDate] = useState<Date | null>(null);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [patientHighlightIndex, setPatientHighlightIndex] = useState(-1);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
@@ -221,9 +223,28 @@ export function PatientRegistration() {
         registeredDate: mappedPatient.registeredDate || '',
       });
       if (mappedPatient.registeredDate) {
-        setEditRegisteredDateDisplay(formatDateToDisplay(mappedPatient.registeredDate));
+        try {
+          // Handle YYYY-MM-DD format
+          const dateStr = mappedPatient.registeredDate;
+          let date: Date;
+          if (dateStr.includes('T')) {
+            // Already has time info
+            date = new Date(dateStr);
+          } else {
+            // Just date, add time for proper parsing
+            date = new Date(dateStr + 'T00:00:00');
+          }
+          // Check if date is valid
+          if (!isNaN(date.getTime())) {
+            setEditRegisteredDate(date);
+          } else {
+            setEditRegisteredDate(null);
+          }
+        } catch {
+          setEditRegisteredDate(null);
+        }
       } else {
-        setEditRegisteredDateDisplay('');
+        setEditRegisteredDate(null);
       }
     } catch (err) {
       console.error('Error fetching patient for edit:', err);
@@ -241,7 +262,7 @@ export function PatientRegistration() {
     setIsEditDialogOpen(false);
     setEditingPatient(null);
     setEditFormData(null);
-    setEditRegisteredDateDisplay('');
+    setEditRegisteredDate(null);
     setEditAdhaarError('');
   };
 
@@ -535,7 +556,7 @@ export function PatientRegistration() {
                         <DialogTitle className="dialog-title-standard">Add New Patient</DialogTitle>
                       </DialogHeader>
                       <div className="dialog-body-content-wrapper">
-                        <form onSubmit={handleSubmit} className="dialog-form-container space-y-2">
+                        <form onSubmit={handleSubmit} className="dialog-form-container space-y-2" autoComplete="off">
                           {error && (
                             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
                               {error}
@@ -826,7 +847,7 @@ export function PatientRegistration() {
                   </div>
                 </div>
               ) : editingPatient && editFormData ? (
-                <form onSubmit={(e) => { e.preventDefault(); handleUpdatePatient(); }} className="dialog-form-container space-y-2">
+                <form onSubmit={(e) => { e.preventDefault(); handleUpdatePatient(); }} className="dialog-form-container space-y-2" autoComplete="off">
                   <div className="dialog-form-field">
                     <Label htmlFor="editPatientName" className="dialog-label-standard">Patient Name *</Label>
                     <Input
@@ -995,6 +1016,34 @@ export function PatientRegistration() {
                     />
                   </div>
                   <div className="dialog-form-field">
+                    <Label htmlFor="editRegisteredDate" className="dialog-label-standard">Registered Date</Label>
+                    <DatePicker
+                      id="editRegisteredDate"
+                      selected={editRegisteredDate}
+                      onChange={(date: Date | null) => {
+                        setEditRegisteredDate(date);
+                        if (date) {
+                          const year = date.getFullYear();
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
+                          const dateStr = `${year}-${month}-${day}`;
+                          setEditFormData({ ...editFormData, registeredDate: dateStr });
+                        } else {
+                          setEditFormData({ ...editFormData, registeredDate: '' });
+                        }
+                      }}
+                      dateFormat="dd-MM-yyyy"
+                      placeholderText="dd-mm-yyyy"
+                      className="dialog-input-standard w-full"
+                      wrapperClassName="w-full"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={100}
+                      scrollableYearDropdown
+                    />
+                  </div>
+                  <div className="dialog-form-field">
                     <div className="flex items-center gap-3">
                       <Label htmlFor="edit-status" className="dialog-label-standard">Status</Label>
                       <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
@@ -1015,33 +1064,6 @@ export function PatientRegistration() {
                         />
                       </div>
                     </div>
-                  </div>
-                  <div className="dialog-form-field">
-                    <Label htmlFor="editRegisteredDate" className="dialog-label-standard">Registered Date</Label>
-                    <Input
-                      id="editRegisteredDate"
-                      type="text"
-                      placeholder="dd-mm-yyyy"
-                      value={editRegisteredDateDisplay}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setEditRegisteredDateDisplay(value);
-                        const parsed = parseDateFromDisplay(value);
-                        if (parsed) {
-                          setEditFormData({ ...editFormData, registeredDate: parsed });
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const parsed = parseDateFromDisplay(e.target.value);
-                        if (parsed) {
-                          setEditRegisteredDateDisplay(formatDateToDisplay(parsed));
-                          setEditFormData({ ...editFormData, registeredDate: parsed });
-                        } else if (e.target.value) {
-                          setEditRegisteredDateDisplay('');
-                        }
-                      }}
-                      className="dialog-input-standard"
-                    />
                   </div>
                   <div className="flex justify-end gap-2 mt-4">
                     <Button 
