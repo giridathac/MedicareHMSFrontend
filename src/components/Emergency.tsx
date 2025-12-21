@@ -864,24 +864,6 @@ export function Emergency() {
             <div className="dialog-scrollable-wrapper dialog-content-scrollable">
               <DialogHeader className="dialog-header-standard">
                 <DialogTitle className="dialog-title-standard">Add New Emergency Admission</DialogTitle>
-                {emergencyFormData.patientId && (
-                  <div className="mt-2 text-sm font-semibold text-gray-700">
-                    Patient: {(() => {
-                      const selectedPatient = availablePatients.find(p => {
-                        const pid = (p as any).patientId || (p as any).PatientId || '';
-                        return pid === emergencyFormData.patientId;
-                      });
-                      if (selectedPatient) {
-                        const patientNo = (selectedPatient as any).patientNo || (selectedPatient as any).PatientNo || '';
-                        const patientName = (selectedPatient as any).patientName || (selectedPatient as any).PatientName || '';
-                        const lastName = (selectedPatient as any).lastName || (selectedPatient as any).LastName || '';
-                        const fullName = `${patientName} ${lastName}`.trim();
-                        return `${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`;
-                      }
-                      return 'Unknown';
-                    })()}
-                  </div>
-                )}
               </DialogHeader>
               <div className="dialog-body-content-wrapper">
                 <div className="dialog-form-container space-y-4">
@@ -893,11 +875,18 @@ export function Emergency() {
                         id="add-doctor-search"
                         placeholder="Search by Doctor Name or Specialty..."
                         value={doctorSearchTerm}
-                        onChange={(e) => setDoctorSearchTerm(e.target.value)}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setDoctorSearchTerm(newValue);
+                          // Clear doctor selection when user edits the search term to allow re-selection
+                          if (emergencyFormData.doctorId) {
+                            setEmergencyFormData({ ...emergencyFormData, doctorId: '' });
+                          }
+                        }}
                         className="dialog-input-standard pl-10"
                       />
                     </div>
-                    {doctorSearchTerm && (
+                    {doctorSearchTerm && !emergencyFormData.doctorId && (
                       <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
                         <table className="w-full">
                           <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
@@ -1013,7 +1002,9 @@ export function Emergency() {
                                     onClick={() => {
                                       setEmergencyFormData({ ...emergencyFormData, patientId });
                                       setSelectedPatientId(patientId);
-                                      // Keep dropdown open - don't clear search term
+                                      // Set patient name in search box similar to doctor search
+                                      const displayName = patientNo ? `${patientNo} - ${fullName}` : fullName;
+                                      setPatientSearchTerm(displayName || 'Unknown');
                                     }}
                                     className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-gray-100' : ''}`}
                                   >
@@ -1488,13 +1479,21 @@ export function Emergency() {
                   <div className="mb-4">
                     <div className="grid grid-cols-5 gap-3">
                       {occupiedBedsList.map((bed) => {
-                        // Find admission for this bed where patient is admitted (not transferred)
-                        const admission = emergencyAdmissions.find(a => 
+                        // Find admission for this bed - try strict match first, then fallback to any match by bed ID
+                        let admission = emergencyAdmissions.find(a => 
                           a.emergencyBedId === bed.id && 
                           a.emergencyStatus === 'Admitted' &&
                           a.status === 'Active' &&
                           !(a.transferToIPDOTICU && a.transferTo)
                         );
+                        
+                        // Fallback: if strict match fails, try to find any active admission for this bed
+                        if (!admission) {
+                          admission = emergencyAdmissions.find(a => 
+                            a.emergencyBedId === bed.id && 
+                            a.status === 'Active'
+                          );
+                        }
                         
                         const priority = admission?.priority || 'Medium';
                         const patientName = admission?.patientName || '';
@@ -1548,9 +1547,13 @@ export function Emergency() {
                             onClick={() => {
                               if (admission) {
                                 handleEditAdmission(admission);
+                              } else {
+                                // If no admission found but bed is occupied, show a message
+                                console.warn(`No admission found for bed ${bed.emergencyBedNo} (ID: ${bed.id})`);
+                                alert(`No active admission found for bed ${bed.emergencyBedNo}. The bed may be marked as occupied but has no associated admission record.`);
                               }
                             }}
-                            className={`p-4 border-2 rounded-lg text-center transition-all ${colors.border} ${colors.bg} ${colors.hover}`}
+                            className={`p-4 border-2 rounded-lg text-center transition-all ${colors.border} ${colors.bg} ${colors.hover} ${!admission ? 'opacity-75' : ''}`}
                           >
                             <p className="text-sm text-gray-900 mb-1">{bed.emergencyBedNo}</p>
                             <div className="flex items-center justify-center gap-1">
@@ -1719,24 +1722,6 @@ export function Emergency() {
                   Fetching admission details from server...
                 </div>
               )}
-              {editFormData.patientId && (
-                <div className="mt-2 text-sm font-semibold text-gray-700">
-                  Patient: {(() => {
-                    const selectedPatient = availablePatients.find(p => {
-                      const pid = (p as any).patientId || (p as any).PatientId || '';
-                      return pid === editFormData.patientId;
-                    });
-                    if (selectedPatient) {
-                      const patientNo = (selectedPatient as any).patientNo || (selectedPatient as any).PatientNo || '';
-                      const patientName = (selectedPatient as any).patientName || (selectedPatient as any).PatientName || '';
-                      const lastName = (selectedPatient as any).lastName || (selectedPatient as any).LastName || '';
-                      const fullName = `${patientName} ${lastName}`.trim();
-                      return `${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`;
-                    }
-                    return 'Unknown';
-                  })()}
-                </div>
-              )}
             </DialogHeader>
             <div className="dialog-body-content-wrapper">
               {isFetchingAdmission ? (
@@ -1824,6 +1809,107 @@ export function Emergency() {
                 </div>
 
                 <div className="dialog-form-field">
+                  <Label htmlFor="edit-emergency-patient-search" className="dialog-label-standard">Patient *</Label>
+                  <div className="relative mb-2" ref={editPatientInputRef}>
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400 z-10" />
+                    <Input
+                      id="edit-emergency-patient-search"
+                      autoComplete="off"
+                      placeholder="Search patient by name, ID, phone, or patient number..."
+                      value={editPatientSearchTerm}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setEditPatientSearchTerm(newValue);
+                        setEditPatientHighlightIndex(-1);
+                        // Clear patient selection when user edits the search term
+                        if (editFormData.patientId) {
+                          setEditFormData({ ...editFormData, patientId: '' });
+                          setEditSelectedPatientId('');
+                        }
+                        // Clear error when user starts typing
+                        if (editPatientError) {
+                          setEditPatientError('');
+                        }
+                      }}
+                      className="dialog-input-standard pl-10"
+                    />
+                  </div>
+                  {editPatientSearchTerm && !editFormData.patientId && (
+                    <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
+                      <table className="w-full">
+                        <tbody>
+                          {availablePatients
+                            .filter((patient: any) => {
+                              if (!editPatientSearchTerm) return false;
+                              const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                              const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                              const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                              const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                              const fullName = `${patientName} ${lastName}`.trim();
+                              const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                              const searchLower = editPatientSearchTerm.toLowerCase();
+                              return (
+                                patientId.toLowerCase().includes(searchLower) ||
+                                patientNo.toLowerCase().includes(searchLower) ||
+                                fullName.toLowerCase().includes(searchLower) ||
+                                phoneNo.includes(editPatientSearchTerm)
+                              );
+                            })
+                            .map((patient: any) => {
+                              const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                              const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                              const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                              const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                              const fullName = `${patientName} ${lastName}`.trim();
+                              const isSelected = editFormData.patientId === patientId;
+                              return (
+                                <tr
+                                  key={patientId}
+                                  onClick={() => {
+                                    setEditFormData({ ...editFormData, patientId });
+                                    setEditSelectedPatientId(patientId);
+                                    // Set patient name in search box similar to doctor search
+                                    const displayName = patientNo ? `${patientNo} - ${fullName}` : fullName;
+                                    setEditPatientSearchTerm(displayName || 'Unknown');
+                                  }}
+                                  className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-gray-100' : ''}`}
+                                >
+                                  <td className="py-2 px-3 text-sm text-gray-900">
+                                    {patientNo ? `${patientNo} - ` : ''}{fullName || 'Unknown'}
+                                  </td>
+                                  <td className="py-2 px-3 text-sm text-gray-600 font-mono text-xs">
+                                    ID: {patientId.substring(0, 8)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                      {availablePatients.filter((patient: any) => {
+                        if (!editPatientSearchTerm) return false;
+                        const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                        const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                        const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                        const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                        const fullName = `${patientName} ${lastName}`.trim();
+                        const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                        const searchLower = editPatientSearchTerm.toLowerCase();
+                        return (
+                          patientId.toLowerCase().includes(searchLower) ||
+                          patientNo.toLowerCase().includes(searchLower) ||
+                          fullName.toLowerCase().includes(searchLower) ||
+                          phoneNo.includes(editPatientSearchTerm)
+                        );
+                      }).length === 0 && (
+                        <div className="text-center py-8 text-sm text-gray-700">
+                          No patients found. Try a different search term.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="dialog-form-field">
                   <Label htmlFor="edit-emergencyBedId" className="dialog-label-standard">Emergency Bed *</Label>
                   <select
                     id="edit-emergencyBedId"
@@ -1835,18 +1921,23 @@ export function Emergency() {
                     <option value="">Select Emergency Bed *</option>
                     {emergencyBeds
                       .filter(bed => bed.status === 'active')
-                      .map(bed => (
-                        <option key={bed.id} value={bed.id.toString()}>
-                          {bed.emergencyBedNo} {bed.emergencyRoomNameNo ? `(${bed.emergencyRoomNameNo})` : ''}
-                        </option>
-                      ))}
+                      .map(bed => {
+                        // Check against the original admission's bed ID from backend, not the form's current state
+                        const originalBedId = selectedAdmissionForEdit?.emergencyBedId;
+                        const isCurrentlyAssigned = originalBedId && bed.id === originalBedId;
+                        return (
+                          <option key={bed.id} value={bed.id.toString()}>
+                            {bed.emergencyBedNo} {bed.emergencyRoomNameNo ? `(${bed.emergencyRoomNameNo})` : ''}{isCurrentlyAssigned ? ' (currently assigned)' : ''}
+                          </option>
+                        );
+                      })}
                     {/* Include inactive beds if the current selection is inactive */}
-                    {editFormData.emergencyBedId && !emergencyBeds.some(bed => bed.id.toString() === editFormData.emergencyBedId && bed.status === 'active') && (
+                    {selectedAdmissionForEdit?.emergencyBedId && !emergencyBeds.some(bed => bed.id === selectedAdmissionForEdit.emergencyBedId && bed.status === 'active') && (
                       emergencyBeds
-                        .filter(bed => bed.id.toString() === editFormData.emergencyBedId && bed.status !== 'active')
+                        .filter(bed => bed.id === selectedAdmissionForEdit.emergencyBedId && bed.status !== 'active')
                         .map(bed => (
                           <option key={bed.id} value={bed.id.toString()}>
-                            {bed.emergencyBedNo} {bed.emergencyRoomNameNo ? `(${bed.emergencyRoomNameNo})` : ''} (Inactive)
+                            {bed.emergencyBedNo} {bed.emergencyRoomNameNo ? `(${bed.emergencyRoomNameNo})` : ''} (currently assigned)
                           </option>
                         ))
                     )}
@@ -2460,7 +2551,7 @@ function EmergencyAdmissionsList({
                       </td>
                       <td className="py-3 px-3">
                         <Button variant="outline" size="sm" onClick={() => onEdit(admission)}>
-                          Modify
+                          Manage
                         </Button>
                       </td>
                     </tr>
