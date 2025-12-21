@@ -7,6 +7,7 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from './ui/dialog';
 import { ResizableDialogContent } from './ResizableDialogContent';
+import { CustomResizableDialog, CustomResizableDialogHeader, CustomResizableDialogTitle, CustomResizableDialogClose } from './CustomResizableDialog';
 import { Textarea } from './ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Switch } from './ui/switch';
@@ -877,18 +878,26 @@ export function FrontDesk() {
               <p className="text-gray-500">Generate and manage patient appointments for doctor consultation</p>
             </div>
             <div className="flex items-center gap-4">
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
+              <Button 
+                className="flex items-center gap-2"
+                onClick={() => setIsAddDialogOpen(true)}
+              >
                 <Plus className="size-4" />
                 Add Appointment
               </Button>
-            </DialogTrigger>
-            <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
-              <div className="dialog-scrollable-wrapper dialog-content-scrollable">
-                <DialogHeader className="dialog-header-standard">
-                  <DialogTitle className="dialog-title-standard">Add New Patient Appointment</DialogTitle>
-                </DialogHeader>
+              
+              <CustomResizableDialog 
+                open={isAddDialogOpen} 
+                onOpenChange={setIsAddDialogOpen}
+                className="p-0 gap-0"
+                initialWidth={550}
+                maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
+              >
+                <CustomResizableDialogClose onClick={() => setIsAddDialogOpen(false)} />
+                <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+                  <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+                    <CustomResizableDialogTitle className="dialog-title-standard">Add New Patient Appointment</CustomResizableDialogTitle>
+                  </CustomResizableDialogHeader>
                 <div className="dialog-body-content-wrapper">
                   <div className="dialog-form-container space-y-4">
                   <div>
@@ -1424,9 +1433,8 @@ export function FrontDesk() {
                     </Button>
                   </div>
                 </div>
-              </div>
-            </ResizableDialogContent>
-          </Dialog>
+                </div>
+              </CustomResizableDialog>
             </div>
           </div>
         </div>

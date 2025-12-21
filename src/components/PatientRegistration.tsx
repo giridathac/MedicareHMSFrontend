@@ -19,6 +19,7 @@ import { Patient } from '../types';
 import { formatDateToDDMMYYYY } from '../utils/timeUtils';
 import { ScrollableDialog, StickySectionHeader } from './ScrollableDialog';
 import { ResizableDialogContent } from './ResizableDialogContent';
+import { CustomResizableDialog, CustomResizableDialogHeader, CustomResizableDialogTitle, CustomResizableDialogClose } from './CustomResizableDialog';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -543,18 +544,26 @@ export function PatientRegistration() {
                 <p className="text-gray-500">Register and manage patient information</p>
               </div>
               <div className="flex items-center gap-4">
-                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="dialog-trigger-button">
-                      <Plus className="size-4" />
-                      Add New Patient
-                    </Button>
-                  </DialogTrigger>
-                  <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
-                    <div className="dialog-scrollable-wrapper dialog-content-scrollable">
-                      <DialogHeader className="dialog-header-standard">
-                        <DialogTitle className="dialog-title-standard">Add New Patient</DialogTitle>
-                      </DialogHeader>
+                <Button 
+                  className="dialog-trigger-button"
+                  onClick={() => setIsAddDialogOpen(true)}
+                >
+                  <Plus className="size-4" />
+                  Add New Patient
+                </Button>
+                
+                <CustomResizableDialog 
+                  open={isAddDialogOpen} 
+                  onOpenChange={setIsAddDialogOpen}
+                  className="p-0 gap-0"
+                  initialWidth={550}
+                  maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
+                >
+                  <CustomResizableDialogClose onClick={() => setIsAddDialogOpen(false)} />
+                  <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+                    <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+                      <CustomResizableDialogTitle className="dialog-title-standard">Add New Patient</CustomResizableDialogTitle>
+                    </CustomResizableDialogHeader>
                       <div className="dialog-body-content-wrapper">
                         <form onSubmit={handleSubmit} className="dialog-form-container space-y-2" autoComplete="off">
                           {error && (
@@ -801,8 +810,7 @@ export function PatientRegistration() {
                         </form>
                       </div>
                     </div>
-                  </ResizableDialogContent>
-                </Dialog>
+                  </CustomResizableDialog>
               </div>
             </div>
           </div>

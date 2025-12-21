@@ -4,8 +4,9 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ResizableDialogContent } from './ResizableDialogContent';
+import { CustomResizableDialog, CustomResizableDialogHeader, CustomResizableDialogTitle, CustomResizableDialogClose } from './CustomResizableDialog';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -853,18 +854,26 @@ export function Emergency() {
             <p className="text-gray-500">Manage emergency cases and triage</p>
           </div>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-red-600 hover:bg-red-700">
-              <Plus className="size-4" />
-              Register Emergency Patient
-            </Button>
-          </DialogTrigger>
-          <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
-            <div className="dialog-scrollable-wrapper dialog-content-scrollable">
-              <DialogHeader className="dialog-header-standard">
-                <DialogTitle className="dialog-title-standard">Add New Emergency Admission</DialogTitle>
-              </DialogHeader>
+        <Button 
+          className="gap-2 bg-red-600 hover:bg-red-700"
+          onClick={() => setIsAddDialogOpen(true)}
+        >
+          <Plus className="size-4" />
+          Register Emergency Patient
+        </Button>
+        
+        <CustomResizableDialog 
+          open={isAddDialogOpen} 
+          onOpenChange={setIsAddDialogOpen}
+          className="p-0 gap-0"
+          initialWidth={550}
+          maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
+        >
+          <CustomResizableDialogClose onClick={() => setIsAddDialogOpen(false)} />
+          <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+            <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+              <CustomResizableDialogTitle className="dialog-title-standard">Add New Emergency Admission</CustomResizableDialogTitle>
+            </CustomResizableDialogHeader>
               <div className="dialog-body-content-wrapper">
                 <div className="dialog-form-container space-y-4">
                   <div className="dialog-form-field">
@@ -1398,8 +1407,7 @@ export function Emergency() {
                 </div>
               </div>
             </div>
-          </ResizableDialogContent>
-        </Dialog>
+          </CustomResizableDialog>
       </div>
       
 

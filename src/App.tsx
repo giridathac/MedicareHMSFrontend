@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -16,7 +16,11 @@ import {
   Shield,
   Building,
   Users,
-  Home
+  Home,
+  ChevronLeft,
+  ChevronRight,
+  ArrowLeft,
+  ArrowRight
 } from 'lucide-react';
 
 // Lazy load all components for code splitting
@@ -58,6 +62,7 @@ function ManageConsultationRoute() {
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -81,58 +86,112 @@ export default function App() {
   ];
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 relative">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <Activity className="size-8 text-blue-600" />
-            <div>
-              <h1 className="text-gray-900">MediCare HMS</h1>
-              <p className="text-sm text-gray-500">Hospital Management</p>
+      <aside className={`${isSidebarMinimized ? 'w-0' : 'w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300 relative`} style={{ overflow: 'visible' }}>
+        {!isSidebarMinimized && (
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center gap-2">
+              <Activity className="size-8 text-blue-600 flex-shrink-0" />
+              <div>
+                <h1 className="text-gray-900">MediCare HMS</h1>
+                <p className="text-sm text-gray-500">Hospital Management</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
         
-        <nav className="flex-1 p-4 overflow-y-auto">
-          <ul className="space-y-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              // Check if current path matches or starts with the item path (for nested routes)
-              const isActive = location.pathname === item.path || 
-                (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
-              return (
-                <li key={item.path}>
-                  <button
-                    onClick={() => navigate(item.path)}
-                    title={item.label}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Icon className="size-5 flex-shrink-0" />
-                    <span className="truncate whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+        {!isSidebarMinimized && (
+          <nav className="flex-1 p-4 overflow-y-auto relative">
+            {/* Toggle Button - Left of Dashboard, at left edge of window (more visible) - Round circle (large) */}
+            <button
+              onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
+              className="fixed left-0 z-50 hover:scale-110 transition-all cursor-pointer"
+              title="Minimize sidebar"
+              style={{ 
+                left: '0px',
+                transform: 'translateX(-28px)', // Move 70% of 40px to the left, showing 30% (more than quarter)
+                top: 'calc(6rem + 1rem)', // Header height + smaller offset to move it up
+                width: '40px',
+                height: '40px',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                border: '2px solid #d1d5db',
+                borderRadius: '50%',
+                outline: 'none',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+              }}
+            />
+            
+            <ul className="space-y-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                // Check if current path matches or starts with the item path (for nested routes)
+                const isActive = location.pathname === item.path || 
+                  (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
+                return (
+                  <li key={item.path}>
+                    <button
+                      onClick={() => navigate(item.path)}
+                      title={item.label}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon className="size-5 flex-shrink-0" />
+                      <span className="truncate whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        )}
+        
+        
 
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center gap-3 px-4 py-3">
-            <div className="size-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <span className="text-blue-700">AD</span>
-            </div>
-            <div>
-              <p className="text-sm text-gray-900">Admin User</p>
-              <p className="text-xs text-gray-500">Administrator</p>
+        {!isSidebarMinimized && (
+          <div className="p-4 border-t border-gray-200">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="size-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-blue-700">AD</span>
+              </div>
+              <div>
+                <p className="text-sm text-gray-900">Admin User</p>
+                <p className="text-xs text-gray-500">Administrator</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+        
       </aside>
+
+      {/* Toggle Button - When minimized, show at left edge - Round circle to expand (large, more visible) */}
+      {isSidebarMinimized && (
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsSidebarMinimized(false);
+          }}
+          className="fixed left-0 z-[9999] hover:scale-110 transition-all cursor-pointer"
+          title="Click to expand sidebar"
+          style={{ 
+            left: '0px',
+            transform: 'translateX(-28px)', // Move 70% of 40px to the left, showing 30% (more than quarter)
+            top: 'calc(6rem + 1rem)',
+            pointerEvents: 'auto',
+            width: '40px',
+            height: '40px',
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            border: '2px solid #d1d5db',
+            borderRadius: '50%',
+            outline: 'none',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+          }}
+        />
+      )}
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
