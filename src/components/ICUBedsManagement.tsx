@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -13,16 +13,11 @@ const icuTypeOptions = ['Medical', 'Surgical', 'Pediatric', 'Cardiac', 'Neurolog
 const statusOptions: ICUBed['status'][] = ['active', 'inactive'];
 
 export function ICUBedsManagement() {
-  const { icuBeds, loading, error, fetchICUBeds, createICUBed, updateICUBed } = useICUBeds();
+  const { icuBeds, loading, error, createICUBed, updateICUBed } = useICUBeds();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedICUBed, setSelectedICUBed] = useState<ICUBed | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-
-  // Fetch ICU beds from API on component mount
-  useEffect(() => {
-    fetchICUBeds();
-  }, [fetchICUBeds]);
   const [formData, setFormData] = useState({
     icuBedNo: '',
     icuType: 'Medical',
@@ -90,8 +85,6 @@ export function ICUBedsManagement() {
         isVentilatorAttached: false,
         status: 'active',
       });
-      // Refresh the ICU beds table after creating
-      await fetchICUBeds();
     } catch (err) {
       // Error handled in parent
     }
@@ -111,8 +104,8 @@ export function ICUBedsManagement() {
     }
     try {
       // Explicitly ensure boolean value is correctly set
-      const isVentilatorAttachedValue = Boolean(formData.isVentilatorAttached);
-      console.log('Update ICU Bed - isVentilatorAttached value:', isVentilatorAttachedValue, 'from formData:', formData.isVentilatorAttached, 'type:', typeof formData.isVentilatorAttached);
+      const isVentilatorAttachedValue = formData.isVentilatorAttached === true;
+      console.log('Update ICU Bed - isVentilatorAttached value:', isVentilatorAttachedValue, 'from formData:', formData.isVentilatorAttached);
       await handleUpdateICUBed(selectedICUBed.icuId, {
         icuBedNo: formData.icuBedNo,
         icuType: formData.icuType,
@@ -131,8 +124,6 @@ export function ICUBedsManagement() {
         isVentilatorAttached: false,
         status: 'active',
       });
-      // Refresh the ICU beds table after updating
-      await fetchICUBeds();
     } catch (err) {
       console.error('Error updating ICU bed:', err);
       alert(err instanceof Error ? err.message : 'Failed to update ICU bed. Please check the console for details.');
@@ -147,15 +138,12 @@ export function ICUBedsManagement() {
       return;
     }
     setSelectedICUBed(icuBed);
-    // Ensure isVentilatorAttached is properly converted to boolean
-    const isVentilatorAttached = Boolean(icuBed.isVentilatorAttached);
-    console.log('Edit ICU Bed - isVentilatorAttached:', isVentilatorAttached, 'from icuBed:', icuBed.isVentilatorAttached, 'type:', typeof icuBed.isVentilatorAttached);
     setFormData({
       icuBedNo: icuBed.icuBedNo,
       icuType: icuBed.icuType,
       icuRoomNameNo: icuBed.icuRoomNameNo,
       icuDescription: icuBed.icuDescription || '',
-      isVentilatorAttached: isVentilatorAttached,
+      isVentilatorAttached: icuBed.isVentilatorAttached,
       status: icuBed.status,
     });
     setIsEditDialogOpen(true);
@@ -379,11 +367,11 @@ export function ICUBedsManagement() {
 
                     if (filteredBeds.length === 0) {
                       return (
-                    <tr>
+                        <tr>
                           <td colSpan={8} className="text-center py-8 text-gray-500">
                             {searchTerm ? 'No ICU beds found matching your search.' : 'No ICU beds found. Add a new ICU bed to get started.'}
-                      </td>
-                    </tr>
+                          </td>
+                        </tr>
                       );
                     }
 
@@ -520,3 +508,4 @@ export function ICUBedsManagement() {
     </div>
   );
 }
+

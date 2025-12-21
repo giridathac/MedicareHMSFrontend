@@ -8,7 +8,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { FileText, FlaskConical, Stethoscope, Heart, ArrowLeft, Plus, Search, Eye, Edit } from 'lucide-react';
+import { FileText, FlaskConical, Stethoscope, Heart, ArrowLeft, Plus, Search, Eye, Edit, Settings } from 'lucide-react';
 import { admissionsApi } from '../api/admissions';
 import { Admission, PatientLabTest, PatientDoctorVisit, PatientNurseVisit } from '../api/admissions';
 import { labTestsApi } from '../api/labTests';
@@ -79,7 +79,6 @@ export function ManageIPDAdmission() {
     visitsRemarks: '',
     patientCondition: '',
     status: 'Active',
-    visitCreatedBy: '',
     visitCreatedAt: ''
   });
   const [doctorVisitSubmitting, setDoctorVisitSubmitting] = useState(false);
@@ -110,10 +109,9 @@ export function ManageIPDAdmission() {
     o2Saturation: '',
     respiratoryRate: '',
     pulseRate: '',
-    vitalsStatus: 'Normal',
+    vitalsStatus: 'Stable',
     vitalsRemarks: '',
     vitalsCreatedBy: '',
-    vitalsCreatedAt: '',
     status: 'Active'
   });
   const [visitVitalsSubmitting, setVisitVitalsSubmitting] = useState(false);
@@ -325,6 +323,15 @@ export function ManageIPDAdmission() {
         return defaultValue;
       };
       
+      // Fetch all staff/nurses to map nurseId to nurseName if needed
+      let allStaff: any[] = [];
+      try {
+        allStaff = await staffApi.getAll();
+        console.log('Fetched staff for nurse name mapping:', allStaff.length);
+      } catch (err) {
+        console.warn('Error fetching staff for nurse name mapping:', err);
+      }
+      
       // Map the response to PatientAdmitVisitVitals interface
       const mappedVitals: PatientAdmitVisitVitals[] = vitalsData.map((vital: any) => {
         const patientAdmitVisitVitalsId = Number(extractField(vital, [
@@ -346,6 +353,58 @@ export function ManageIPDAdmission() {
           'nurseId', 'NurseId', 'nurse_id', 'Nurse_Id',
           'nurseID', 'NurseID', 'Nurse.nurseId', 'Nurse.NurseId'
         ], 0)) || undefined;
+        
+        // Extract Nurse Name with multiple variations, including nested objects
+        let nurseNameValue = extractField(vital, [
+          'nurseName', 'NurseName', 'nurse_name', 'Nurse_Name',
+          'nurseFullName', 'NurseFullName', 'nurse_full_name', 'Nurse_Full_Name'
+        ], '');
+        
+        // If not found, try nested Nurse object with various field names
+        if (!nurseNameValue || nurseNameValue === '') {
+          const nurseObj = vital?.Nurse || vital?.nurse;
+          if (nurseObj) {
+            nurseNameValue = nurseObj.UserName || 
+                            nurseObj.userName || 
+                            nurseObj.name || 
+                            nurseObj.Name || 
+                            nurseObj.fullName || 
+                            nurseObj.FullName ||
+                            nurseObj.nurseName ||
+                            nurseObj.NurseName || '';
+          }
+        }
+        
+        // Also check for direct nested path variations
+        if (!nurseNameValue || nurseNameValue === '') {
+          nurseNameValue = extractField(vital, [
+            'Nurse.UserName', 'Nurse.name', 'Nurse.Name', 'Nurse.fullName', 'Nurse.FullName',
+            'nurse.UserName', 'nurse.name', 'nurse.Name', 'nurse.fullName', 'nurse.FullName'
+          ], '');
+        }
+        
+        // If still not found and we have a nurseId, try to find the nurse in the staff list
+        if ((!nurseNameValue || nurseNameValue === '') && nurseIdValue && allStaff.length > 0) {
+          const foundNurse = allStaff.find((staff: any) => {
+            const staffId = staff.UserId || staff.userId || staff.id || staff.Id;
+            return staffId && Number(staffId) === Number(nurseIdValue);
+          });
+          if (foundNurse) {
+            nurseNameValue = foundNurse.UserName || foundNurse.userName || foundNurse.name || foundNurse.Name || '';
+            console.log(`Found nurse name from staff list: ${nurseNameValue} for nurseId: ${nurseIdValue}`);
+          }
+        }
+        
+        // Log for debugging
+        if (!nurseNameValue || nurseNameValue === '') {
+          console.log('Nurse name not found for vital:', {
+            vitalId: patientAdmitVisitVitalsId,
+            nurseId: nurseIdValue,
+            vitalKeys: Object.keys(vital),
+            hasNurseObj: !!(vital?.Nurse || vital?.nurse),
+            nurseObjKeys: vital?.Nurse ? Object.keys(vital.Nurse) : vital?.nurse ? Object.keys(vital.nurse) : []
+          });
+        }
         
         const patientStatusValue = extractField(vital, [
           'patientStatus', 'PatientStatus', 'patient_status', 'Patient_Status',
@@ -430,6 +489,7 @@ export function ManageIPDAdmission() {
           roomAdmissionId: roomAdmissionIdValue,
           patientId: (patientIdValue && patientIdValue !== '') ? patientIdValue : undefined,
           nurseId: nurseIdValue,
+          nurseName: (nurseNameValue && nurseNameValue !== '') ? nurseNameValue : undefined,
           patientStatus: (patientStatusValue && patientStatusValue !== '') ? patientStatusValue : undefined,
           recordedDateTime: (recordedDateTimeValue && recordedDateTimeValue !== '') ? recordedDateTimeValue : undefined,
           visitRemarks: (visitRemarksValue && visitRemarksValue !== '') ? visitRemarksValue : undefined,
@@ -826,7 +886,6 @@ export function ManageIPDAdmission() {
         visitsRemarks: '',
         patientCondition: '',
         status: 'Active',
-        visitCreatedBy: '',
         visitCreatedAt: new Date().toISOString()
       });
       setDoctorSearchTerm('');
@@ -871,7 +930,6 @@ export function ManageIPDAdmission() {
       visitsRemarks: visit.visitsRemarks || '',
       patientCondition: visit.patientCondition || '',
       status: visit.status || 'Active',
-      visitCreatedBy: String(visit.visitCreatedBy || ''),
       visitCreatedAt: visit.visitCreatedAt ? (typeof visit.visitCreatedAt === 'string' ? new Date(visit.visitCreatedAt).toISOString().slice(0, 16) : new Date(visit.visitCreatedAt).toISOString().slice(0, 16)) : ''
     });
 
@@ -929,9 +987,6 @@ export function ManageIPDAdmission() {
       };
 
       // Add optional fields
-      if (doctorVisitFormData.visitCreatedBy && doctorVisitFormData.visitCreatedBy.trim() !== '') {
-        payload.VisitCreatedBy = doctorVisitFormData.visitCreatedBy.trim();
-      }
       if (doctorVisitFormData.visitCreatedAt && doctorVisitFormData.visitCreatedAt.trim() !== '') {
         payload.VisitCreatedAt = new Date(doctorVisitFormData.visitCreatedAt).toISOString();
       }
@@ -982,7 +1037,6 @@ export function ManageIPDAdmission() {
         visitsRemarks: '',
         patientCondition: '',
         status: 'Active',
-        visitCreatedBy: '',
         visitCreatedAt: ''
       });
       setDoctorSearchTerm('');
@@ -1021,7 +1075,7 @@ export function ManageIPDAdmission() {
       setVisitVitalsFormData({
         patientId: String(patientIdValue),
         nurseId: '',
-        patientStatus: '',
+        patientStatus: 'Stable',
         recordedDateTime: new Date().toISOString().slice(0, 16),
         visitRemarks: '',
         dailyOrHourlyVitals: 'Daily',
@@ -1031,10 +1085,9 @@ export function ManageIPDAdmission() {
         o2Saturation: '',
         respiratoryRate: '',
         pulseRate: '',
-        vitalsStatus: 'Normal',
+        vitalsStatus: 'Stable',
         vitalsRemarks: '',
         vitalsCreatedBy: '',
-        vitalsCreatedAt: new Date().toISOString(),
         status: 'Active'
       });
       setNurseSearchTerm('');
@@ -1088,10 +1141,9 @@ export function ManageIPDAdmission() {
       o2Saturation: vitals.o2Saturation ? String(vitals.o2Saturation) : '',
       respiratoryRate: vitals.respiratoryRate ? String(vitals.respiratoryRate) : '',
       pulseRate: vitals.pulseRate ? String(vitals.pulseRate) : '',
-      vitalsStatus: vitals.vitalsStatus || 'Normal',
+      vitalsStatus: vitals.vitalsStatus || 'Stable',
       vitalsRemarks: vitals.vitalsRemarks || '',
       vitalsCreatedBy: String(vitals.vitalsCreatedBy || ''),
-      vitalsCreatedAt: vitals.vitalsCreatedAt ? new Date(vitals.vitalsCreatedAt).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
       status: vitals.status || 'Active'
     });
 
@@ -1146,10 +1198,9 @@ export function ManageIPDAdmission() {
         Status: visitVitalsFormData.status || 'Active',
       };
 
-      // Add optional fields
-      if (visitVitalsFormData.patientStatus && visitVitalsFormData.patientStatus.trim() !== '') {
-        payload.PatientStatus = visitVitalsFormData.patientStatus.trim();
-      }
+      // Add required/optional fields
+      // Patient Status is required
+      payload.PatientStatus = visitVitalsFormData.patientStatus.trim() || 'Stable';
       if (visitVitalsFormData.visitRemarks && visitVitalsFormData.visitRemarks.trim() !== '') {
         payload.VisitRemarks = visitVitalsFormData.visitRemarks.trim();
       }
@@ -1179,9 +1230,6 @@ export function ManageIPDAdmission() {
       }
       if (visitVitalsFormData.vitalsCreatedBy && visitVitalsFormData.vitalsCreatedBy.trim() !== '') {
         payload.VitalsCreatedBy = visitVitalsFormData.vitalsCreatedBy.trim();
-      }
-      if (visitVitalsFormData.vitalsCreatedAt && visitVitalsFormData.vitalsCreatedAt.trim() !== '') {
-        payload.VitalsCreatedAt = new Date(visitVitalsFormData.vitalsCreatedAt).toISOString();
       }
 
       console.log('API Payload:', JSON.stringify(payload, null, 2));
@@ -1226,7 +1274,7 @@ export function ManageIPDAdmission() {
       setVisitVitalsFormData({
         patientId: '',
         nurseId: '',
-        patientStatus: '',
+        patientStatus: 'Stable',
         recordedDateTime: '',
         visitRemarks: '',
         dailyOrHourlyVitals: 'Daily',
@@ -1236,10 +1284,9 @@ export function ManageIPDAdmission() {
         o2Saturation: '',
         respiratoryRate: '',
         pulseRate: '',
-        vitalsStatus: 'Normal',
+        vitalsStatus: 'Stable',
         vitalsRemarks: '',
         vitalsCreatedBy: '',
-        vitalsCreatedAt: '',
         status: 'Active'
       });
       setNurseSearchTerm('');
@@ -1677,15 +1724,26 @@ export function ManageIPDAdmission() {
                               </Badge>
                             </td>
                             <td className="py-3 px-4">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOpenEditDoctorVisitDialog(visit)}
-                                className="gap-1"
-                              >
-                                <Edit className="size-3" />
-                                View & Edit
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleOpenEditDoctorVisitDialog(visit)}
+                                  className="gap-1"
+                                >
+                                  <Edit className="size-3" />
+                                  View & Edit
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleOpenEditDoctorVisitDialog(visit)}
+                                  className="gap-1"
+                                >
+                                  <Settings className="size-3" />
+                                  Manage
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1737,6 +1795,7 @@ export function ManageIPDAdmission() {
                       <thead>
                         <tr className="border-b border-gray-200">
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">PatientStatus</th>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-700">Nurse Name</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">RecordedDateTime</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">DailyOrHourlyVitals</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">HeartRate</th>
@@ -1758,11 +1817,14 @@ export function ManageIPDAdmission() {
                             <td className="py-3 px-4">
                               <Badge variant={
                                 vital.patientStatus?.toLowerCase() === 'stable' || vital.patientStatus?.toLowerCase() === 'good' ? 'default' :
-                                vital.patientStatus?.toLowerCase() === 'critical' || vital.patientStatus?.toLowerCase() === 'serious' ? 'destructive' :
+                                vital.patientStatus?.toLowerCase() === 'notstable' || vital.patientStatus?.toLowerCase() === 'critical' || vital.patientStatus?.toLowerCase() === 'serious' ? 'destructive' :
                                 'outline'
                               }>
                                 {vital.patientStatus || 'N/A'}
                               </Badge>
+                            </td>
+                            <td className="py-3 px-4 text-gray-600 font-medium">
+                              {vital.nurseName || 'N/A'}
                             </td>
                             <td className="py-3 px-4 text-gray-600">
                               {vital.recordedDateTime ? new Date(vital.recordedDateTime).toLocaleString() : 'N/A'}
@@ -1778,7 +1840,7 @@ export function ManageIPDAdmission() {
                             <td className="py-3 px-4 text-gray-600">{vital.pulseRate || 'N/A'}</td>
                             <td className="py-3 px-4">
                               <Badge variant={
-                                vital.vitalsStatus?.toLowerCase() === 'normal' ? 'default' :
+                                vital.vitalsStatus?.toLowerCase() === 'normal' || vital.vitalsStatus?.toLowerCase() === 'stable' || vital.vitalsStatus?.toLowerCase() === 'improving' ? 'default' :
                                 vital.vitalsStatus?.toLowerCase() === 'critical' ? 'destructive' :
                                 'outline'
                               }>
@@ -2740,14 +2802,14 @@ export function ManageIPDAdmission() {
                   </select>
                 </div>
                 <div>
-                  <Label htmlFor="visitVitalsPatientStatus">Patient Status</Label>
+                  <Label htmlFor="visitVitalsPatientStatus">Patient Status *</Label>
                   <select
                     id="visitVitalsPatientStatus"
                     className="w-full px-3 py-2 border border-gray-200 rounded-md"
                     value={visitVitalsFormData.patientStatus}
                     onChange={(e) => setVisitVitalsFormData({ ...visitVitalsFormData, patientStatus: e.target.value })}
+                    required
                   >
-                    <option value="">Select Patient Status</option>
                     <option value="Stable">Stable</option>
                     <option value="Notstable">Notstable</option>
                   </select>
@@ -2819,35 +2881,14 @@ export function ManageIPDAdmission() {
                     className="w-full px-3 py-2 border border-gray-200 rounded-md"
                     value={visitVitalsFormData.vitalsStatus}
                     onChange={(e) => setVisitVitalsFormData({ ...visitVitalsFormData, vitalsStatus: e.target.value })}
-                  >
-                    <option value="Normal">Normal</option>
-                    <option value="Abnormal">Abnormal</option>
-                    <option value="Critical">Critical</option>
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="visitVitalsStatus">Status *</Label>
-                  <select
-                    id="visitVitalsStatus"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                    value={visitVitalsFormData.status}
-                    onChange={(e) => setVisitVitalsFormData({ ...visitVitalsFormData, status: e.target.value })}
                     required
                   >
-                    <option value="Active">Active</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Cancelled">Cancelled</option>
+                    <option value="">Select Vitals Status</option>
+                    <option value="Stable">Stable</option>
+                    <option value="Critical">Critical</option>
+                    <option value="Improving">Improving</option>
+                    <option value="Normal">Normal</option>
                   </select>
-                </div>
-                <div>
-                  <Label htmlFor="visitVitalsCreatedAt">Vitals Created At</Label>
-                  <Input
-                    id="visitVitalsCreatedAt"
-                    type="datetime-local"
-                    value={visitVitalsFormData.vitalsCreatedAt ? new Date(visitVitalsFormData.vitalsCreatedAt).toISOString().slice(0, 16) : ''}
-                    onChange={(e) => setVisitVitalsFormData({ ...visitVitalsFormData, vitalsCreatedAt: e.target.value ? new Date(e.target.value).toISOString() : '' })}
-                    placeholder="Enter creation date (optional)"
-                  />
                 </div>
                 <div className="col-span-2">
                   <Label htmlFor="visitVitalsVitalsRemarks">Vitals Remarks</Label>
@@ -2927,7 +2968,7 @@ export function ManageIPDAdmission() {
                     <p className="text-gray-900 font-medium mt-1">
                       <Badge variant={
                         viewingVisitVitals.patientStatus?.toLowerCase() === 'stable' || viewingVisitVitals.patientStatus?.toLowerCase() === 'good' ? 'default' :
-                        viewingVisitVitals.patientStatus?.toLowerCase() === 'critical' || viewingVisitVitals.patientStatus?.toLowerCase() === 'serious' ? 'destructive' :
+                        viewingVisitVitals.patientStatus?.toLowerCase() === 'notstable' || viewingVisitVitals.patientStatus?.toLowerCase() === 'critical' || viewingVisitVitals.patientStatus?.toLowerCase() === 'serious' ? 'destructive' :
                         'outline'
                       }>
                         {viewingVisitVitals.patientStatus || 'N/A'}
@@ -2986,7 +3027,7 @@ export function ManageIPDAdmission() {
                     <Label className="text-sm text-gray-500">Vitals Status</Label>
                     <p className="text-gray-900 font-medium mt-1">
                       <Badge variant={
-                        viewingVisitVitals.vitalsStatus?.toLowerCase() === 'normal' ? 'default' :
+                        viewingVisitVitals.vitalsStatus?.toLowerCase() === 'normal' || viewingVisitVitals.vitalsStatus?.toLowerCase() === 'stable' || viewingVisitVitals.vitalsStatus?.toLowerCase() === 'improving' ? 'default' :
                         viewingVisitVitals.vitalsStatus?.toLowerCase() === 'critical' ? 'destructive' :
                         'outline'
                       }>

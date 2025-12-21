@@ -198,6 +198,7 @@ export interface PatientAdmitVisitVitals {
   roomAdmissionId?: number;
   patientId?: string;
   nurseId?: number;
+  nurseName?: string;
   patientStatus?: string;
   recordedDateTime?: string;
   visitRemarks?: string;

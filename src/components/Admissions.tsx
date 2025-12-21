@@ -336,11 +336,12 @@ export function Admissions() {
     setEditingAdmission(admission);
     
     // Load patient, room bed, and doctor options
+    let roomBedsList: any[] = [];
     try {
       const patientsList = await admissionsApi.getPatientRegistrations();
       setPatientOptions(patientsList || []);
       
-      const roomBedsList = await roomBedsApi.getAll();
+      roomBedsList = await roomBedsApi.getAll();
       setRoomBedOptions(roomBedsList || []);
       
       const doctorsList = await doctorsApi.getAll();
@@ -396,13 +397,28 @@ export function Admissions() {
       }
     }
 
+    // Find the room bed by matching bedNumber with roomBedOptions
+    let foundRoomBedId = '';
+    let foundRoomBedsId = '';
+    if (admission.bedNumber && roomBedsList.length > 0) {
+      const matchingBed = roomBedsList.find((bed: any) => {
+        const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+        return bedNo === admission.bedNumber;
+      });
+      
+      if (matchingBed) {
+        foundRoomBedId = String((matchingBed as any).roomBedId || (matchingBed as any).RoomBedsId || (matchingBed as any).id || '');
+        foundRoomBedsId = String((matchingBed as any).RoomBedsId || (matchingBed as any).roomBedsId || (matchingBed as any).roomBedId || (matchingBed as any).id || '');
+      }
+    }
+
     setAddAdmissionForm({
       patientId: admission.patientId || '',
       patientType: admission.patientType || '',
       patientAppointmentId: admission.patientAppointmentId || admission.appointmentId || '',
       emergencyBedSlotId: admission.emergencyBedSlotId || '',
-      roomBedId: '',
-      roomBedsId: '',
+      roomBedId: foundRoomBedId,
+      roomBedsId: foundRoomBedsId,
       roomType: admission.roomType || '',
       admittedBy: admission.admittedBy || '',
       admittedByDoctorId: '',
@@ -1749,17 +1765,50 @@ export function Admissions() {
                       <Label htmlFor="room-bed-search-edit">Room/Bed *</Label>
                       <p className="mt-1 text-gray-900 font-medium">
                         {(() => {
-                          const selectedBed = roomBedOptions.find((b: any) => {
+                          // First try to find by roomBedId
+                          let selectedBed = roomBedOptions.find((b: any) => {
                             const bid = (b as any).roomBedId || (b as any).RoomBedsId || (b as any).id || '';
                             return String(bid) === addAdmissionForm.roomBedId;
                           });
-                          if (selectedBed) {
-                            const roomNo = (selectedBed as any).roomNo || (selectedBed as any).RoomNo || '';
-                            const bedNo = (selectedBed as any).bedNo || (selectedBed as any).BedNo || '';
-                            const roomType = (selectedBed as any).roomType || (selectedBed as any).RoomType || '';
-                            return `${roomNo} - ${bedNo} (${roomType})`;
+                          
+                          // If not found, try to find by roomBedsId
+                          if (!selectedBed && addAdmissionForm.roomBedsId) {
+                            selectedBed = roomBedOptions.find((b: any) => {
+                              const bids = (b as any).RoomBedsId || (b as any).roomBedsId || (b as any).roomBedId || (b as any).id || '';
+                              return String(bids) === addAdmissionForm.roomBedsId;
+                            });
                           }
-                          return addAdmissionForm.roomBedId ? `Room Bed ID: ${addAdmissionForm.roomBedId}` : 'N/A';
+                          
+                          // If still not found, try to find by bedNumber
+                          if (!selectedBed && addAdmissionForm.bedNumber) {
+                            selectedBed = roomBedOptions.find((b: any) => {
+                              const bedNo = (b as any).bedNo || (b as any).BedNo || '';
+                              return bedNo === addAdmissionForm.bedNumber;
+                            });
+                          }
+                          
+                          if (selectedBed) {
+                            const bedNo = (selectedBed as any).bedNo || (selectedBed as any).BedNo || '';
+                            const roomBedsId = (selectedBed as any).RoomBedsId || (selectedBed as any).roomBedsId || (selectedBed as any).roomBedId || (selectedBed as any).id || '';
+                            const roomNo = (selectedBed as any).roomNo || (selectedBed as any).RoomNo || '';
+                            const roomType = (selectedBed as any).roomType || (selectedBed as any).RoomType || '';
+                            return `Bed No: ${bedNo}, RoomBedsId: ${roomBedsId}${roomNo ? ` (${roomNo} - ${roomType})` : ''}`;
+                          }
+                          
+                          // Fallback: show what we have
+                          if (addAdmissionForm.bedNumber && addAdmissionForm.roomBedsId) {
+                            return `Bed No: ${addAdmissionForm.bedNumber}, RoomBedsId: ${addAdmissionForm.roomBedsId}`;
+                          }
+                          if (addAdmissionForm.bedNumber) {
+                            return `Bed No: ${addAdmissionForm.bedNumber}`;
+                          }
+                          if (addAdmissionForm.roomBedsId) {
+                            return `RoomBedsId: ${addAdmissionForm.roomBedsId}`;
+                          }
+                          if (addAdmissionForm.roomBedId) {
+                            return `Room Bed ID: ${addAdmissionForm.roomBedId}`;
+                          }
+                          return 'N/A';
                         })()}
                       </p>
                     </div>
