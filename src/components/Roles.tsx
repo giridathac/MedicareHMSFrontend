@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Plus, Trash2, Edit, Shield, Search, Eye, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Trash2, Shield, Search, Eye, CheckCircle2, XCircle } from 'lucide-react';
 import { useRoles } from '../hooks/useRoles';
 import { Role } from '../types/roles';
 
@@ -341,11 +341,9 @@ function RolesView({
                                 <Button 
                                   variant="outline" 
                                   size="sm" 
-                                  className="gap-1"
                                   onClick={() => handleViewEdit(role)}
                                 >
-                                  <Edit className="size-3" />
-                                  View & Edit
+                                  Manage
                                 </Button>
                               </div>
                             </td>

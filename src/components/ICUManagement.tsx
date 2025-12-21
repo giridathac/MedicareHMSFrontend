@@ -1265,23 +1265,6 @@ export function ICUManagement() {
                     )}
                   </div>
                 )}
-                {addICUAdmissionForm.patientId && (
-                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-gray-700">
-                    Selected: {(() => {
-                      // Find patient similar to FrontDesk pattern
-                      const selectedPatient = patientOptions.find((p: any) => {
-                        const pid = (p as any).patientId || (p as any).PatientId || '';
-                        return pid === addICUAdmissionForm.patientId;
-                      });
-                      if (!selectedPatient) return 'Unknown';
-                      const patientNo = (selectedPatient as any).patientNo || (selectedPatient as any).PatientNo || '';
-                      const patientName = (selectedPatient as any).patientName || (selectedPatient as any).PatientName || '';
-                      const lastName = (selectedPatient as any).lastName || (selectedPatient as any).LastName || '';
-                      const fullName = `${patientName} ${lastName}`.trim();
-                      return `${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`;
-                    })()}
-                  </div>
-                )}
               </div>
               <div className="w-full">
                 <Label htmlFor="add-icubed-search">ICU Bed *</Label>
@@ -1368,19 +1351,6 @@ export function ICUManagement() {
                         No ICU beds found. Try a different search term.
                       </div>
                     )}
-                  </div>
-                )}
-                {addICUAdmissionForm.icuBedId && (
-                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-gray-700">
-                    Selected: {(() => {
-                      const selectedBed = icuBedOptions.find((b: any) => {
-                        const bid = (b as any).icuBedId || (b as any).ICUBedId || (b as any).id || '';
-                        return String(bid) === addICUAdmissionForm.icuBedId;
-                      });
-                      if (!selectedBed) return 'Unknown';
-                      const bedNumber = (selectedBed as any).bedNumber || (selectedBed as any).icuBedNo || (selectedBed as any).ICUBedNo || (selectedBed as any).bedNo || 'Unknown';
-                      return bedNumber;
-                    })()}
                   </div>
                 )}
               </div>

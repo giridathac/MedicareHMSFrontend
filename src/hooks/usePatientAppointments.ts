@@ -12,10 +12,13 @@ export function usePatientAppointments() {
     try {
       setLoading(true);
       setError(null);
-      const data = await patientAppointmentsApi.getAll();
-      setPatientAppointments(data);
+      const response = await patientAppointmentsApi.getAll({ page: 1, limit: 1000 });
+      // Handle paginated response - extract data array
+      const appointments = Array.isArray(response) ? response : (response?.data || []);
+      setPatientAppointments(appointments);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch patient appointments');
+      setPatientAppointments([]);
     } finally {
       setLoading(false);
     }

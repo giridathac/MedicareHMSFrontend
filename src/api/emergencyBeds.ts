@@ -79,17 +79,33 @@ export const emergencyBedsApi = {
       }
 
       // Normalize the response data to match EmergencyBed interface
-      const normalizedEmergencyBeds: EmergencyBed[] = response.data.map((item) => ({
-        id: item.EmergencyBedId || 0,
-        emergencyBedId: String(item.EmergencyBedId || ''),
-        emergencyBedNo: item.EmergencyBedNo || '',
-        emergencyRoomNameNo: item.EmergencyRoomNameNo || undefined,
-        emergencyRoomDescription: item.EmergencyRoomDescription || undefined,
-        chargesPerDay: item.ChargesPerDay !== null && item.ChargesPerDay !== undefined ? Number(item.ChargesPerDay) : 0,
-        createdBy: item.CreatedBy !== null && item.CreatedBy !== undefined ? String(item.CreatedBy) : '',
-        createdAt: item.CreatedAt ? (typeof item.CreatedAt === 'string' ? item.CreatedAt : item.CreatedAt.toISOString()) : new Date().toISOString(),
-        status: (item.Status || 'active').toLowerCase() as 'active' | 'inactive' | 'occupied',
-      }));
+      const normalizedEmergencyBeds: EmergencyBed[] = response.data.map((item) => {
+        // Map API status values to frontend status values
+        // API returns: "Unoccupied", "Occupied", "Inactive"
+        // Frontend expects: 'active', 'occupied', 'inactive'
+        let status: 'active' | 'inactive' | 'occupied' = 'active';
+        const apiStatus = (item.Status || '').toLowerCase();
+        if (apiStatus === 'occupied') {
+          status = 'occupied';
+        } else if (apiStatus === 'inactive') {
+          status = 'inactive';
+        } else {
+          // 'unoccupied' or any other value maps to 'active' (available bed)
+          status = 'active';
+        }
+        
+        return {
+          id: item.EmergencyBedId || 0,
+          emergencyBedId: String(item.EmergencyBedId || ''),
+          emergencyBedNo: item.EmergencyBedNo || '',
+          emergencyRoomNameNo: item.EmergencyRoomNameNo || undefined,
+          emergencyRoomDescription: item.EmergencyRoomDescription || undefined,
+          chargesPerDay: item.ChargesPerDay !== null && item.ChargesPerDay !== undefined ? Number(item.ChargesPerDay) : 0,
+          createdBy: item.CreatedBy !== null && item.CreatedBy !== undefined ? String(item.CreatedBy) : '',
+          createdAt: item.CreatedAt ? (typeof item.CreatedAt === 'string' ? item.CreatedAt : item.CreatedAt.toISOString()) : new Date().toISOString(),
+          status: status,
+        };
+      });
 
       return normalizedEmergencyBeds;
     } catch (error: any) {

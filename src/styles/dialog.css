@@ -12,6 +12,7 @@
   padding: 0;
   gap: 0;
   background-color: white;
+  overflow: hidden; /* Ensure rounded corners are visible */
 }
 
 /* Dialog scrollable wrapper (contains header, body, and footer) */
@@ -21,6 +22,7 @@
   min-height: 0;
   background-color: white;
   max-height: 90vh; /* Limit height */
+  border-radius: inherit; /* Inherit border-radius from parent */
 }
 
 /* ============================================
@@ -120,8 +122,14 @@
 .dialog-input-disabled {
   color: rgb(55, 65, 81); /* text-gray-700 */
   background-color: rgb(249, 250, 251); /* bg-gray-50 */
-  font-size: 1.125rem; /* 18px */
+  font-size: 1rem; /* 16px - matches dialog-input-standard on mobile */
   line-height: 1.5;
+}
+
+@media (min-width: 768px) {
+  .dialog-input-disabled {
+    font-size: 0.875rem; /* 14px - matches dialog-input-standard on desktop */
+  }
 }
 
 /* ============================================
@@ -270,7 +278,7 @@
   transform: translate(-50%, -50%) !important;
   translate: none !important;
   margin: 0 !important;
-  border-radius: 0.75rem !important; /* increased from 0.5rem for more curved corners */
+  border-radius: 0.875rem !important; /* rounded corners */
   padding: 0 !important;
   background-color: white !important;
   z-index: 9999 !important;

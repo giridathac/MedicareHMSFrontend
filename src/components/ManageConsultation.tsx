@@ -1,5 +1,6 @@
 // Manage Consultation Component - Full page matching the design
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -8,10 +9,12 @@ import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
-import { ArrowLeft, UserCheck, FileText, TestTube, Pill, BedDouble, Clock } from 'lucide-react';
+import { ArrowLeft, UserCheck, FileText, TestTube, Clock } from 'lucide-react';
 import { apiRequest } from '../api/base';
 import { patientsApi } from '../api/patients';
 import { patientAppointmentsApi } from '../api/patientAppointments';
+import { doctorsApi } from '../api/doctors';
+import { formatDateToDDMMYYYY } from '../utils/timeUtils';
 
 interface ManageConsultationProps {
   appointmentId: number;
@@ -34,27 +37,36 @@ interface PatientData {
 }
 
 export function ManageConsultation({ appointmentId, onBack }: ManageConsultationProps) {
+  const navigate = useNavigate();
   const [currentPatient, setCurrentPatient] = useState<PatientData | null>(null);
   const [queue, setQueue] = useState<QueuePatient[]>([]);
+  const [waitingAppointments, setWaitingAppointments] = useState<any[]>([]); // Store full appointment objects with IDs
   const [queueLoading, setQueueLoading] = useState(false);
   const [showPrescriptionDialog, setShowPrescriptionDialog] = useState(false);
   
   // Consultation form states
   const [diagnosis, setDiagnosis] = useState('');
+  const [consultationCharge, setConsultationCharge] = useState<number>(0);
   const [labTests, setLabTests] = useState<Array<{ testName: string; labTestId: number; patientLabTestsId?: number }>>([]);
   const [prescribedLabTests, setPrescribedLabTests] = useState<Array<{ testName: string; labTestId: number; patientLabTestsId: number }>>([]);
   const [labTestsToDelete, setLabTestsToDelete] = useState<number[]>([]); // Track prescribed tests to delete on submission
-  const [medicines, setMedicines] = useState<{ name: string; dosage: string; duration: string }[]>([]);
+  const [prescriptionsUrl, setPrescriptionsUrl] = useState('');
   const [followUp, setFollowUp] = useState('');
-  const [admitAsIPD, setAdmitAsIPD] = useState(false);
-  const [roomType, setRoomType] = useState('');
   const [newLabTest, setNewLabTest] = useState('');
-  const [newMedicine, setNewMedicine] = useState({ name: '', dosage: '', duration: '' });
+  const [referToAnotherDoctor, setReferToAnotherDoctor] = useState(false);
+  const [referredDoctorId, setReferredDoctorId] = useState<string>('');
+  const [transferToIPDOTICU, setTransferToIPDOTICU] = useState(false);
+  const [transferTo, setTransferTo] = useState<'IPD Room Admission' | 'ICU' | 'OT' | undefined>(undefined);
+  const [transferDetails, setTransferDetails] = useState('');
+  const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
+  const [availableDoctors, setAvailableDoctors] = useState<any[]>([]);
+  const [doctorDetailsMap, setDoctorDetailsMap] = useState<Map<number, any>>(new Map());
   
   // Available lab tests from API (store full objects to get LabTestId)
   const [availableLabTests, setAvailableLabTests] = useState<any[]>([]);
   const [labTestsLoading, setLabTestsLoading] = useState(false);
   const [appointmentData, setAppointmentData] = useState<any>(null);
+  const [doctorData, setDoctorData] = useState<{ name: string; specialty: string } | null>(null);
 
   // Fetch appointment data to get patientId
   useEffect(() => {
@@ -70,6 +82,20 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
             ...appointment,
             patientId: appointment.patientId || appointment.PatientId || '',
           });
+          // Initialize diagnosis from appointment data
+          setDiagnosis(appointment.diagnosis || appointment.Diagnosis || '');
+          // Initialize prescriptionsUrl from appointment data
+          setPrescriptionsUrl(appointment.prescriptionsUrl || appointment.PrescriptionsUrl || '');
+          // Initialize followUp from appointment data
+          setFollowUp(appointment.followUpDetails || appointment.FollowUpDetails || '');
+          // Initialize consultationCharge from appointment data
+          setConsultationCharge(appointment.consultationCharge || appointment.ConsultationCharge || 0);
+          // Initialize followup options from appointment data
+          setReferToAnotherDoctor(appointment.referToAnotherDoctor || appointment.ReferToAnotherDoctor === 'Yes' || false);
+          setReferredDoctorId(appointment.referredDoctorId || appointment.ReferredDoctorId || '');
+          setTransferToIPDOTICU(appointment.transferToIPDOTICU || appointment.TransferToIPDOTICU === 'Yes' || false);
+          setTransferTo(appointment.transferTo || appointment.TransferTo);
+          setTransferDetails(appointment.transferDetails || appointment.TransferDetails || '');
         }
       } catch (err) {
         console.error('Failed to fetch appointment:', err);
@@ -78,6 +104,35 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
     
     fetchAppointment();
   }, [appointmentId]);
+
+  // Fetch doctor data when appointment data is available
+  useEffect(() => {
+    const fetchDoctor = async () => {
+      if (!appointmentData) return;
+      
+      const doctorId = appointmentData.doctorId || appointmentData.DoctorId;
+      if (!doctorId) {
+        console.warn('No doctorId found in appointment data');
+        return;
+      }
+
+      try {
+        const doctor = await doctorsApi.getById(Number(doctorId));
+        setDoctorData({
+          name: doctor.name || 'Unknown Doctor',
+          specialty: doctor.specialty || 'General Medicine',
+        });
+      } catch (err) {
+        console.error('Failed to fetch doctor:', err);
+        setDoctorData({
+          name: 'Unknown Doctor',
+          specialty: 'General Medicine',
+        });
+      }
+    };
+    
+    fetchDoctor();
+  }, [appointmentData]);
 
   // Fetch patient data when appointment data is available
   useEffect(() => {
@@ -148,13 +203,21 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
       try {
         setQueueLoading(true);
         // Fetch all appointments for the same doctor with "Waiting" status
-        const appointments = await patientAppointmentsApi.getAll({
+        const response = await patientAppointmentsApi.getAll({
           doctorId: Number(doctorId),
           appointmentStatus: 'Waiting',
+          page: 1,
+          limit: 100, // Get enough appointments to find the next 3
         });
 
+        console.log('Waiting queue API response:', response);
+
+        // Extract the data array from the paginated response
+        const appointments = response?.data || [];
+        console.log('Extracted appointments array:', appointments);
+
         // Exclude the current appointment and sort by appointment date and time (first-come-first-serve)
-        const waitingAppointments = appointments
+        const sortedWaitingAppointments = appointments
           .filter(apt => apt.id !== appointmentId)
           .sort((a, b) => {
             // First sort by appointment date (YYYY-MM-DD format)
@@ -170,11 +233,17 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
             const timeA = a.appointmentTime || '';
             const timeB = b.appointmentTime || '';
             return timeA.localeCompare(timeB);
-          });
+          })
+          .slice(0, 3); // Limit to next 3 people
+
+        console.log('Filtered and sorted waiting appointments (next 3):', sortedWaitingAppointments);
+        
+        // Store the full appointment objects for navigation
+        setWaitingAppointments(sortedWaitingAppointments);
 
         // Fetch patient details for each appointment
         const queuePatients: QueuePatient[] = await Promise.all(
-          waitingAppointments.map(async (appointment) => {
+          sortedWaitingAppointments.map(async (appointment) => {
             try {
               const patient = await patientsApi.getById(appointment.patientId);
               const tokenNumber = appointment.tokenNo || 'N/A';
@@ -336,6 +405,54 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
     fetchLabTests();
   }, []);
 
+  // Fetch available doctors for referral
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const doctors = await doctorsApi.getAll();
+        setAvailableDoctors(doctors);
+        
+        // Fetch department details for each doctor
+        const detailsMap = new Map<number, any>();
+        const fetchPromises = doctors.map(async (doctor) => {
+          try {
+            const response = await apiRequest<any>(`/users/${doctor.id}/doctor-details`);
+            console.log(`Doctor ${doctor.id} details response:`, response);
+            
+            // Handle different response structures: { data: {...} } or direct object
+            const doctorDetails = response?.data || response;
+            console.log(`Doctor ${doctor.id} extracted details:`, doctorDetails);
+            
+            if (doctorDetails) {
+              detailsMap.set(doctor.id, doctorDetails);
+            // Log department extraction for debugging
+            const department = doctorDetails.DepartmentName || 
+                              doctorDetails.departmentName || 
+                              doctorDetails.DoctorDepartmentName ||
+                              doctorDetails.Department?.DepartmentName ||
+                              doctorDetails.Department?.name ||
+                              doctorDetails.department?.name ||
+                              doctorDetails.department;
+            console.log(`Doctor ${doctor.id} department extracted:`, department);
+            console.log(`Doctor ${doctor.id} full details object:`, JSON.stringify(doctorDetails, null, 2));
+            }
+          } catch (err) {
+            console.error(`Failed to fetch doctor details for doctor ${doctor.id}:`, err);
+          }
+        });
+        
+        await Promise.all(fetchPromises);
+        console.log('Doctor details map:', detailsMap);
+        setDoctorDetailsMap(detailsMap);
+      } catch (err) {
+        console.error('Failed to fetch doctors:', err);
+        setAvailableDoctors([]);
+      }
+    };
+    
+    fetchDoctors();
+  }, []);
+
   const addLabTest = (test: any) => {
     const testName = test.TestName || test.testName || test.name || test.Name || '';
     
@@ -368,23 +485,12 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
     setLabTestsToDelete([...labTestsToDelete, patientLabTestsId]);
   };
 
-  const addMedicine = () => {
-    if (newMedicine.name && newMedicine.dosage && newMedicine.duration) {
-      setMedicines([...medicines, newMedicine]);
-      setNewMedicine({ name: '', dosage: '', duration: '' });
-    }
-  };
-
   const completeConsultation = async () => {
     if (!diagnosis) {
       alert('Please enter diagnosis');
       return;
     }
 
-    if (admitAsIPD && !roomType) {
-      alert('Please select room type for IPD admission');
-      return;
-    }
 
     // Submit all lab test operations (adds and deletes) before showing prescription dialog
     if (labTests.length > 0 || labTestsToDelete.length > 0) {
@@ -448,6 +554,28 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
       }
     }
 
+    // Update appointment with diagnosis, consultationCharge, followUp, prescriptionsUrl, etc.
+    try {
+      await patientAppointmentsApi.update({
+        id: appointmentId,
+        diagnosis: diagnosis || undefined,
+        consultationCharge: consultationCharge || undefined,
+        followUpDetails: followUp || undefined,
+        prescriptionsUrl: prescriptionsUrl || undefined,
+        referToAnotherDoctor: referToAnotherDoctor,
+        referredDoctorId: referToAnotherDoctor && referredDoctorId ? referredDoctorId : undefined,
+        transferToIPDOTICU: transferToIPDOTICU,
+        transferTo: transferToIPDOTICU && transferTo ? transferTo : undefined,
+        transferDetails: transferToIPDOTICU && transferDetails ? transferDetails : undefined,
+        appointmentStatus: 'Completed',
+      });
+      console.log('Updated appointment with consultation details');
+    } catch (err) {
+      console.error('Failed to update appointment:', err);
+      alert('Failed to update appointment. Please try again.');
+      return;
+    }
+
     setShowPrescriptionDialog(true);
   };
 
@@ -459,8 +587,12 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
           Back
         </Button>
         <div>
-          <h1 className="text-gray-900 mb-2">Doctor Consultation - Dr. Sarah Johnson</h1>
-          <p className="text-gray-500">Cardiology Department</p>
+          <h1 className="text-gray-900 mb-2">
+            Doctor Consultation - {doctorData ? doctorData.name : 'Loading...'}
+          </h1>
+          <p className="text-gray-500">
+            {doctorData ? doctorData.specialty : 'Loading...'} Department
+          </p>
         </div>
       </div>
 
@@ -499,6 +631,26 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
                   </div>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-lg">
+                  {appointmentData && (
+                    <div className="mb-3 pb-3 border-b border-gray-200">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500 mb-1">Appointment Date</p>
+                          <p className="text-gray-900">
+                            {formatDateToDDMMYYYY(
+                              appointmentData.appointmentDate || appointmentData.AppointmentDate
+                            ) || 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 mb-1">Appointment Time</p>
+                          <p className="text-gray-900">
+                            {appointmentData.appointmentTime || appointmentData.AppointmentTime || 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <p className="text-sm text-gray-500 mb-1">Chief Complaint</p>
                   <p className="text-gray-900">{currentPatient.complaint}</p>
                 </div>
@@ -555,10 +707,11 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="diagnosis" className="space-y-6">
-              <TabsList className="grid grid-cols-4 w-full">
+              <TabsList className="grid grid-cols-5 w-full">
                 <TabsTrigger value="diagnosis">Diagnosis</TabsTrigger>
                 <TabsTrigger value="labtests">Lab Tests</TabsTrigger>
                 <TabsTrigger value="medicines">Medicines</TabsTrigger>
+                <TabsTrigger value="consultationcharge">Consultation Charge</TabsTrigger>
                 <TabsTrigger value="followup">Follow-up & Admission</TabsTrigger>
               </TabsList>
 
@@ -627,168 +780,245 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
                   ) : (
                     <p className="text-gray-500 text-sm mb-4">No lab tests available</p>
                   )}
-                  <div>
-                    <Label htmlFor="customTest">Or Add Custom Test</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="customTest"
-                        placeholder="Enter test name"
-                        value={newLabTest}
-                        onChange={(e) => setNewLabTest(e.target.value)}
-                      />
-                      <Button onClick={async () => {
-                        // For custom tests, we need to create them differently
-                        // For now, just add to local state (you may want to handle this differently)
-                        if (newLabTest && !labTests.some(lt => lt.testName === newLabTest)) {
-                          // Note: Custom tests added this way won't have a PatientLabTestsId
-                          // You may want to prevent this or handle it differently
-                          alert('Custom test names need to be selected from the available tests above.');
-                          setNewLabTest('');
-                        }
-                      }}>Add</Button>
-                    </div>
-                  </div>
                 </div>
               </TabsContent>
 
               <TabsContent value="medicines" className="space-y-4">
                 <div>
-                  <Label>Prescribed Medicines</Label>
-                  {medicines.length > 0 && (
-                    <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden">
-                      <table className="w-full">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="text-left py-2 px-4 text-sm text-gray-700">Medicine</th>
-                            <th className="text-left py-2 px-4 text-sm text-gray-700">Dosage</th>
-                            <th className="text-left py-2 px-4 text-sm text-gray-700">Duration</th>
-                            <th className="text-left py-2 px-4 text-sm text-gray-700">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {medicines.map((med, index) => (
-                            <tr key={index} className="border-t border-gray-100">
-                              <td className="py-2 px-4 text-sm">{med.name}</td>
-                              <td className="py-2 px-4 text-sm">{med.dosage}</td>
-                              <td className="py-2 px-4 text-sm">{med.duration}</td>
-                              <td className="py-2 px-4">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setMedicines(medicines.filter((_, i) => i !== index))}
-                                >
-                                  Remove
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-3 gap-4 mb-4">
-                    <div>
-                      <Label htmlFor="medName">Medicine Name</Label>
-                      <Input
-                        id="medName"
-                        placeholder="Medicine name"
-                        value={newMedicine.name}
-                        onChange={(e) => setNewMedicine({ ...newMedicine, name: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="dosage">Dosage</Label>
-                      <Input
-                        id="dosage"
-                        placeholder="e.g., 1-0-1"
-                        value={newMedicine.dosage}
-                        onChange={(e) => setNewMedicine({ ...newMedicine, dosage: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="duration">Duration</Label>
-                      <Input
-                        id="duration"
-                        placeholder="e.g., 7 days"
-                        value={newMedicine.duration}
-                        onChange={(e) => setNewMedicine({ ...newMedicine, duration: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <Button onClick={addMedicine}>
-                    <Pill className="size-4 mr-2" />
-                    Add Medicine
-                  </Button>
+                  <Label htmlFor="prescriptionsUrl">Prescriptions URL</Label>
+                  <Input
+                    id="prescriptionsUrl"
+                    type="url"
+                    placeholder="Enter prescriptions folder URL"
+                    value={prescriptionsUrl}
+                    onChange={(e) => setPrescriptionsUrl(e.target.value)}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Folder URL - multiple prescriptions should be saved</p>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="consultationcharge" className="space-y-4">
+                <div>
+                  <Label htmlFor="consultationCharge">Consultation Charge (₹) *</Label>
+                  <Input
+                    id="consultationCharge"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g., 500"
+                    value={consultationCharge}
+                    onChange={(e) => setConsultationCharge(parseFloat(e.target.value) || 0)}
+                  />
                 </div>
               </TabsContent>
 
               <TabsContent value="followup" className="space-y-4">
                 <div>
-                  <Label htmlFor="followup">Follow-up Instructions</Label>
+                  <Label htmlFor="followup">Follow Up Details</Label>
                   <Textarea
                     id="followup"
-                    placeholder="Enter follow-up instructions (e.g., Next visit after 1 week)"
+                    placeholder="Enter follow up details..."
                     value={followUp}
                     onChange={(e) => setFollowUp(e.target.value)}
-                    rows={3}
+                    rows={2}
                   />
                 </div>
 
                 <div className="border-t border-gray-200 pt-4">
-                  <div className="flex items-center gap-3 mb-4">
-                    <input
-                      type="checkbox"
-                      id="admitIPD"
-                      checked={admitAsIPD}
-                      onChange={(e) => setAdmitAsIPD(e.target.checked)}
-                      className="size-4"
-                    />
-                    <Label htmlFor="admitIPD" className="text-lg flex items-center gap-2">
-                      <BedDouble className="size-5 text-purple-600" />
-                      Admit as In-Patient (IPD)
-                    </Label>
-                  </div>
-
-                  {admitAsIPD && (
-                    <div className="ml-7 space-y-3">
-                      <Label>Select Room Type</Label>
-                      <div className="grid grid-cols-3 gap-4">
-                        <button
-                          onClick={() => setRoomType('Regular Ward')}
-                          className={`p-4 border-2 rounded-lg text-center transition-colors ${
-                            roomType === 'Regular Ward'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <p className="text-gray-900">Regular Ward</p>
-                          <p className="text-sm text-gray-500">₹1,000/day</p>
-                        </button>
-                        <button
-                          onClick={() => setRoomType('Special Shared Room')}
-                          className={`p-4 border-2 rounded-lg text-center transition-colors ${
-                            roomType === 'Special Shared Room'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <p className="text-gray-900">Special Shared</p>
-                          <p className="text-sm text-gray-500">₹2,500/day</p>
-                        </button>
-                        <button
-                          onClick={() => setRoomType('Special Room')}
-                          className={`p-4 border-2 rounded-lg text-center transition-colors ${
-                            roomType === 'Special Room'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <p className="text-gray-900">Special Room</p>
-                          <p className="text-sm text-gray-500">₹5,000/day</p>
-                        </button>
-                      </div>
+                  <Label className="mb-4 block">Followup option</Label>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        id="referToDoctor"
+                        name="followupOption"
+                        checked={referToAnotherDoctor && !transferToIPDOTICU}
+                        onChange={() => {
+                          setReferToAnotherDoctor(true);
+                          setTransferToIPDOTICU(false);
+                          setTransferTo(undefined);
+                          setTransferDetails('');
+                        }}
+                        className="size-4"
+                      />
+                      <Label htmlFor="referToDoctor" className="cursor-pointer">Refer to Another Doctor</Label>
                     </div>
-                  )}
+                    {referToAnotherDoctor && !transferToIPDOTICU && (
+                      <div className="ml-7 space-y-2">
+                        <Label htmlFor="doctorSearch">Select Doctor</Label>
+                        <div className="relative">
+                          <Input
+                            id="doctorSearch"
+                            type="text"
+                            placeholder="Search doctor by name or specialty..."
+                            value={doctorSearchTerm}
+                            onChange={(e) => {
+                              setDoctorSearchTerm(e.target.value);
+                              // Clear selection if user edits the search term
+                              const selectedDoctor = availableDoctors.find(d => String(d.id) === referredDoctorId);
+                              if (selectedDoctor && e.target.value !== selectedDoctor.name) {
+                                setReferredDoctorId('');
+                              }
+                            }}
+                            onFocus={() => setDoctorSearchTerm(doctorSearchTerm || '')}
+                            autoComplete="off"
+                          />
+                          {doctorSearchTerm && !referredDoctorId && (
+                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                              <table className="w-full">
+                                <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                  <tr>
+                                    <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                    <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Department</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {availableDoctors
+                                    .filter((doctor) => {
+                                      if (!doctorSearchTerm) return false;
+                                      const searchLower = doctorSearchTerm.toLowerCase();
+                                      const doctorName = doctor.name || '';
+                                      const specialty = doctor.specialty || '';
+                                      // Get department from doctor-details endpoint
+                                      const doctorDetails = doctorDetailsMap.get(doctor.id);
+                                      const department = doctorDetails?.DepartmentName || 
+                                                        doctorDetails?.departmentName || 
+                                                        doctorDetails?.DoctorDepartmentName ||
+                                                        doctorDetails?.Department?.DepartmentName ||
+                                                        doctorDetails?.Department?.name ||
+                                                        doctorDetails?.department?.name ||
+                                                        doctorDetails?.department ||
+                                                        '';
+                                      return (
+                                        doctorName.toLowerCase().includes(searchLower) ||
+                                        specialty.toLowerCase().includes(searchLower) ||
+                                        department.toLowerCase().includes(searchLower)
+                                      );
+                                    })
+                                    .map((doctor) => {
+                                      const doctorIdStr = String(doctor.id || '');
+                                      const isSelected = referredDoctorId === doctorIdStr;
+                                      const doctorDetails = doctorDetailsMap.get(doctor.id);
+                                      // Extract department from doctor-details endpoint response
+                                      const department = doctorDetails?.DepartmentName || 
+                                                        doctorDetails?.departmentName || 
+                                                        doctorDetails?.DoctorDepartmentName ||
+                                                        doctorDetails?.Department?.DepartmentName ||
+                                                        doctorDetails?.Department?.name ||
+                                                        doctorDetails?.department?.name ||
+                                                        doctorDetails?.department ||
+                                                        'N/A';
+                                      return (
+                                        <tr
+                                          key={doctor.id}
+                                          onClick={() => {
+                                            setReferredDoctorId(doctorIdStr);
+                                            // Keep the doctor name in the search box
+                                            setDoctorSearchTerm(doctor.name || '');
+                                          }}
+                                          className={`cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
+                                        >
+                                          <td className="py-2 px-3 text-sm">{doctor.name}</td>
+                                          <td className="py-2 px-3 text-sm">{department}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  {doctorSearchTerm && availableDoctors.filter((doctor) => {
+                                    const searchLower = doctorSearchTerm.toLowerCase();
+                                    const doctorName = doctor.name || '';
+                                    const specialty = doctor.specialty || '';
+                                    const doctorDetails = doctorDetailsMap.get(doctor.id);
+                                    // Extract department from doctor-details endpoint response only
+                                    const department = doctorDetails?.DepartmentName || 
+                                                      doctorDetails?.departmentName || 
+                                                      doctorDetails?.DoctorDepartmentName ||
+                                                      doctorDetails?.Department?.DepartmentName ||
+                                                      doctorDetails?.Department?.name ||
+                                                      doctorDetails?.department?.name ||
+                                                      doctorDetails?.department ||
+                                                      '';
+                                    return (
+                                      doctorName.toLowerCase().includes(searchLower) ||
+                                      specialty.toLowerCase().includes(searchLower) ||
+                                      department.toLowerCase().includes(searchLower)
+                                    );
+                                  }).length === 0 && (
+                                    <tr>
+                                      <td colSpan={2} className="py-2 px-3 text-sm text-gray-500 text-center">
+                                        No doctors found. Try a different search term.
+                                      </td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                        {referredDoctorId && (
+                          <div className="flex items-center justify-end p-2 bg-blue-50 rounded-md">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setReferredDoctorId('');
+                                // Keep the doctor name in search box, user can edit it
+                              }}
+                              className="h-6 px-2 text-xs"
+                            >
+                              Clear Selection
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        id="transferToIPDOTICU"
+                        name="followupOption"
+                        checked={transferToIPDOTICU && !referToAnotherDoctor}
+                        onChange={() => {
+                          setTransferToIPDOTICU(true);
+                          setReferToAnotherDoctor(false);
+                          setReferredDoctorId('');
+                          setDoctorSearchTerm('');
+                          // Don't clear transferTo and transferDetails when selecting this option
+                        }}
+                        className="size-4"
+                      />
+                      <Label htmlFor="transferToIPDOTICU" className="cursor-pointer">Transfer to IPD/OT/ICU</Label>
+                    </div>
+                    {transferToIPDOTICU && !referToAnotherDoctor && (
+                      <div className="ml-7 space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="transferTo">Transfer Destination</Label>
+                          <select
+                            id="transferTo"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                            value={transferTo || ''}
+                            onChange={(e) => setTransferTo(e.target.value as 'IPD Room Admission' | 'ICU' | 'OT' | undefined)}
+                          >
+                            <option value="">Select Transfer Destination</option>
+                            <option value="IPD Room Admission">IPD</option>
+                            <option value="ICU">ICU</option>
+                            <option value="OT">OT</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="transferDetails">Transfer Details</Label>
+                          <Textarea
+                            id="transferDetails"
+                            placeholder="Enter transfer details..."
+                            value={transferDetails}
+                            onChange={(e) => setTransferDetails(e.target.value)}
+                            rows={2}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>
@@ -836,53 +1066,37 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
               </div>
             )}
 
-            {medicines.length > 0 && (
-              <div>
-                <p className="text-sm text-gray-500 mb-2">Medicines Prescribed</p>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left py-2 px-4">Medicine</th>
-                        <th className="text-left py-2 px-4">Dosage</th>
-                        <th className="text-left py-2 px-4">Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {medicines.map((med, i) => (
-                        <tr key={i} className="border-t border-gray-100">
-                          <td className="py-2 px-4">{med.name}</td>
-                          <td className="py-2 px-4">{med.dosage}</td>
-                          <td className="py-2 px-4">{med.duration}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
             {followUp && (
               <div>
-                <p className="text-sm text-gray-500 mb-1">Follow-up Instructions</p>
+                <p className="text-sm text-gray-500 mb-1">Follow Up Details</p>
                 <p className="text-gray-900">{followUp}</p>
               </div>
             )}
 
-            {admitAsIPD && (
-              <div className="p-4 bg-purple-50 rounded-lg border-2 border-purple-200">
-                <p className="text-purple-900">✓ Patient will be admitted as In-Patient</p>
-                <p className="text-sm text-purple-700">Room Type: {roomType}</p>
-              </div>
-            )}
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setShowPrescriptionDialog(false)}>
               Edit
             </Button>
             <Button onClick={() => {
-              alert('Consultation completed!');
               setShowPrescriptionDialog(false);
+              
+              // Find the next waiting patient
+              if (waitingAppointments.length > 0) {
+                const nextAppointment = waitingAppointments[0]; // First in queue (already sorted)
+                if (nextAppointment && nextAppointment.id) {
+                  // Navigate to the next patient's consultation
+                  navigate(`/consultation/${nextAppointment.id}`);
+                } else {
+                  // No more patients waiting, go back to consultation list
+                  alert('Consultation completed! No more patients waiting.');
+                  onBack();
+                }
+              } else {
+                // No more patients waiting, go back to consultation list
+                alert('Consultation completed! No more patients waiting.');
+                onBack();
+              }
             }}>
               Confirm & Call Next Patient
             </Button>

@@ -509,58 +509,60 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
         <div className="px-6 pt-4 pb-4 flex-1">
           {/* Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <Card className="bg-white border border-gray-200 shadow-sm rounded-lg">
-              <CardContent className="p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="bg-gray-500 p-4 rounded-lg shadow-sm flex items-center justify-center">
-                    <Users className="size-7 text-white" strokeWidth={2} />
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Total Appointments</p>
+                    <h3 className="text-gray-900">{patientAppointments.length}</h3>
                   </div>
-                  <span className="text-sm font-medium text-gray-500">Total</span>
+                  <Users className="size-8 text-blue-500" />
                 </div>
-                <h3 className="text-4xl font-bold text-gray-900 mb-2">{patientAppointments.length}</h3>
-                <p className="text-base text-gray-500">Total Appointments</p>
               </CardContent>
             </Card>
-            <Card className="bg-white border border-gray-200 shadow-sm rounded-lg">
-              <CardContent className="p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="bg-orange-500 p-4 rounded-lg shadow-sm flex items-center justify-center">
-                    <Clock className="size-7 text-white" strokeWidth={2} />
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Waiting</p>
+                    <h3 className="text-gray-900">{getAppointmentsByStatus('Waiting').length}</h3>
                   </div>
-                  <span className="text-sm font-medium text-gray-500">Waiting</span>
+                  <div className="size-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                    <span className="text-yellow-700">⏳</span>
+                  </div>
                 </div>
-                <h3 className="text-4xl font-bold text-gray-900 mb-2">{getAppointmentsByStatus('Waiting').length}</h3>
-                <p className="text-base text-gray-500">Waiting</p>
               </CardContent>
             </Card>
-            <Card className="bg-white border border-gray-200 shadow-sm rounded-lg">
-              <CardContent className="p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="bg-purple-500 p-4 rounded-lg shadow-sm flex items-center justify-center">
-                    <Stethoscope className="size-7 text-white" strokeWidth={2} />
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Consulting</p>
+                    <h3 className="text-gray-900">{getAppointmentsByStatus('Consulting').length}</h3>
                   </div>
-                  <span className="text-sm font-medium text-gray-500">Consulting</span>
+                  <div className="size-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-blue-700">👨‍⚕️</span>
+                  </div>
                 </div>
-                <h3 className="text-4xl font-bold text-gray-900 mb-2">{getAppointmentsByStatus('Consulting').length}</h3>
-                <p className="text-base text-gray-500">Consulting</p>
               </CardContent>
             </Card>
-            <Card className="bg-white border border-gray-200 shadow-sm rounded-lg">
-              <CardContent className="p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="bg-green-500 p-4 rounded-lg shadow-sm flex items-center justify-center">
-                    <CheckCircle2 className="size-7 text-white" strokeWidth={2} />
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Completed</p>
+                    <h3 className="text-gray-900">{getAppointmentsByStatus('Completed').length}</h3>
                   </div>
-                  <span className="text-sm font-medium text-gray-500">Completed</span>
+                  <div className="size-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-green-700">✓</span>
+                  </div>
                 </div>
-                <h3 className="text-4xl font-bold text-gray-900 mb-2">{getAppointmentsByStatus('Completed').length}</h3>
-                <p className="text-base text-gray-500">Completed</p>
               </CardContent>
             </Card>
           </div>
 
           {/* Search */}
-          <Card className="mb-6 bg-white">
+          <Card className="mb-6">
             <CardContent className="p-6">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
@@ -568,7 +570,7 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                   placeholder="Search by token no, patient, or doctor..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-gray-50"
+                  className="pl-10"
                 />
               </div>
             </CardContent>
@@ -589,29 +591,33 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
-                  setSelectedAppointment(appointment);
-                  setEditFormData({
-                    patientId: appointment.patientId,
-                    doctorId: appointment.doctorId,
-                    appointmentDate: appointment.appointmentDate,
-                    appointmentTime: appointment.appointmentTime,
-                    appointmentStatus: appointment.appointmentStatus,
-                    consultationCharge: appointment.consultationCharge,
-                    diagnosis: appointment.diagnosis || '',
-                    followUpDetails: appointment.followUpDetails || '',
-                    prescriptionsUrl: appointment.prescriptionsUrl || '',
-                    toBeAdmitted: appointment.toBeAdmitted,
-                    referToAnotherDoctor: appointment.referToAnotherDoctor,
-                    referredDoctorId: appointment.referredDoctorId || '',
-                    transferToIPDOTICU: appointment.transferToIPDOTICU,
-                    transferTo: appointment.transferTo,
-                    transferDetails: appointment.transferDetails || '',
-                    billId: appointment.billId || '',
-                  });
-                  // Set display values for date and time
-                  setEditDateDisplay(formatDateToDisplay(appointment.appointmentDate));
-                  setEditTimeDisplay(formatTimeToDisplay(appointment.appointmentTime));
-                  setIsEditDialogOpen(true);
+                  if (onManageAppointment && appointment.id) {
+                    onManageAppointment(appointment.id);
+                  } else {
+                    // Fallback to edit dialog if navigation not available
+                    setSelectedAppointment(appointment);
+                    setEditFormData({
+                      patientId: appointment.patientId,
+                      doctorId: appointment.doctorId,
+                      appointmentDate: appointment.appointmentDate,
+                      appointmentTime: appointment.appointmentTime,
+                      appointmentStatus: appointment.appointmentStatus,
+                      consultationCharge: appointment.consultationCharge,
+                      diagnosis: appointment.diagnosis || '',
+                      followUpDetails: appointment.followUpDetails || '',
+                      prescriptionsUrl: appointment.prescriptionsUrl || '',
+                      toBeAdmitted: appointment.toBeAdmitted,
+                      referToAnotherDoctor: appointment.referToAnotherDoctor,
+                      referredDoctorId: appointment.referredDoctorId || '',
+                      transferToIPDOTICU: appointment.transferToIPDOTICU,
+                      transferTo: appointment.transferTo,
+                      transferDetails: appointment.transferDetails || '',
+                      billId: appointment.billId || '',
+                    });
+                    setEditDateDisplay(formatDateToDisplay(appointment.appointmentDate));
+                    setEditTimeDisplay(formatTimeToDisplay(appointment.appointmentTime));
+                    setIsEditDialogOpen(true);
+                  }
                 }}
               />
             </TabsContent>
@@ -621,29 +627,32 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
-                  setSelectedAppointment(appointment);
-                  setEditFormData({
-                    patientId: appointment.patientId,
-                    doctorId: appointment.doctorId,
-                    appointmentDate: appointment.appointmentDate,
-                    appointmentTime: appointment.appointmentTime,
-                    appointmentStatus: appointment.appointmentStatus,
-                    consultationCharge: appointment.consultationCharge,
-                    diagnosis: appointment.diagnosis || '',
-                    followUpDetails: appointment.followUpDetails || '',
-                    prescriptionsUrl: appointment.prescriptionsUrl || '',
-                    toBeAdmitted: appointment.toBeAdmitted,
-                    referToAnotherDoctor: appointment.referToAnotherDoctor,
-                    referredDoctorId: appointment.referredDoctorId || '',
-                    transferToIPDOTICU: appointment.transferToIPDOTICU,
-                    transferTo: appointment.transferTo,
-                    transferDetails: appointment.transferDetails || '',
-                    billId: appointment.billId || '',
-                  });
-                  // Set display values for date and time
-                  setEditDateDisplay(formatDateToDisplay(appointment.appointmentDate));
-                  setEditTimeDisplay(formatTimeToDisplay(appointment.appointmentTime));
-                  setIsEditDialogOpen(true);
+                  if (onManageAppointment && appointment.id) {
+                    onManageAppointment(appointment.id);
+                  } else {
+                    setSelectedAppointment(appointment);
+                    setEditFormData({
+                      patientId: appointment.patientId,
+                      doctorId: appointment.doctorId,
+                      appointmentDate: appointment.appointmentDate,
+                      appointmentTime: appointment.appointmentTime,
+                      appointmentStatus: appointment.appointmentStatus,
+                      consultationCharge: appointment.consultationCharge,
+                      diagnosis: appointment.diagnosis || '',
+                      followUpDetails: appointment.followUpDetails || '',
+                      prescriptionsUrl: appointment.prescriptionsUrl || '',
+                      toBeAdmitted: appointment.toBeAdmitted,
+                      referToAnotherDoctor: appointment.referToAnotherDoctor,
+                      referredDoctorId: appointment.referredDoctorId || '',
+                      transferToIPDOTICU: appointment.transferToIPDOTICU,
+                      transferTo: appointment.transferTo,
+                      transferDetails: appointment.transferDetails || '',
+                      billId: appointment.billId || '',
+                    });
+                    setEditDateDisplay(formatDateToDisplay(appointment.appointmentDate));
+                    setEditTimeDisplay(formatTimeToDisplay(appointment.appointmentTime));
+                    setIsEditDialogOpen(true);
+                  }
                 }}
               />
             </TabsContent>
@@ -653,29 +662,32 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
-                  setSelectedAppointment(appointment);
-                  setEditFormData({
-                    patientId: appointment.patientId,
-                    doctorId: appointment.doctorId,
-                    appointmentDate: appointment.appointmentDate,
-                    appointmentTime: appointment.appointmentTime,
-                    appointmentStatus: appointment.appointmentStatus,
-                    consultationCharge: appointment.consultationCharge,
-                    diagnosis: appointment.diagnosis || '',
-                    followUpDetails: appointment.followUpDetails || '',
-                    prescriptionsUrl: appointment.prescriptionsUrl || '',
-                    toBeAdmitted: appointment.toBeAdmitted,
-                    referToAnotherDoctor: appointment.referToAnotherDoctor,
-                    referredDoctorId: appointment.referredDoctorId || '',
-                    transferToIPDOTICU: appointment.transferToIPDOTICU,
-                    transferTo: appointment.transferTo,
-                    transferDetails: appointment.transferDetails || '',
-                    billId: appointment.billId || '',
-                  });
-                  // Set display values for date and time
-                  setEditDateDisplay(formatDateToDisplay(appointment.appointmentDate));
-                  setEditTimeDisplay(formatTimeToDisplay(appointment.appointmentTime));
-                  setIsEditDialogOpen(true);
+                  if (onManageAppointment && appointment.id) {
+                    onManageAppointment(appointment.id);
+                  } else {
+                    setSelectedAppointment(appointment);
+                    setEditFormData({
+                      patientId: appointment.patientId,
+                      doctorId: appointment.doctorId,
+                      appointmentDate: appointment.appointmentDate,
+                      appointmentTime: appointment.appointmentTime,
+                      appointmentStatus: appointment.appointmentStatus,
+                      consultationCharge: appointment.consultationCharge,
+                      diagnosis: appointment.diagnosis || '',
+                      followUpDetails: appointment.followUpDetails || '',
+                      prescriptionsUrl: appointment.prescriptionsUrl || '',
+                      toBeAdmitted: appointment.toBeAdmitted,
+                      referToAnotherDoctor: appointment.referToAnotherDoctor,
+                      referredDoctorId: appointment.referredDoctorId || '',
+                      transferToIPDOTICU: appointment.transferToIPDOTICU,
+                      transferTo: appointment.transferTo,
+                      transferDetails: appointment.transferDetails || '',
+                      billId: appointment.billId || '',
+                    });
+                    setEditDateDisplay(formatDateToDisplay(appointment.appointmentDate));
+                    setEditTimeDisplay(formatTimeToDisplay(appointment.appointmentTime));
+                    setIsEditDialogOpen(true);
+                  }
                 }}
               />
             </TabsContent>
@@ -685,29 +697,32 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
-                  setSelectedAppointment(appointment);
-                  setEditFormData({
-                    patientId: appointment.patientId,
-                    doctorId: appointment.doctorId,
-                    appointmentDate: appointment.appointmentDate,
-                    appointmentTime: appointment.appointmentTime,
-                    appointmentStatus: appointment.appointmentStatus,
-                    consultationCharge: appointment.consultationCharge,
-                    diagnosis: appointment.diagnosis || '',
-                    followUpDetails: appointment.followUpDetails || '',
-                    prescriptionsUrl: appointment.prescriptionsUrl || '',
-                    toBeAdmitted: appointment.toBeAdmitted,
-                    referToAnotherDoctor: appointment.referToAnotherDoctor,
-                    referredDoctorId: appointment.referredDoctorId || '',
-                    transferToIPDOTICU: appointment.transferToIPDOTICU,
-                    transferTo: appointment.transferTo,
-                    transferDetails: appointment.transferDetails || '',
-                    billId: appointment.billId || '',
-                  });
-                  // Set display values for date and time
-                  setEditDateDisplay(formatDateToDisplay(appointment.appointmentDate));
-                  setEditTimeDisplay(formatTimeToDisplay(appointment.appointmentTime));
-                  setIsEditDialogOpen(true);
+                  if (onManageAppointment && appointment.id) {
+                    onManageAppointment(appointment.id);
+                  } else {
+                    setSelectedAppointment(appointment);
+                    setEditFormData({
+                      patientId: appointment.patientId,
+                      doctorId: appointment.doctorId,
+                      appointmentDate: appointment.appointmentDate,
+                      appointmentTime: appointment.appointmentTime,
+                      appointmentStatus: appointment.appointmentStatus,
+                      consultationCharge: appointment.consultationCharge,
+                      diagnosis: appointment.diagnosis || '',
+                      followUpDetails: appointment.followUpDetails || '',
+                      prescriptionsUrl: appointment.prescriptionsUrl || '',
+                      toBeAdmitted: appointment.toBeAdmitted,
+                      referToAnotherDoctor: appointment.referToAnotherDoctor,
+                      referredDoctorId: appointment.referredDoctorId || '',
+                      transferToIPDOTICU: appointment.transferToIPDOTICU,
+                      transferTo: appointment.transferTo,
+                      transferDetails: appointment.transferDetails || '',
+                      billId: appointment.billId || '',
+                    });
+                    setEditDateDisplay(formatDateToDisplay(appointment.appointmentDate));
+                    setEditTimeDisplay(formatTimeToDisplay(appointment.appointmentTime));
+                    setIsEditDialogOpen(true);
+                  }
                 }}
               />
             </TabsContent>
@@ -1043,36 +1058,19 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="edit-appointmentStatus" className="text-gray-600" style={{ fontSize: '1.125rem' }}>Appointment Status</Label>
-                      <select
-                        id="edit-appointmentStatus"
-                        aria-label="Appointment Status"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-md text-gray-700 bg-gray-100"
-                        value={editFormData.appointmentStatus}
-                        onChange={(e) => setEditFormData({ ...editFormData, appointmentStatus: e.target.value as PatientAppointment['appointmentStatus'] })}
-                        style={{ fontSize: '1.125rem' }}
-                      >
-                        <option value="Waiting">Waiting</option>
-                        <option value="Consulting">Consulting</option>
-                        <option value="Completed">Completed</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label htmlFor="edit-consultationCharge" className="text-gray-600" style={{ fontSize: '1.125rem' }}>Consultation Charge (₹) *</Label>
-                      <Input
-                        id="edit-consultationCharge"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="e.g., 500"
-                        value={editFormData.consultationCharge}
-                        onChange={(e) => setEditFormData({ ...editFormData, consultationCharge: parseFloat(e.target.value) || 0 })}
-                        className="text-gray-700 bg-gray-100"
-                        style={{ fontSize: '1.125rem' }}
-                      />
-                    </div>
+                  <div>
+                    <Label htmlFor="edit-consultationCharge" className="text-gray-600" style={{ fontSize: '1.125rem' }}>Consultation Charge (₹) *</Label>
+                    <Input
+                      id="edit-consultationCharge"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g., 500"
+                      value={editFormData.consultationCharge}
+                      onChange={(e) => setEditFormData({ ...editFormData, consultationCharge: parseFloat(e.target.value) || 0 })}
+                      className="text-gray-700 bg-gray-100"
+                      style={{ fontSize: '1.125rem' }}
+                    />
                   </div>
                   <div>
                     <Label htmlFor="edit-diagnosis" className="text-gray-600" style={{ fontSize: '1.125rem' }}>Diagnosis</Label>
@@ -1218,6 +1216,21 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                       style={{ fontSize: '1.125rem' }}
                     />
                     <p className="text-xs text-gray-700 mt-1">Foreign Key to BillId</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-appointmentStatus" className="text-gray-600" style={{ fontSize: '1.125rem' }}>Appointment Status</Label>
+                    <select
+                      id="edit-appointmentStatus"
+                      aria-label="Appointment Status"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-gray-700 bg-gray-100"
+                      value={editFormData.appointmentStatus}
+                      onChange={(e) => setEditFormData({ ...editFormData, appointmentStatus: e.target.value as PatientAppointment['appointmentStatus'] })}
+                      style={{ fontSize: '1.125rem' }}
+                    >
+                      <option value="Waiting">Waiting</option>
+                      <option value="Consulting">Consulting</option>
+                      <option value="Completed">Completed</option>
+                    </select>
                   </div>
                 </div>
                   </TabsContent>
@@ -1856,19 +1869,19 @@ function AppointmentList({
   };
 
   return (
-    <Card className="mb-4 bg-white border border-gray-200 shadow-sm rounded-lg">
+    <Card className="mb-4">
       <CardContent className="p-0">
         <div className="overflow-x-auto border border-gray-200 rounded">
-          <table className="w-full">
+          <table className="w-full table-fixed">
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="border-b border-gray-200">
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Patient ID</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Patient</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Phone</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Doctor</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Status</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Admission</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Actions</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Patient ID</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white">Patient</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Phone</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Doctor</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Status</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Admission</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1901,21 +1914,21 @@ function AppointmentList({
                     
                     return (
                       <tr key={appointment.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-4 px-6 text-gray-900 font-mono font-medium whitespace-nowrap">{patientId}</td>
-                        <td className="py-4 px-6 text-gray-600 whitespace-nowrap">{patientName}</td>
-                        <td className="py-4 px-6 text-gray-600 whitespace-nowrap">{patientPhone}</td>
-                        <td className="py-4 px-6 text-gray-600 whitespace-nowrap">{doctorName}</td>
-                        <td className="py-4 px-6">{getStatusBadge(appointment.appointmentStatus)}</td>
-                        <td className="py-4 px-6">
+                        <td className="py-3 px-3 text-gray-900 font-mono font-medium whitespace-nowrap">{patientId}</td>
+                        <td className="py-3 px-3 text-gray-600 break-words min-w-0">{patientName}</td>
+                        <td className="py-3 px-3 text-gray-600 whitespace-nowrap">{patientPhone}</td>
+                        <td className="py-3 px-3 text-gray-600 whitespace-nowrap">{doctorName}</td>
+                        <td className="py-3 px-3">{getStatusBadge(appointment.appointmentStatus)}</td>
+                        <td className="py-3 px-3">
                           {appointment.toBeAdmitted ? (
-                            <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300 text-xs">
+                            <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300">
                               <Hospital className="size-3 mr-1" />Yes
                             </Badge>
                           ) : (
                             <span className="text-gray-600">No</span>
                           )}
                         </td>
-                        <td className="py-4 px-6 whitespace-nowrap">
+                        <td className="py-3 px-3 whitespace-nowrap">
                           <Button
                             variant="outline"
                             size="sm"
