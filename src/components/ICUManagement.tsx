@@ -81,7 +81,6 @@ export function ICUManagement() {
     patientCondition: string;
     onVentilator: string;
     icuAdmissionStatus: string;
-    patientType: string;
   }>({
     patientId: '',
     icuId: '',
@@ -95,7 +94,6 @@ export function ICUManagement() {
     patientCondition: '',
     onVentilator: 'No',
     icuAdmissionStatus: 'Occupied',
-    patientType: '',
   });
 
   // Load ICU patient admissions from API
@@ -476,22 +474,6 @@ export function ICUManagement() {
       setAddICUAdmissionError(null);
       setPatientSearchTerm(''); // Reset search term when opening dialog
       setIcuBedSearchTerm(''); // Reset ICU bed search term when opening dialog
-      // Reset form to initial state
-      setAddICUAdmissionForm({
-        patientId: '',
-        icuId: '',
-        icuBedId: '',
-        icuBedNo: '',
-        icuPatientStatus: '',
-        icuAllocationFromDate: '',
-        icuAllocationToDate: '',
-        diagnosis: '',
-        treatmentDetails: '',
-        patientCondition: '',
-        onVentilator: 'No',
-        icuAdmissionStatus: 'Occupied',
-        patientType: '',
-      });
       // Preload dropdowns
       const patientsList = await admissionsApi.getPatientRegistrations();
       setPatientOptions(patientsList || []);
@@ -601,7 +583,6 @@ export function ICUManagement() {
         PatientCondition: addICUAdmissionForm.patientCondition,
         OnVentilator: addICUAdmissionForm.onVentilator,
         ICUAdmissionStatus: addICUAdmissionForm.icuAdmissionStatus,
-        PatientType: addICUAdmissionForm.patientType || '',
       };
 
       console.log('Saving ICU admission with payload:', payload);
@@ -1110,6 +1091,8 @@ export function ICUManagement() {
       ], 'Not Specified'),
       ventilatorSupport: ventilatorSupport,
     };
+    
+    return patient;
   };
 
   // Function to fetch latest vitals for an ICU admission
@@ -1371,26 +1354,6 @@ export function ICUManagement() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Patient Type</Label>
-                  <Select
-                    onValueChange={(val) => {
-                      console.log('Patient Type selected:', val);
-                      setAddICUAdmissionForm(prev => ({ ...prev, patientType: val }));
-                    }}
-                    value={addICUAdmissionForm.patientType || ''}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Patient Type" />
-                    </SelectTrigger>
-                    <SelectContent className="z-[99999] !pointer-events-auto" position="popper">
-                      <SelectItem value="IPD">IPD</SelectItem>
-                      <SelectItem value="OPD">OPD</SelectItem>
-                      <SelectItem value="Emergency">Emergency</SelectItem>
-                      <SelectItem value="Direct">Direct</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
                   <Label>ICU Patient Status</Label>
                   <Select
                     onValueChange={(val) => {
@@ -1572,11 +1535,9 @@ export function ICUManagement() {
                     }
                     
                     // Create click handler - using async/await properly
-                    const handleBedClick = async (e?: React.MouseEvent | React.KeyboardEvent) => {
-                      if (e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }
+                    const handleBedClick = async (e: React.MouseEvent) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       
                       // Set selected bed ID first
                       setSelectedICUBedId(bedId);

@@ -5,34 +5,31 @@ import { ICUBed } from '../types';
 
 export function useICUBeds() {
   const [icuBeds, setIcuBeds] = useState<ICUBed[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Always fetch fresh from network - no caching
   const fetchICUBeds = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await icuBedsApi.getAll();
       setIcuBeds(data);
-      return data;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch ICU beds';
-      setError(errorMessage);
-      setIcuBeds([]);
-      throw err;
+      setError(err instanceof Error ? err.message : 'Failed to fetch ICU beds');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // No auto-fetch on mount - component must call fetchICUBeds explicitly
+  useEffect(() => {
+    fetchICUBeds();
+  }, [fetchICUBeds]);
 
   const createICUBed = useCallback(async (data: CreateICUBedDto) => {
     try {
       setError(null);
       const newICUBed = await icuBedsApi.create(data);
-      // Don't update local state - always fetch fresh from network
+      setIcuBeds(prev => [...prev, newICUBed]);
       return newICUBed;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create ICU bed';
@@ -45,7 +42,7 @@ export function useICUBeds() {
     try {
       setError(null);
       const updatedICUBed = await icuBedsApi.update(data);
-      // Don't update local state - always fetch fresh from network
+      setIcuBeds(prev => prev.map(b => b.icuId === data.icuId ? updatedICUBed : b));
       return updatedICUBed;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update ICU bed';
@@ -58,7 +55,7 @@ export function useICUBeds() {
     try {
       setError(null);
       await icuBedsApi.delete(icuBedId);
-      // Don't update local state - always fetch fresh from network
+      setIcuBeds(prev => prev.filter(b => b.icuBedId !== icuBedId));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete ICU bed';
       setError(errorMessage);
