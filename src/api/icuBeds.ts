@@ -69,7 +69,20 @@ export const icuBedsApi = {
             icuType: icuBed.icuType || icuBed.ICUType || '',
             icuRoomNameNo: icuBed.icuRoomNameNo || icuBed.ICURoomNameNo || icuBed.ICURoomNameNo || '',
             icuDescription: icuBed.icuDescription || icuBed.ICUDescription || undefined,
-            isVentilatorAttached: Boolean(icuBed.isVentilatorAttached !== undefined ? icuBed.isVentilatorAttached : (icuBed.IsVentilatorAttached !== undefined ? icuBed.IsVentilatorAttached : false)),
+            isVentilatorAttached: (() => {
+              // Handle boolean values
+              if (icuBed.isVentilatorAttached !== undefined) {
+                return Boolean(icuBed.isVentilatorAttached);
+              }
+              if (icuBed.IsVentilatorAttached !== undefined) {
+                // Handle string "Yes"/"No" or boolean
+                if (typeof icuBed.IsVentilatorAttached === 'string') {
+                  return icuBed.IsVentilatorAttached === 'Yes' || icuBed.IsVentilatorAttached === 'yes';
+                }
+                return Boolean(icuBed.IsVentilatorAttached);
+              }
+              return false;
+            })(),
             status: (icuBed.status || icuBed.Status || 'active').toLowerCase() as 'active' | 'inactive',
             createdAt: icuBed.createdAt || icuBed.CreatedAt || new Date().toISOString(),
             createdDate: icuBed.createdDate || icuBed.CreatedDate || icuBed.createdAt || icuBed.CreatedAt || undefined,

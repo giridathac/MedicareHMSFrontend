@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -115,10 +116,12 @@ export function Admissions() {
   const [savingAdmission, setSavingAdmission] = useState(false);
   const [admissionError, setAdmissionError] = useState<string | null>(null);
 
+  const navigate = useNavigate();
+  
   const handleManageCase = (admission: Admission) => {
     const roomAdmissionId = admission.roomAdmissionId || admission.admissionId;
     if (roomAdmissionId) {
-      window.location.hash = `manageipdadmission?roomAdmissionId=${roomAdmissionId}`;
+      navigate(`/manage-ipd-admission?roomAdmissionId=${roomAdmissionId}`);
     }
   };
 
@@ -1003,29 +1006,27 @@ export function Admissions() {
   };
 
   return (
-    <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
-      <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
-        <div className="px-6 pt-6 pb-0 flex-shrink-0">
-          <div className="flex items-center justify-between mb-4 flex-shrink-0">
-            <div>
-              <h1 className="text-gray-900 mb-2">IPD Admissions Management</h1>
-              <p className="text-gray-500">Manage in-patient admissions and bed allocation</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="flex items-center gap-2">
-                  <Plus className="size-4" />
-                  New IPD Admission
-                </Button>
-              </DialogTrigger>
-          <DialogContent className="p-0 gap-0 large-dialog dialog-content-standard max-w-4xl max-h-[90vh]">
-            <div className="dialog-scrollable-wrapper dialog-content-scrollable">
-              <DialogHeader className="dialog-header-standard">
-                <DialogTitle className="dialog-title-standard">{editingAdmission ? 'Edit Admission' : 'Register New Admission'}</DialogTitle>
-              </DialogHeader>
-              <div className="dialog-body-content-wrapper">
-                <div className="dialog-form-container">
+    <div className="dashboard-container">
+      <div className="dashboard-scrollable-container">
+        <div className="dashboard-header-section">
+          <div className="dashboard-header-content">
+          <div>
+              <h1 className="dashboard-header">IPD Admissions Management</h1>
+              <p className="dashboard-subheader">Manage in-patient admissions and bed allocation</p>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="size-4" />
+              New IPD Admission
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="p-0 gap-0 large-dialog max-w-4xl max-h-[90vh] bg-white">
+            <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0 bg-white">
+              <DialogTitle>{editingAdmission ? 'Edit Admission' : 'Register New Admission'}</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0 bg-white">
+            <div className="space-y-4 py-4">
                 {/* Patient Selection - Same pattern as Front Desk */}
                 <div>
                   <Label htmlFor="patient-search">Patient *</Label>
@@ -1044,7 +1045,7 @@ export function Admissions() {
                     />
                 </div>
                   {patientSearchTerm && (
-                    <div className="dialog-dropdown-container">
+                    <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
                       <table className="w-full">
                         <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                           <tr>
@@ -1099,7 +1100,7 @@ export function Admissions() {
                                     }
                                     // Keep dropdown open to allow selecting a different patient
                                   }}
-                                  className={`dialog-dropdown-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
+                                  className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
                                 >
                                   <td className="py-2 px-3 text-sm text-gray-900 font-mono">{patientNo || patientId.substring(0, 8)}</td>
                                   <td className="py-2 px-3 text-sm text-gray-600">{fullName || 'Unknown'}</td>
@@ -1138,11 +1139,11 @@ export function Admissions() {
                 </div>
 
                 {/* Patient Type */}
-                <div className="dialog-form-field">
-                  <Label htmlFor="patientType" className="dialog-label-standard">Patient Type *</Label>
+                <div>
+                  <Label htmlFor="patientType">Patient Type *</Label>
                   <select
                     id="patientType"
-                    className="dialog-select-standard"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
                     value={addAdmissionForm.patientType}
                     onChange={(e) => handlePatientTypeChange(e.target.value)}
                     required
@@ -1195,11 +1196,11 @@ export function Admissions() {
                 )}
 
                 {addAdmissionForm.patientType === 'Emergency' && (
-                  <div className="dialog-form-field">
-                    <Label htmlFor="emergencyBedSlotId" className="dialog-label-standard">Emergency Admission Bed No *</Label>
+                  <div>
+                    <Label htmlFor="emergencyBedSlotId">Emergency Admission Bed No *</Label>
                     <select
                       id="emergencyBedSlotId"
-                      className="dialog-select-standard"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
                       value={addAdmissionForm.emergencyBedSlotId}
                       onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, emergencyBedSlotId: e.target.value })}
                       required
@@ -1223,8 +1224,8 @@ export function Admissions() {
                 )}
 
                 {/* Room/Bed Selection - Same pattern as Patient selection */}
-                <div className="dialog-form-field">
-                  <Label htmlFor="room-bed-search" className="dialog-label-standard">Room/Bed *</Label>
+                <div>
+                  <Label htmlFor="room-bed-search">Room/Bed *</Label>
                   <div className="relative mb-2">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                     <Input
@@ -1232,11 +1233,11 @@ export function Admissions() {
                       placeholder="Search by Room No, Bed No, Room Type, or Category..."
                       value={roomBedSearchTerm}
                       onChange={(e) => setRoomBedSearchTerm(e.target.value)}
-                      className="dialog-input-standard pl-10"
+                      className="pl-10"
                     />
                 </div>
                   {roomBedSearchTerm && (
-                    <div className="dialog-dropdown-container">
+                    <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
                       <table className="w-full">
                         <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                           <tr>
@@ -1284,7 +1285,7 @@ export function Admissions() {
                                     });
                                     setRoomBedSearchTerm(`${roomNo} - ${bedNo} (${roomType})`);
                                   }}
-                                  className={`dialog-dropdown-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
+                                  className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
                                 >
                                   <td className="py-2 px-3 text-sm text-gray-900 font-mono">{roomNo || '-'}</td>
                                   <td className="py-2 px-3 text-sm text-gray-600">{bedNo || '-'}</td>
@@ -1336,7 +1337,7 @@ export function Admissions() {
                     />
                   </div>
                   {doctorSearchTerm && (
-                    <div className="dialog-dropdown-container">
+                    <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
                       <table className="w-full">
                         <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                           <tr>
@@ -1378,7 +1379,7 @@ export function Admissions() {
                                     });
                                     setDoctorSearchTerm(`${doctorName} - ${specialty}`);
                                   }}
-                                  className={`dialog-dropdown-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
+                                  className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
                                 >
                                   <td className="py-2 px-3 text-sm text-gray-900 font-mono">{doctorId || '-'}</td>
                                   <td className="py-2 px-3 text-sm text-gray-600">{doctorName || 'Unknown'}</td>
@@ -1440,11 +1441,11 @@ export function Admissions() {
                     scrollableYearDropdown
                   />
               </div>
-              <div className="dialog-form-field">
-                  <Label htmlFor="admissionStatus" className="dialog-label-standard">Admission Status *</Label>
+              <div>
+                  <Label htmlFor="admissionStatus">Admission Status *</Label>
                   <select
                     id="admissionStatus"
-                    className="dialog-select-standard"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
                     value={addAdmissionForm.admissionStatus}
                     onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, admissionStatus: e.target.value })}
                     required
@@ -1456,34 +1457,32 @@ export function Admissions() {
                   </select>
                 </div>
 
-                <div className="dialog-form-field">
-                  <Label htmlFor="caseSheet" className="dialog-label-standard">Case Sheet</Label>
+                <div>
+                  <Label htmlFor="caseSheet">Case Sheet</Label>
                   <Input 
                     id="caseSheet" 
                     placeholder="Enter case sheet" 
                     value={addAdmissionForm.caseSheet}
                     onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, caseSheet: e.target.value })}
-                    className="dialog-input-standard"
                   />
               </div>
 
-                <div className="dialog-form-field dialog-field-full-width">
-                  <Label htmlFor="caseDetails" className="dialog-label-standard">Case Details</Label>
+                <div className="col-span-2">
+                  <Label htmlFor="caseDetails">Case Details</Label>
                   <Textarea 
                     id="caseDetails" 
                     placeholder="Enter case details" 
                     value={addAdmissionForm.caseDetails}
                     onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, caseDetails: e.target.value })}
-                    className="dialog-textarea-standard"
                     rows={4}
                   />
             </div>
 
-                <div className="dialog-form-field">
-                  <Label htmlFor="isLinkedToICU" className="dialog-label-standard">Is Linked To ICU *</Label>
+                <div>
+                  <Label htmlFor="isLinkedToICU">Is Linked To ICU *</Label>
                   <select
                     id="isLinkedToICU"
-                    className="dialog-select-standard"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
                     value={addAdmissionForm.isLinkedToICU}
                     onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, isLinkedToICU: e.target.value })}
                     required
@@ -1492,24 +1491,23 @@ export function Admissions() {
                     <option value="Yes">Yes</option>
                   </select>
             </div>
-                  </div>
               </div>
-              {admissionError && (
-                <div className="dialog-body-content-wrapper">
-                  <div className="dialog-error-message">
-                    {admissionError}
-                  </div>
-                </div>
-              )}
-              <DialogFooter className="dialog-footer-standard">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={savingAdmission} className="dialog-footer-button">
-                  Cancel
-                </Button>
-                <Button onClick={handleSaveAdmission} disabled={savingAdmission} className="dialog-footer-button">
-                  {savingAdmission ? 'Saving...' : editingAdmission ? 'Update Admission' : 'Admit Patient'}
-                </Button>
-              </DialogFooter>
             </div>
+            {admissionError && (
+              <div className="px-6 pb-2 flex-shrink-0 bg-white">
+                <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                  {admissionError}
+                </div>
+              </div>
+            )}
+            <DialogFooter className="px-6 py-3 flex-shrink-0 border-t bg-white">
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={savingAdmission}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveAdmission} disabled={savingAdmission}>
+                {savingAdmission ? 'Saving...' : editingAdmission ? 'Update Admission' : 'Admit Patient'}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -1615,240 +1613,105 @@ export function Admissions() {
                     {/* Patient Type */}
                     <div>
                       <Label htmlFor="patientType-edit">Patient Type *</Label>
-                      <select
-                        id="patientType-edit"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                        value={addAdmissionForm.patientType}
-                        onChange={(e) => handlePatientTypeChange(e.target.value)}
-                        required
-                      >
-                        <option value="">Select Patient Type</option>
-                        <option value="OPD">OPD</option>
-                        <option value="Emergency">Emergency</option>
-                        <option value="Direct">Direct</option>
-                      </select>
+                      <p className="mt-1 text-gray-900 font-medium">
+                        {addAdmissionForm.patientType || 'N/A'}
+                      </p>
                     </div>
 
                     {/* Conditional Fields based on PatientType */}
                     {addAdmissionForm.patientType === 'OPD' && (
                       <div>
                         <Label htmlFor="patientAppointmentId-edit">Patient Appointment ID *</Label>
-                        <select
-                          id="patientAppointmentId-edit"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                          value={addAdmissionForm.patientAppointmentId}
-                          onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, patientAppointmentId: e.target.value })}
-                          required
-                        >
-                          <option value="">Select Appointment</option>
-                          {availableAppointments.map((appointment: any) => {
-                            const appointmentId = appointment.id || appointment.patientAppointmentId || appointment.PatientAppointmentId || '';
-                            const tokenNo = appointment.tokenNo || appointment.TokenNo || '';
-                            const appointmentDate = appointment.appointmentDate || appointment.AppointmentDate || '';
-                            let formattedDate = '';
-                            if (appointmentDate) {
-                              try {
-                                if (typeof appointmentDate === 'string') {
-                                  formattedDate = appointmentDate.split('T')[0];
-                                } else {
-                                  formattedDate = new Date(appointmentDate).toISOString().split('T')[0];
+                        <p className="mt-1 text-gray-900 font-medium">
+                          {(() => {
+                            if (!addAdmissionForm.patientAppointmentId) return 'N/A';
+                            const appointment = availableAppointments.find((a: any) => {
+                              const appointmentId = a.id || a.patientAppointmentId || a.PatientAppointmentId || '';
+                              return String(appointmentId) === String(addAdmissionForm.patientAppointmentId);
+                            });
+                            if (appointment) {
+                              const tokenNo = appointment.tokenNo || appointment.TokenNo || '';
+                              const appointmentDate = appointment.appointmentDate || appointment.AppointmentDate || '';
+                              let formattedDate = '';
+                              if (appointmentDate) {
+                                try {
+                                  if (typeof appointmentDate === 'string') {
+                                    formattedDate = appointmentDate.split('T')[0];
+                                  } else {
+                                    formattedDate = new Date(appointmentDate).toISOString().split('T')[0];
+                                  }
+                                } catch {
+                                  formattedDate = String(appointmentDate).split('T')[0] || 'N/A';
                                 }
-                              } catch {
-                                formattedDate = String(appointmentDate).split('T')[0] || 'N/A';
+                              } else {
+                                formattedDate = 'N/A';
                               }
-                            } else {
-                              formattedDate = 'N/A';
+                              return tokenNo ? `Token: ${tokenNo} - ${formattedDate}` : `Appointment ID: ${addAdmissionForm.patientAppointmentId} - ${formattedDate}`;
                             }
-                            return (
-                              <option key={appointmentId} value={appointmentId}>
-                                {tokenNo ? `Token: ${tokenNo} - ${formattedDate}` : `Appointment ID: ${appointmentId} - ${formattedDate}`}
-                              </option>
-                            );
-                          })}
-                        </select>
+                            return addAdmissionForm.patientAppointmentId || 'N/A';
+                          })()}
+                        </p>
                       </div>
                     )}
 
                     {addAdmissionForm.patientType === 'Emergency' && (
                       <div>
                         <Label htmlFor="emergencyBedSlotId-edit">Emergency Bed Slot ID *</Label>
-                        <select
-                          id="emergencyBedSlotId-edit"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                          value={addAdmissionForm.emergencyBedSlotId}
-                          onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, emergencyBedSlotId: e.target.value })}
-                          required
-                        >
-                          <option value="">Select Emergency Bed Slot</option>
-                          {availableEmergencyBedSlots.map((slot: any) => {
-                            const slotId = slot.id || slot.emergencyBedSlotId || slot.EmergencyBedSlotId || '';
-                            const bedNo = slot.bedNo || slot.BedNo || '';
-                            const status = slot.status || slot.Status || '';
-                            return (
-                              <option key={slotId} value={slotId}>
-                                {bedNo ? `Bed: ${bedNo} - ${status}` : `Slot ID: ${slotId} - ${status}`}
-                              </option>
-                            );
-                          })}
-                        </select>
+                        <p className="mt-1 text-gray-900 font-medium">
+                          {(() => {
+                            if (!addAdmissionForm.emergencyBedSlotId) return 'N/A';
+                            const slot = availableEmergencyBedSlots.find((s: any) => {
+                              const slotId = s.id || s.emergencyBedSlotId || s.EmergencyBedSlotId || '';
+                              return String(slotId) === String(addAdmissionForm.emergencyBedSlotId);
+                            });
+                            if (slot) {
+                              const bedNo = slot.bedNo || slot.BedNo || '';
+                              const status = slot.status || slot.Status || '';
+                              return bedNo ? `Bed: ${bedNo} - ${status}` : `Slot ID: ${addAdmissionForm.emergencyBedSlotId} - ${status}`;
+                            }
+                            return addAdmissionForm.emergencyBedSlotId || 'N/A';
+                          })()}
+                        </p>
                       </div>
                     )}
 
                     {/* Room/Bed Selection */}
                     <div className="md:col-span-2">
                       <Label htmlFor="room-bed-search-edit">Room/Bed *</Label>
-                      <div className="relative mb-2">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                        <Input
-                          id="room-bed-search-edit"
-                          placeholder="Search by Room No, Bed No, Room Type, or Category..."
-                          value={roomBedSearchTerm}
-                          onChange={(e) => setRoomBedSearchTerm(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                      {roomBedSearchTerm && (
-                        <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
-                          <table className="w-full">
-                            <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
-                              <tr>
-                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Room No</th>
-                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Bed No</th>
-                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Room Type</th>
-                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Category</th>
-                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {roomBedOptions
-                                .filter((bed: any) => {
-                                  if (!roomBedSearchTerm) return false;
-                                  const searchLower = roomBedSearchTerm.toLowerCase();
-                                  const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
-                                  const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
-                                  const roomType = (bed as any).roomType || (bed as any).RoomType || '';
-                                  const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
-                                  return (
-                                    roomNo.toLowerCase().includes(searchLower) ||
-                                    bedNo.toLowerCase().includes(searchLower) ||
-                                    roomType.toLowerCase().includes(searchLower) ||
-                                    roomCategory.toLowerCase().includes(searchLower)
-                                  );
-                                })
-                                .map((bed: any) => {
-                                  const roomBedId = (bed as any).roomBedId || (bed as any).RoomBedsId || (bed as any).id || '';
-                                  const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
-                                  const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
-                                  const roomType = (bed as any).roomType || (bed as any).RoomType || '';
-                                  const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
-                                  const status = (bed as any).status || (bed as any).Status || '';
-                                  const isSelected = addAdmissionForm.roomBedId === String(roomBedId);
-                                  return (
-                                    <tr
-                                      key={roomBedId}
-                                      onClick={() => {
-                                        const roomBedsId = (bed as any).RoomBedsId || (bed as any).roomBedsId || roomBedId;
-                                        setAddAdmissionForm({ 
-                                          ...addAdmissionForm, 
-                                          roomBedId: String(roomBedId),
-                                          roomBedsId: String(roomBedsId),
-                                          roomType: roomType
-                                        });
-                                        setRoomBedSearchTerm(`${roomNo} - ${bedNo} (${roomType})`);
-                                      }}
-                                      className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
-                                    >
-                                      <td className="py-2 px-3 text-sm text-gray-900 font-mono">{roomNo || '-'}</td>
-                                      <td className="py-2 px-3 text-sm text-gray-600">{bedNo || '-'}</td>
-                                      <td className="py-2 px-3 text-sm text-gray-600">{roomType || '-'}</td>
-                                      <td className="py-2 px-3 text-sm text-gray-600">{roomCategory || '-'}</td>
-                                      <td className="py-2 px-3 text-sm">
-                                        <Badge variant={status === 'Active' ? 'default' : 'outline'}>
-                                          {status || 'N/A'}
-                                        </Badge>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                      <p className="mt-1 text-gray-900 font-medium">
+                        {(() => {
+                          const selectedBed = roomBedOptions.find((b: any) => {
+                            const bid = (b as any).roomBedId || (b as any).RoomBedsId || (b as any).id || '';
+                            return String(bid) === addAdmissionForm.roomBedId;
+                          });
+                          if (selectedBed) {
+                            const roomNo = (selectedBed as any).roomNo || (selectedBed as any).RoomNo || '';
+                            const bedNo = (selectedBed as any).bedNo || (selectedBed as any).BedNo || '';
+                            const roomType = (selectedBed as any).roomType || (selectedBed as any).RoomType || '';
+                            return `${roomNo} - ${bedNo} (${roomType})`;
+                          }
+                          return addAdmissionForm.roomBedId ? `Room Bed ID: ${addAdmissionForm.roomBedId}` : 'N/A';
+                        })()}
+                      </p>
                     </div>
 
                     {/* Doctor Selection */}
                     <div className="md:col-span-2">
                       <Label htmlFor="doctor-search-edit">Admitted By (Doctor) *</Label>
-                      <div className="relative mb-2">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                        <Input
-                          id="doctor-search-edit"
-                          placeholder="Search by Doctor Name, ID, or Specialty..."
-                          value={doctorSearchTerm}
-                          onChange={(e) => setDoctorSearchTerm(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                      {doctorSearchTerm && (
-                        <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
-                          <table className="w-full">
-                            <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
-                              <tr>
-                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Doctor ID</th>
-                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
-                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Specialty</th>
-                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Type</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {doctorOptions
-                                .filter((doctor: any) => {
-                                  if (!doctorSearchTerm) return false;
-                                  const searchLower = doctorSearchTerm.toLowerCase();
-                                  const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
-                                  const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
-                                  const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
-                                  return (
-                                    doctorId.toLowerCase().includes(searchLower) ||
-                                    doctorName.toLowerCase().includes(searchLower) ||
-                                    specialty.toLowerCase().includes(searchLower)
-                                  );
-                                })
-                                .map((doctor: any) => {
-                                  const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
-                                  const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
-                                  const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || 'General';
-                                  const doctorType = (doctor as any).type || (doctor as any).Type || (doctor as any).DoctorType || '';
-                                  const isSelected = addAdmissionForm.admittedByDoctorId === doctorId;
-                                  return (
-                                    <tr
-                                      key={doctorId}
-                                      onClick={() => {
-                                        setAddAdmissionForm({ 
-                                          ...addAdmissionForm, 
-                                          admittedByDoctorId: doctorId,
-                                          doctorId: doctorId,
-                                          admittedBy: doctorName
-                                        });
-                                        setDoctorSearchTerm(`${doctorName} - ${specialty}`);
-                                      }}
-                                      className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
-                                    >
-                                      <td className="py-2 px-3 text-sm text-gray-900 font-mono">{doctorId || '-'}</td>
-                                      <td className="py-2 px-3 text-sm text-gray-600">{doctorName || 'Unknown'}</td>
-                                      <td className="py-2 px-3 text-sm text-gray-600">{specialty || '-'}</td>
-                                      <td className="py-2 px-3 text-sm text-gray-600">
-                                        <Badge variant={doctorType === 'inhouse' ? 'default' : 'outline'}>
-                                          {doctorType || 'N/A'}
-                                        </Badge>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                      <p className="mt-1 text-gray-900 font-medium">
+                        {(() => {
+                          const selectedDoctor = doctorOptions.find((d: any) => {
+                            const did = String((d as any).id || (d as any).Id || (d as any).UserId || '');
+                            return did === addAdmissionForm.admittedByDoctorId;
+                          });
+                          if (selectedDoctor) {
+                            const doctorName = (selectedDoctor as any).name || (selectedDoctor as any).Name || (selectedDoctor as any).UserName || '';
+                            const specialty = (selectedDoctor as any).specialty || (selectedDoctor as any).Specialty || (selectedDoctor as any).DoctorDepartmentName || '';
+                            return `${doctorName}${specialty ? ` - ${specialty}` : ''}`;
+                          }
+                          return addAdmissionForm.admittedBy || addAdmissionForm.admittedByDoctorId || 'N/A';
+                        })()}
+                      </p>
                     </div>
 
                     <div>
@@ -2128,10 +1991,10 @@ export function Admissions() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-            </div>
           </div>
         </div>
-        <div className="px-6 pt-4 pb-4 flex-1">
+
+        <div className="dashboard-main-content">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <Card>
@@ -2623,113 +2486,113 @@ function AdmissionsList({
   schedulingOT: number | null;
 }) {
   return (
-    <Card className="mb-4 bg-white border border-gray-200 shadow-sm rounded-lg">
-      <CardContent className="p-0">
-        <div className="overflow-x-auto border border-gray-200 rounded">
-          <table className="w-full">
-            <thead className="sticky top-0 bg-white z-10 shadow-sm">
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Bed #</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Patient</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Age/Gender</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Room Type</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Admission Date</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">AdmittingDoctorName</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Patient Type</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Admission Status</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Schedule OT</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Actions</th>
+    <Card className="dashboard-table-card">
+      <CardContent className="dashboard-table-card-content">
+        <div className="dashboard-table-wrapper">
+          <table className="dashboard-table">
+            <thead>
+              <tr className="dashboard-table-header-row">
+                <th className="dashboard-table-header-cell">Bed #</th>
+                <th className="dashboard-table-header-cell">Patient</th>
+                <th className="dashboard-table-header-cell">Age/Gender</th>
+                <th className="dashboard-table-header-cell">Room Type</th>
+                <th className="dashboard-table-header-cell">Admission Date</th>
+                <th className="dashboard-table-header-cell">AdmittingDoctorName</th>
+                <th className="dashboard-table-header-cell">Patient Type</th>
+                <th className="dashboard-table-header-cell">Admission Status</th>
+                <th className="dashboard-table-header-cell">Schedule OT</th>
+                <th className="dashboard-table-header-cell">Actions</th>
               </tr>
             </thead>
             <tbody>
               {admissions.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-8 text-gray-500">
+                  <td colSpan={10} className="dashboard-table-empty-cell">
                     No admissions found
                   </td>
                 </tr>
               ) : (
                 admissions.map((admission) => (
-                  <tr key={admission.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      <Badge>{admission.bedNumber}</Badge>
-                    </td>
-                    <td className="py-4 px-6 text-gray-600 break-words" style={{ maxWidth: '200px' }}>{admission.patientName}</td>
-                    <td className="py-4 px-6 text-gray-600 whitespace-nowrap">{admission.age}Y / {admission.gender}</td>
-                    <td className="py-4 px-6 text-gray-600 whitespace-nowrap">{admission.roomType}</td>
-                    <td className="py-4 px-6 text-gray-600 whitespace-nowrap">{admission.admissionDate}</td>
-                    <td className="py-4 px-6 text-gray-600 break-words" style={{ maxWidth: '200px' }}>
+                  <tr key={admission.id} className="dashboard-table-body-row">
+                    <td className="dashboard-table-body-cell">
+                    <Badge>{admission.bedNumber}</Badge>
+                  </td>
+                    <td className="dashboard-table-body-cell dashboard-table-body-cell-primary">{admission.patientName}</td>
+                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.age}Y / {admission.gender}</td>
+                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.roomType}</td>
+                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.admissionDate}</td>
+                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">
                       {admission.admittingDoctorName || admission.admittedBy || 'N/A'}
                     </td>
-                    <td className="py-4 px-6 whitespace-nowrap">
+                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">
                       <Badge variant="outline">
                         {admission.patientType || 'N/A'}
                       </Badge>
                     </td>
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      <span className={`px-3 py-1 rounded-full text-xs ${
-                        admission.status === 'Active' ? 'bg-green-100 text-green-700' :
-                        admission.status === 'Surgery Scheduled' ? 'bg-orange-100 text-orange-700' :
-                        admission.status === 'Moved to ICU' ? 'bg-red-100 text-red-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {admission.admissionStatus || admission.status || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      {(() => {
-                        const scheduleOTValue = admission.scheduleOT;
-                        if (!scheduleOTValue) {
-                          return <span className="text-gray-400 text-sm">-</span>;
-                        }
-                        const isScheduled = String(scheduleOTValue).toLowerCase() === 'yes' || scheduleOTValue === true;
-                        return (
-                          <Badge variant={isScheduled ? 'default' : 'outline'} className={isScheduled ? 'bg-green-100 text-green-700 border-green-300' : ''}>
-                            {isScheduled ? 'Yes' : String(scheduleOTValue)}
-                          </Badge>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        {admission.status === 'Active' && (
-                          <>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="gap-1"
-                              onClick={() => onScheduleOT(admission)}
-                              disabled={schedulingOT === (admission.roomAdmissionId || admission.admissionId)}
-                            >
-                              <Scissors className="size-3" />
-                              {schedulingOT === (admission.roomAdmissionId || admission.admissionId) ? 'Scheduling...' : 'Schedule OT'}
-                            </Button>
-                            
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="gap-1"
-                              onClick={() => onEdit(admission)}
-                            >
-                              <Edit className="size-3" />
-                              View & Edit
-                            </Button>
-                           
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="gap-1"
-                              onClick={() => onManageCase(admission)}
-                            >
-                              <FileText className="size-3" />
-                              Manage Case
-                            </Button>
-                            
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                    <td className="dashboard-table-body-cell">
+                    <span className={`px-3 py-1 rounded-full text-xs ${
+                      admission.status === 'Active' ? 'bg-green-100 text-green-700' :
+                      admission.status === 'Surgery Scheduled' ? 'bg-orange-100 text-orange-700' :
+                      admission.status === 'Moved to ICU' ? 'bg-red-100 text-red-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {admission.admissionStatus || admission.status || 'N/A'}
+                    </span>
+                  </td>
+                  <td className="dashboard-table-body-cell">
+                    {(() => {
+                      const scheduleOTValue = admission.scheduleOT;
+                      if (!scheduleOTValue) {
+                        return <span className="text-gray-400 text-sm">-</span>;
+                      }
+                      const isScheduled = String(scheduleOTValue).toLowerCase() === 'yes' || scheduleOTValue === true;
+                      return (
+                        <Badge variant={isScheduled ? 'default' : 'outline'} className={isScheduled ? 'bg-green-100 text-green-700 border-green-300' : ''}>
+                          {isScheduled ? 'Yes' : String(scheduleOTValue)}
+                        </Badge>
+                      );
+                    })()}
+                  </td>
+                  <td className="dashboard-table-body-cell">
+                    <div className="dashboard-actions-container">
+                      {admission.status === 'Active' && (
+                        <>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="gap-1"
+                            onClick={() => onScheduleOT(admission)}
+                            disabled={schedulingOT === (admission.roomAdmissionId || admission.admissionId)}
+                          >
+                            <Scissors className="size-3" />
+                            {schedulingOT === (admission.roomAdmissionId || admission.admissionId) ? 'Scheduling...' : 'Schedule OT'}
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="gap-1"
+                            onClick={() => onEdit(admission)}
+                          >
+                            <Edit className="size-3" />
+                            View & Edit
+                          </Button>
+                         
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="gap-1"
+                            onClick={() => onManageCase(admission)}
+                          >
+                            <FileText className="size-3" />
+                            Manage Case
+                          </Button>
+                          
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
                 ))
               )}
             </tbody>

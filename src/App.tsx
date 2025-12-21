@@ -39,6 +39,7 @@ const RoomBeds = lazy(() => import('./components/RoomBeds').then(m => ({ default
 const LabTests = lazy(() => import('./components/LabTests').then(m => ({ default: m.LabTests })));
 const ICUBedsManagement = lazy(() => import('./components/ICUBedsManagement').then(m => ({ default: m.ICUBedsManagement })));
 const EmergencyBedManagement = lazy(() => import('./components/EmergencyBedManagement').then(m => ({ default: m.EmergencyBedManagement })));
+const ManageIPDAdmission = lazy(() => import('./components/ManageIPDAdmission').then(m => ({ default: m.ManageIPDAdmission })));
 
 // Wrapper component to extract route params for ManageConsultation
 function ManageConsultationRoute() {
@@ -61,7 +62,7 @@ export default function App() {
     { path: '/frontdesk', label: 'Front Desk', icon: ClipboardList },
     { path: '/patient-registration', label: 'Patient Registration', icon: UserPlus },
     { path: '/consultation', label: 'Doctor Consultation', icon: Stethoscope },
-    { path: '/laboratory', label: 'Laboratory', icon: TestTube },
+    { path: '/laboratory', label: 'Laboratory Tests Management', icon: TestTube },
     { path: '/admissions', label: 'Admissions (IPD)', icon: BedDouble },
     { path: '/emergency', label: 'Emergency', icon: Siren },
     { path: '/ot', label: 'OT Management', icon: Scissors },
@@ -163,6 +164,7 @@ export default function App() {
             <Route path="/icu-beds" element={<ICUBedsManagement />} />
             <Route path="/emergency-beds" element={<EmergencyBedManagement />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/manage-ipd-admission" element={<ManageIPDAdmission />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Suspense>

@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { ResizableDialogContent } from './ResizableDialogContent';
 import { Badge } from './ui/badge';
-import { TestTube, Search, FileText, Clock, CheckCircle, AlertCircle, Download, Edit } from 'lucide-react';
+import { TestTube, Search, FileText, Clock, CheckCircle, AlertCircle, Download, Edit, Upload, FolderOpen, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { apiRequest } from '../api/base';
 import { PatientLabTest } from '../api/admissions';
@@ -20,6 +20,7 @@ import { emergencyBedSlotsApi } from '../api/emergencyBedSlots';
 import { LabTest as LabTestType, Doctor } from '../types';
 import { Textarea } from './ui/textarea';
 import { DialogFooter } from './ui/dialog';
+import { Switch } from './ui/switch';
 
 interface LabTest {
   id: number;
@@ -136,7 +137,7 @@ export function Laboratory() {
   const [newLabOrderFormData, setNewLabOrderFormData] = useState({
     patientId: '',
     labTestId: '',
-    patientType: '' as 'IPD' | 'OPD' | 'Emergency' | '',
+    patientType: '' as 'IPD' | 'OPD' | 'Emergency' | 'Direct' | '',
     roomAdmissionId: '',
     appointmentId: '',
     emergencyBedSlotId: '',
@@ -164,6 +165,13 @@ export function Laboratory() {
   const [showPatientList, setShowPatientList] = useState(false);
   const [showLabTestList, setShowLabTestList] = useState(false);
   const [showDoctorList, setShowDoctorList] = useState(false);
+  
+  // File upload state for ReportsUrl
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Fetch test status counts from API
   useEffect(() => {
@@ -1333,11 +1341,17 @@ export function Laboratory() {
   const handleOpenNewLabOrderDialog = async () => {
     try {
       // Fetch all required data
-      const [patientsData, labTestsData, doctorsData] = await Promise.all([
-        patientsApi.getAll(),
+      // Fetch all patients with large limit (similar to Patients list)
+      const [patientsResponse, labTestsData, doctorsData] = await Promise.all([
+        patientsApi.getAll(1, 1000), // Fetch all patients (page 1, limit 1000)
         labTestsApi.getAll(),
         doctorsApi.getAll()
       ]);
+      
+      // Handle paginated response - extract data array
+      const patientsData = Array.isArray(patientsResponse) 
+        ? patientsResponse 
+        : (patientsResponse?.data || []);
       
       setAvailablePatients(patientsData);
       setAvailableLabTests(labTestsData);
@@ -1366,6 +1380,15 @@ export function Laboratory() {
       setShowLabTestList(false);
       setShowDoctorList(false);
       setNewLabOrderSubmitError(null);
+      
+      // Reset file upload state
+      setSelectedFile(null);
+      setUploadError(null);
+      setUploadProgress(0);
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     } catch (err) {
       console.error('Error fetching data for new lab order:', err);
     }
@@ -1473,10 +1496,10 @@ export function Laboratory() {
   };
 
   // Handle PatientType change - fetch conditional data
-  const handlePatientTypeChange = async (patientType: 'IPD' | 'OPD' | 'Emergency' | '') => {
+  const handlePatientTypeChange = async (patientType: 'IPD' | 'OPD' | 'Emergency' | 'Direct' | '') => {
     setNewLabOrderFormData({
       ...newLabOrderFormData,
-      patientType: patientType as 'IPD' | 'OPD' | 'Emergency',
+      patientType: patientType as 'IPD' | 'OPD' | 'Emergency' | 'Direct',
       roomAdmissionId: '',
       appointmentId: '',
       emergencyBedSlotId: ''
@@ -1484,6 +1507,14 @@ export function Laboratory() {
 
     // Clear conditional data if no patient type selected
     if (!patientType) {
+      setAvailableAdmissions([]);
+      setAvailableAppointments([]);
+      setAvailableEmergencyBedSlots([]);
+      return;
+    }
+
+    // Direct patient type doesn't require conditional fields
+    if (patientType === 'Direct') {
       setAvailableAdmissions([]);
       setAvailableAppointments([]);
       setAvailableEmergencyBedSlots([]);
@@ -1518,6 +1549,204 @@ export function Laboratory() {
     }
   };
 
+  // Handle file upload for ReportsUrl
+  const handleFileUpload = async () => {
+    if (!selectedFile) {
+      setUploadError('Please select a file first');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      setUploadError(null);
+      setUploadProgress(0);
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('folder', 'lab-reports'); // Optional: specify folder
+
+      // Get API base URL
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+      // Upload endpoint - adjust as needed based on your backend API
+      // Common endpoints: /upload, /files/upload, /api/upload, /patient-lab-tests/upload
+      const uploadUrl = `${API_BASE_URL}/upload`;
+
+      // Create XMLHttpRequest for upload progress tracking
+      return new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            setUploadProgress(percentComplete);
+          }
+        });
+
+        // Handle successful upload
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              let response: any;
+              const responseText = xhr.responseText;
+              
+              // Try to parse JSON response
+              if (responseText) {
+                try {
+                  response = JSON.parse(responseText);
+                } catch (parseError) {
+                  // If not JSON, treat as plain text URL
+                  const trimmedText = responseText.trim();
+                  if (trimmedText.startsWith('http://') || trimmedText.startsWith('https://')) {
+                    const fileUrl = trimmedText;
+                    setNewLabOrderFormData(prev => ({ ...prev, reportsUrl: fileUrl }));
+                    setSelectedFile(null);
+                    setUploadProgress(0);
+                    setUploading(false);
+                    resolve(fileUrl);
+                    return;
+                  }
+                  throw new Error('Invalid response format');
+                }
+              } else {
+                throw new Error('Empty response from server');
+              }
+
+              // Handle different response structures
+              // Try multiple possible response formats
+              let fileUrl: string | null = null;
+              
+              // Format 1: { url: "..." }
+              if (response?.url) {
+                fileUrl = response.url;
+              }
+              // Format 2: { data: { url: "..." } }
+              else if (response?.data?.url) {
+                fileUrl = response.data.url;
+              }
+              // Format 3: { fileUrl: "..." }
+              else if (response?.fileUrl) {
+                fileUrl = response.fileUrl;
+              }
+              // Format 4: { file_url: "..." }
+              else if (response?.file_url) {
+                fileUrl = response.file_url;
+              }
+              // Format 5: { location: "..." }
+              else if (response?.location) {
+                fileUrl = response.location;
+              }
+              // Format 6: { path: "..." } - construct full URL
+              else if (response?.path) {
+                const path = response.path;
+                // If path is already a full URL, use it as is
+                if (path.startsWith('http://') || path.startsWith('https://')) {
+                  fileUrl = path;
+                } else {
+                  // Otherwise, construct full URL from base URL and path
+                  fileUrl = `${API_BASE_URL.replace('/api', '')}${path.startsWith('/') ? path : '/' + path}`;
+                }
+              }
+              // Format 7: { filename: "..." } - construct URL from filename
+              else if (response?.filename) {
+                const filename = response.filename;
+                fileUrl = `${API_BASE_URL.replace('/api', '')}/uploads/lab-reports/${filename}`;
+              }
+              // Format 8: Direct string response (already handled above)
+              
+              if (fileUrl) {
+                // Ensure URL is properly formatted
+                const formattedUrl = fileUrl.trim();
+                
+                // Update form data with the file URL
+                setNewLabOrderFormData(prev => ({ ...prev, reportsUrl: formattedUrl }));
+                setSelectedFile(null);
+                setUploadProgress(0);
+                setUploading(false);
+                
+                console.log('File uploaded successfully. URL:', formattedUrl);
+                resolve(formattedUrl);
+              } else {
+                console.error('Upload response structure:', response);
+                throw new Error('No file URL found in response. Response: ' + JSON.stringify(response));
+              }
+            } catch (error) {
+              const errorMsg = error instanceof Error ? error.message : 'Failed to parse upload response';
+              setUploadError(errorMsg);
+              setUploading(false);
+              console.error('Error parsing upload response:', error);
+              reject(new Error(errorMsg));
+            }
+          } else {
+            let errorMsg = `Upload failed with status ${xhr.status}`;
+            try {
+              const errorResponse = JSON.parse(xhr.responseText);
+              errorMsg = errorResponse.message || errorResponse.error || errorMsg;
+            } catch {
+              // Use default error message
+            }
+            setUploadError(errorMsg);
+            setUploading(false);
+            reject(new Error(errorMsg));
+          }
+        });
+
+        // Handle upload errors
+        xhr.addEventListener('error', () => {
+          const errorMsg = 'Network error during file upload';
+          setUploadError(errorMsg);
+          setUploading(false);
+          reject(new Error(errorMsg));
+        });
+
+        // Handle upload abort
+        xhr.addEventListener('abort', () => {
+          setUploadError('Upload cancelled');
+          setUploading(false);
+          reject(new Error('Upload cancelled'));
+        });
+
+        // Start the upload
+        xhr.open('POST', uploadUrl);
+        xhr.send(formData);
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to upload file';
+      setUploadError(errorMsg);
+      setUploading(false);
+      console.error('Error uploading file:', error);
+    }
+  };
+
+  // Handle file selection
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validate file size (e.g., max 10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        setUploadError('File size exceeds 10MB limit');
+        return;
+      }
+      
+      // Validate file type (optional - adjust as needed)
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (!allowedTypes.includes(file.type)) {
+        setUploadError('Invalid file type. Please upload PDF, Word, or Image files.');
+        return;
+      }
+
+      setSelectedFile(file);
+      setUploadError(null);
+    }
+  };
+
+  // Handle Browse button click
+  const handleBrowseClick = () => {
+    fileInputRef.current?.click();
+  };
+
   // Handle saving New Lab Order
   const handleSaveNewLabOrder = async () => {
     try {
@@ -1539,6 +1768,7 @@ export function Laboratory() {
       }
 
       // Validate conditional fields based on PatientType
+      // Direct patient type doesn't require conditional fields
       if (newLabOrderFormData.patientType === 'IPD' && !newLabOrderFormData.roomAdmissionId) {
         throw new Error('Room Admission ID is required for IPD');
       }
@@ -1553,7 +1783,7 @@ export function Laboratory() {
       const payload: any = {
         PatientId: newLabOrderFormData.patientId,
         LabTestId: Number(newLabOrderFormData.labTestId),
-        PatientType: newLabOrderFormData.patientType as 'IPD' | 'OPD' | 'Emergency',
+        PatientType: newLabOrderFormData.patientType as 'IPD' | 'OPD' | 'Emergency' | 'Direct',
         Priority: newLabOrderFormData.priority,
         TestStatus: newLabOrderFormData.testStatus,
         LabTestDone: newLabOrderFormData.labTestDone,
@@ -1561,7 +1791,8 @@ export function Laboratory() {
         OrderedDate: new Date().toISOString().split('T')[0]
       };
 
-      // Add conditional fields
+      // Add conditional fields based on PatientType
+      // Direct patient type doesn't require conditional fields
       if (newLabOrderFormData.patientType === 'IPD' && newLabOrderFormData.roomAdmissionId) {
         payload.RoomAdmissionId = Number(newLabOrderFormData.roomAdmissionId);
       }
@@ -1571,6 +1802,7 @@ export function Laboratory() {
       if (newLabOrderFormData.patientType === 'Emergency' && newLabOrderFormData.emergencyBedSlotId) {
         payload.EmergencyBedSlotId = Number(newLabOrderFormData.emergencyBedSlotId);
       }
+      // Direct patient type: no conditional fields needed
 
       // Add optional fields
       if (newLabOrderFormData.reportsUrl) {
@@ -1612,6 +1844,15 @@ export function Laboratory() {
       setShowLabTestList(false);
       setShowDoctorList(false);
       
+      // Reset file upload state
+      setSelectedFile(null);
+      setUploadError(null);
+      setUploadProgress(0);
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      
       // Refresh the tests list by calling the fetch function
       window.location.reload(); // Simple refresh for now - could be optimized to refetch only
     } catch (err) {
@@ -1628,8 +1869,8 @@ export function Laboratory() {
         <div className="px-6 pt-6 pb-0 flex-shrink-0">
           <div className="flex items-center justify-between mb-4 flex-shrink-0">
             <div>
-              <h1 className="text-gray-900 mb-2 text-2xl">Laboratory Tests Management</h1>
-              <p className="text-gray-500 text-base">Manage lab tests, samples, and reports</p>
+              <h1 className="text-gray-900 mb-2">Laboratory Tests Management</h1>
+              <p className="text-gray-500">Manage lab tests, samples, and reports</p>
             </div>
             <div className="flex items-center gap-4">
             <div className="flex gap-2">
@@ -1818,12 +2059,13 @@ export function Laboratory() {
                       id="patientType"
                       className="dialog-select-standard"
                       value={newLabOrderFormData.patientType}
-                      onChange={(e) => handlePatientTypeChange(e.target.value as 'IPD' | 'OPD' | 'Emergency' | '')}
+                      onChange={(e) => handlePatientTypeChange(e.target.value as 'IPD' | 'OPD' | 'Emergency' | 'Direct' | '')}
                     >
                       <option value="">Select Patient Type</option>
                       <option value="OPD">OPD</option>
                       <option value="IPD">IPD</option>
                       <option value="Emergency">Emergency</option>
+                      <option value="Direct">Direct</option>
                     </select>
                   </div>
 
@@ -2068,16 +2310,117 @@ export function Laboratory() {
                     />
                   </div>
 
-                  {/* Report URL */}
+                  {/* Report URL with File Upload */}
                   <div className="dialog-form-field">
-                    <Label htmlFor="reportsUrl" className="dialog-label-standard">Report URL</Label>
-                    <Input
-                      id="reportsUrl"
-                      placeholder="Enter report URL (optional)"
-                      className="dialog-input-standard"
-                      value={newLabOrderFormData.reportsUrl}
-                      onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, reportsUrl: e.target.value })}
+                    <Label htmlFor="reportsUrl" className="dialog-label-standard">Reports URL</Label>
+                    
+                    {/* Hidden file input */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      id="fileUpload"
                     />
+                    
+                    {/* URL Input and Action Buttons */}
+                    <div className="flex gap-2">
+                      <Input
+                        id="reportsUrl"
+                        placeholder="Enter report URL or upload a file"
+                        className="dialog-input-standard flex-1"
+                        value={newLabOrderFormData.reportsUrl}
+                        onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, reportsUrl: e.target.value })}
+                        disabled={uploading}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleBrowseClick}
+                        disabled={uploading}
+                        className="gap-2"
+                      >
+                        <FolderOpen className="size-4" />
+                        Browse
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleFileUpload}
+                        disabled={!selectedFile || uploading}
+                        className="gap-2"
+                      >
+                        {uploading ? (
+                          <>
+                            <Clock className="size-4 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="size-4" />
+                            Upload
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    
+                    {/* Selected file display */}
+                    {selectedFile && (
+                      <div className="mt-2 flex items-center justify-between p-2 bg-gray-50 rounded-md border border-gray-200">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <FileText className="size-4 text-gray-500 flex-shrink-0" />
+                          <span className="text-sm text-gray-700 truncate" title={selectedFile.name}>
+                            {selectedFile.name}
+                          </span>
+                          <span className="text-xs text-gray-500 flex-shrink-0">
+                            ({(selectedFile.size / 1024).toFixed(2)} KB)
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedFile(null);
+                            setUploadError(null);
+                            if (fileInputRef.current) {
+                              fileInputRef.current.value = '';
+                            }
+                          }}
+                          className="h-6 w-6 p-0"
+                        >
+                          <X className="size-3" />
+                        </Button>
+                      </div>
+                    )}
+                    
+                    {/* Upload progress */}
+                    {uploading && uploadProgress > 0 && (
+                      <div className="mt-2">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">{Math.round(uploadProgress)}% uploaded</p>
+                      </div>
+                    )}
+                    
+                    {/* Upload error */}
+                    {uploadError && (
+                      <div className="mt-2 p-2 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+                        {uploadError}
+                      </div>
+                    )}
+                    
+                    {/* Success message */}
+                    {newLabOrderFormData.reportsUrl && !selectedFile && !uploading && (
+                      <div className="mt-2 p-2 bg-green-50 border border-green-200 text-green-700 rounded-md text-sm">
+                        Report URL set: <a href={newLabOrderFormData.reportsUrl} target="_blank" rel="noopener noreferrer" className="underline">View</a>
+                      </div>
+                    )}
                   </div>
 
                   {/* Ordered By Doctor - Searchable */}
@@ -2816,10 +3159,12 @@ export function Laboratory() {
                         className="dialog-select-standard"
                         value={editPatientLabTestFormData.patientType}
                         onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, patientType: e.target.value })}
+                        disabled
                       >
                         <option value="OPD">OPD</option>
                         <option value="IPD">IPD</option>
                         <option value="Emergency">Emergency</option>
+                        <option value="Direct">Direct</option>
                       </select>
                     </div>
                     <div className="dialog-field-single-column">
@@ -2882,6 +3227,28 @@ export function Laboratory() {
                         className="dialog-input-standard"
                       />
                     </div>
+                    <div className="dialog-field-single-column">
+                      <div className="flex items-center gap-3">
+                        <Label htmlFor="edit-status" className="dialog-label-standard">Status</Label>
+                        <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
+                          <Switch
+                            id="edit-status"
+                            checked={editPatientLabTestFormData.status === 'Active' || editPatientLabTestFormData.status === 'active' || editPatientLabTestFormData.status === undefined}
+                            onCheckedChange={(checked) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, status: checked ? 'Active' : 'Inactive' })}
+                            className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
+                            style={{
+                              width: '2.5rem',
+                              height: '1.5rem',
+                              minWidth: '2.5rem',
+                              minHeight: '1.5rem',
+                              display: 'inline-flex',
+                              position: 'relative',
+                              backgroundColor: (editPatientLabTestFormData.status === 'Active' || editPatientLabTestFormData.status === 'active' || editPatientLabTestFormData.status === undefined) ? '#2563eb' : '#d1d5db',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2931,15 +3298,13 @@ function TestsList({
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">TestStatus</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">TestDoneDateTime</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Status</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Charges</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">CreatedDate</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
               {tests.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="text-center py-8 text-gray-500">
+                  <td colSpan={13} className="text-center py-8 text-gray-500">
                     No lab tests found
                   </td>
                 </tr>
@@ -3000,10 +3365,6 @@ function TestsList({
                         <Badge variant={(test as any).statusValue === 'Active' || (test as any).statusValue === 'active' ? 'default' : 'outline'}>
                           {(test as any).statusValue || test.status || 'N/A'}
                         </Badge>
-                      </td>
-                      <td className="py-4 px-6 text-gray-600 whitespace-nowrap">₹{test.charges || 0}</td>
-                      <td className="py-4 px-6 text-gray-600 whitespace-nowrap">
-                        {test.createdDate ? new Date(test.createdDate).toLocaleDateString() : 'N/A'}
                       </td>
                       <td className="py-4 px-6 whitespace-nowrap">
                         <Button

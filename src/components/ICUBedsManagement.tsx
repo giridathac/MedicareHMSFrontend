@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -13,11 +13,16 @@ const icuTypeOptions = ['Medical', 'Surgical', 'Pediatric', 'Cardiac', 'Neurolog
 const statusOptions: ICUBed['status'][] = ['active', 'inactive'];
 
 export function ICUBedsManagement() {
-  const { icuBeds, loading, error, createICUBed, updateICUBed } = useICUBeds();
+  const { icuBeds, loading, error, fetchICUBeds, createICUBed, updateICUBed } = useICUBeds();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedICUBed, setSelectedICUBed] = useState<ICUBed | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Fetch ICU beds from API on component mount
+  useEffect(() => {
+    fetchICUBeds();
+  }, [fetchICUBeds]);
   const [formData, setFormData] = useState({
     icuBedNo: '',
     icuType: 'Medical',
@@ -85,6 +90,8 @@ export function ICUBedsManagement() {
         isVentilatorAttached: false,
         status: 'active',
       });
+      // Refresh the ICU beds table after creating
+      await fetchICUBeds();
     } catch (err) {
       // Error handled in parent
     }
@@ -104,8 +111,8 @@ export function ICUBedsManagement() {
     }
     try {
       // Explicitly ensure boolean value is correctly set
-      const isVentilatorAttachedValue = formData.isVentilatorAttached === true;
-      console.log('Update ICU Bed - isVentilatorAttached value:', isVentilatorAttachedValue, 'from formData:', formData.isVentilatorAttached);
+      const isVentilatorAttachedValue = Boolean(formData.isVentilatorAttached);
+      console.log('Update ICU Bed - isVentilatorAttached value:', isVentilatorAttachedValue, 'from formData:', formData.isVentilatorAttached, 'type:', typeof formData.isVentilatorAttached);
       await handleUpdateICUBed(selectedICUBed.icuId, {
         icuBedNo: formData.icuBedNo,
         icuType: formData.icuType,
@@ -124,6 +131,8 @@ export function ICUBedsManagement() {
         isVentilatorAttached: false,
         status: 'active',
       });
+      // Refresh the ICU beds table after updating
+      await fetchICUBeds();
     } catch (err) {
       console.error('Error updating ICU bed:', err);
       alert(err instanceof Error ? err.message : 'Failed to update ICU bed. Please check the console for details.');
@@ -138,12 +147,15 @@ export function ICUBedsManagement() {
       return;
     }
     setSelectedICUBed(icuBed);
+    // Ensure isVentilatorAttached is properly converted to boolean
+    const isVentilatorAttached = Boolean(icuBed.isVentilatorAttached);
+    console.log('Edit ICU Bed - isVentilatorAttached:', isVentilatorAttached, 'from icuBed:', icuBed.isVentilatorAttached, 'type:', typeof icuBed.isVentilatorAttached);
     setFormData({
       icuBedNo: icuBed.icuBedNo,
       icuType: icuBed.icuType,
       icuRoomNameNo: icuBed.icuRoomNameNo,
       icuDescription: icuBed.icuDescription || '',
-      isVentilatorAttached: icuBed.isVentilatorAttached,
+      isVentilatorAttached: isVentilatorAttached,
       status: icuBed.status,
     });
     setIsEditDialogOpen(true);
@@ -162,19 +174,15 @@ export function ICUBedsManagement() {
 
   if (loading) {
     return (
-      <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
-        <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
-          <div className="px-6 pt-6 pb-0 flex-shrink-0">
-            <div className="flex items-center justify-between mb-4 flex-shrink-0">
-              <div>
-                <h1 className="text-gray-900 mb-2">ICU Bed Management</h1>
-                <p className="text-gray-500">Manage ICU beds and their configurations</p>
-              </div>
-            </div>
-            <div className="p-8">
-              <div className="text-center py-12 text-blue-600">Loading ICU beds...</div>
-            </div>
+      <div className="px-4 pt-4 pb-0 bg-white h-full flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <div>
+            <h1 className="text-gray-900 mb-0 text-xl">ICU Bed Management</h1>
+            <p className="text-gray-500 text-sm">Manage ICU beds and their configurations</p>
           </div>
+        </div>
+        <div className="p-8">
+          <div className="text-center py-12 text-blue-600">Loading ICU beds...</div>
         </div>
       </div>
     );
@@ -182,41 +190,35 @@ export function ICUBedsManagement() {
 
   if (error) {
     return (
-      <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
-        <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
-          <div className="px-6 pt-6 pb-0 flex-shrink-0">
-            <div className="flex items-center justify-between mb-4 flex-shrink-0">
-              <div>
-                <h1 className="text-gray-900 mb-2">ICU Bed Management</h1>
-                <p className="text-gray-500">Manage ICU beds and their configurations</p>
-              </div>
-            </div>
-            <div className="p-8">
-              <div className="text-center py-12 text-red-500">Error: {error}</div>
-            </div>
+      <div className="px-4 pt-4 pb-0 bg-white h-full flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <div>
+            <h1 className="text-gray-900 mb-0 text-xl">ICU Bed Management</h1>
+            <p className="text-gray-500 text-sm">Manage ICU beds and their configurations</p>
           </div>
+        </div>
+        <div className="p-8">
+          <div className="text-center py-12 text-red-500">Error: {error}</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
-      <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
-        <div className="px-6 pt-6 pb-0 flex-shrink-0">
-          <div className="flex items-center justify-between mb-4 flex-shrink-0">
-            <div>
-              <h1 className="text-gray-900 mb-2">ICU Bed Management</h1>
-              <p className="text-gray-500">Manage ICU beds and their configurations</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="flex items-center gap-2">
-                    <Plus className="size-4" />
-                    Add ICU Bed
-                  </Button>
-                </DialogTrigger>
+    <div className="px-4 pt-4 pb-4 bg-white h-screen flex flex-col overflow-hidden">
+      <div className="flex-shrink-0">
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <div>
+            <h1 className="text-gray-900 mb-0 text-xl">ICU Bed Management</h1>
+            <p className="text-gray-500 text-sm">Manage ICU beds and their configurations</p>
+          </div>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="size-4" />
+                Add ICU Bed
+              </Button>
+            </DialogTrigger>
             <DialogContent className="p-0 gap-0 large-dialog">
               <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
                 <DialogTitle>Add New ICU Bed</DialogTitle>
@@ -304,10 +306,12 @@ export function ICUBedsManagement() {
               </div>
             </DialogContent>
           </Dialog>
-              </div>
-            </div>
-          {/* Search Bar */}
-          <Card className="mb-4 bg-white">
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+        {/* Search Bar */}
+        <Card className="mb-4 bg-white">
           <CardContent className="p-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
@@ -320,10 +324,10 @@ export function ICUBedsManagement() {
               />
             </div>
           </CardContent>
-          </Card>
+        </Card>
 
-          {/* ICU Beds Table */}
-          <Card className="flex-1 flex flex-col overflow-hidden min-h-0 mb-4 bg-white">
+        {/* ICU Beds Table */}
+        <Card className="flex-1 flex flex-col overflow-hidden min-h-0 mb-4 bg-white">
           <CardContent className="p-0 flex-1 overflow-hidden flex flex-col min-h-0 bg-white">
             <div className="overflow-x-auto overflow-y-scroll border border-gray-200 rounded flex-1 min-h-0 icu-beds-scrollable doctors-scrollable bg-white" style={{ maxHeight: 'calc(100vh - 240px)' }}>
               <table className="w-full bg-white">
@@ -375,11 +379,11 @@ export function ICUBedsManagement() {
 
                     if (filteredBeds.length === 0) {
                       return (
-                        <tr>
+                    <tr>
                           <td colSpan={8} className="text-center py-8 text-gray-500">
                             {searchTerm ? 'No ICU beds found matching your search.' : 'No ICU beds found. Add a new ICU bed to get started.'}
-                          </td>
-                        </tr>
+                      </td>
+                    </tr>
                       );
                     }
 
@@ -410,9 +414,10 @@ export function ICUBedsManagement() {
               </table>
             </div>
           </CardContent>
-          </Card>
+        </Card>
+      </div>
 
-          {/* Edit Dialog */}
+      {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="p-0 gap-0 large-dialog">
           <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
@@ -512,9 +517,6 @@ export function ICUBedsManagement() {
           </div>
         </DialogContent>
       </Dialog>
-        </div>
-      </div>
     </div>
   );
 }
-
