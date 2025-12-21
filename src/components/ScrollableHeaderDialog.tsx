@@ -28,7 +28,7 @@ export function ScrollableHeaderDialog({
       <style>{`
         .scrollable-header-dialog-container {
           scrollbar-width: auto !important;
-          scrollbar-color: #888 #f1f1f1 !important;
+          scrollbar-color: #9B9B9B #1F1F1F !important;
           scroll-behavior: smooth !important;
         }
         .scrollable-header-dialog-container::-webkit-scrollbar {
@@ -37,25 +37,24 @@ export function ScrollableHeaderDialog({
           -webkit-appearance: none !important;
         }
         .scrollable-header-dialog-container::-webkit-scrollbar-track {
-          background: #e5e5e5 !important;
+          background: #1F1F1F !important;
           border-radius: 8px !important;
-          border: 1px solid #d0d0d0 !important;
         }
         .scrollable-header-dialog-container::-webkit-scrollbar-thumb {
-          background: #888 !important;
+          background: #9B9B9B !important;
           border-radius: 8px !important;
-          border: 2px solid #e5e5e5 !important;
+          border: 2px solid #1F1F1F !important;
           min-height: 30px !important;
           transition: background 0.2s ease !important;
         }
         .scrollable-header-dialog-container::-webkit-scrollbar-thumb:hover {
-          background: #666 !important;
+          background: #A6A6A6 !important;
         }
         .scrollable-header-dialog-container::-webkit-scrollbar-thumb:active {
-          background: #444 !important;
+          background: #B8B8B8 !important;
         }
         .scrollable-header-dialog-container::-webkit-scrollbar-corner {
-          background: #e5e5e5 !important;
+          background: #1F1F1F !important;
         }
       `}</style>
       <Dialog open={open} onOpenChange={onOpenChange}>
