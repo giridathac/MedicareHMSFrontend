@@ -804,30 +804,6 @@ function StaffView({
                     />
                   </div>
                 </div>
-                <div className="dialog-form-field">
-                  <div className="flex items-center gap-3">
-                    <Label htmlFor="edit-status" className="dialog-label-standard">Status</Label>
-                    <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
-                      <Switch
-                        id="edit-status"
-                        checked={formData.Status === 'Active'}
-                        onCheckedChange={(checked) => {
-                          setFormData({ ...formData, Status: checked ? 'Active' : 'InActive' });
-                        }}
-                        className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
-                        style={{
-                          width: '2.5rem',
-                          height: '1.5rem',
-                          minWidth: '2.5rem',
-                          minHeight: '1.5rem',
-                          display: 'inline-flex',
-                          position: 'relative',
-                          backgroundColor: formData.Status === 'Active' ? '#2563eb' : '#d1d5db',
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
 
                 {/* Doctor-specific fields */}
                 {selectedRoleIsDoctor && (
@@ -970,6 +946,30 @@ function StaffView({
                   </div>
                 </>
               )}
+              <div className="dialog-form-field">
+                <div className="flex items-center gap-3">
+                  <Label htmlFor="edit-status" className="dialog-label-standard">Status</Label>
+                  <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
+                    <Switch
+                      id="edit-status"
+                      checked={formData.Status === 'Active'}
+                      onCheckedChange={(checked) => {
+                        setFormData({ ...formData, Status: checked ? 'Active' : 'InActive' });
+                      }}
+                      className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
+                      style={{
+                        width: '2.5rem',
+                        height: '1.5rem',
+                        minWidth: '2.5rem',
+                        minHeight: '1.5rem',
+                        display: 'inline-flex',
+                        position: 'relative',
+                        backgroundColor: formData.Status === 'Active' ? '#2563eb' : '#d1d5db',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
               </div>
             </div>
             <div className="dialog-footer-standard">

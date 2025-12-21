@@ -18,8 +18,17 @@ import { Textarea } from './ui/textarea';
 import { cn } from './ui/utils';
 import { OTRoom, OTSlot, PatientOTAllocation, Patient, Doctor } from '../types';
 import { usePatients } from '../hooks/usePatients';
+import { useStaff } from '../hooks/useStaff';
+import { useRoles } from '../hooks/useRoles';
+import { useDepartments } from '../hooks/useDepartments';
 import { patientsApi } from '../api/patients';
 import { doctorsApi } from '../api/doctors';
+import { patientAppointmentsApi } from '../api/patientAppointments';
+import { admissionsApi, Admission } from '../api/admissions';
+import { emergencyAdmissionsApi } from '../api/emergencyAdmissions';
+import { PatientAppointment } from '../types';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 interface Surgery {
   id: number;
@@ -131,11 +140,32 @@ export function OTManagement() {
   const [loadingAllocations, setLoadingAllocations] = useState(false);
   const [selectedOTId, setSelectedOTId] = useState<string>('');
   const [otSlots, setOTSlots] = useState<OTSlot[]>([]);
-  const [addOtAllocationDatePickerOpen, setAddOtAllocationDatePickerOpen] = useState(false);
-  const [addOtAllocationDateDisplay, setAddOtAllocationDateDisplay] = useState('');
+  const [addOtAllocationDate, setAddOtAllocationDate] = useState<Date | null>(null);
   const { patients, fetchPatients } = usePatients();
+  const { staff, fetchStaff } = useStaff();
+  const { roles, fetchRoles } = useRoles();
+  const { departments, fetchDepartments } = useDepartments();
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [patientHighlightIndex, setPatientHighlightIndex] = useState(-1);
+  const [leadSurgeonSearchTerm, setLeadSurgeonSearchTerm] = useState('');
+  const [leadSurgeonHighlightIndex, setLeadSurgeonHighlightIndex] = useState(-1);
+  const [assistantDoctorSearchTerm, setAssistantDoctorSearchTerm] = useState('');
+  const [assistantDoctorHighlightIndex, setAssistantDoctorHighlightIndex] = useState(-1);
+  const [anaesthetistSearchTerm, setAnaesthetistSearchTerm] = useState('');
+  const [anaesthetistHighlightIndex, setAnaesthetistHighlightIndex] = useState(-1);
+  const [nurseSearchTerm, setNurseSearchTerm] = useState('');
+  const [nurseHighlightIndex, setNurseHighlightIndex] = useState(-1);
+  const [patientAppointmentSearchTerm, setPatientAppointmentSearchTerm] = useState('');
+  const [patientAppointmentHighlightIndex, setPatientAppointmentHighlightIndex] = useState(-1);
+  const [roomAdmissionSearchTerm, setRoomAdmissionSearchTerm] = useState('');
+  const [roomAdmissionHighlightIndex, setRoomAdmissionHighlightIndex] = useState(-1);
+  const [emergencyBedSlotSearchTerm, setEmergencyBedSlotSearchTerm] = useState('');
+  const [emergencyBedSlotHighlightIndex, setEmergencyBedSlotHighlightIndex] = useState(-1);
+  const [availableDoctors, setAvailableDoctors] = useState<Doctor[]>([]);
+  const [availableNurses, setAvailableNurses] = useState<Array<{ id: number; name: string; department?: string }>>([]);
+  const [availablePatientAppointments, setAvailablePatientAppointments] = useState<PatientAppointment[]>([]);
+  const [availableRoomAdmissions, setAvailableRoomAdmissions] = useState<Admission[]>([]);
+  const [availableEmergencyBedSlots, setAvailableEmergencyBedSlots] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     patientId: '',
     roomAdmissionId: '',
@@ -163,6 +193,32 @@ export function OTManagement() {
     billId: '',
     status: 'Active' as PatientOTAllocation['status'],
   });
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadedDocumentUrls, setUploadedDocumentUrls] = useState<string[]>([]);
+
+  // Sync date picker with form data
+  useEffect(() => {
+    if (formData.otAllocationDate) {
+      try {
+        const dateStr = formData.otAllocationDate;
+        let date: Date;
+        if (dateStr.includes('T')) {
+          date = new Date(dateStr);
+        } else {
+          date = new Date(dateStr + 'T00:00:00');
+        }
+        if (!isNaN(date.getTime())) {
+          setAddOtAllocationDate(date);
+        } else {
+          setAddOtAllocationDate(null);
+        }
+      } catch {
+        setAddOtAllocationDate(null);
+      }
+    } else {
+      setAddOtAllocationDate(null);
+    }
+  }, [formData.otAllocationDate]);
 
   // Convert string date (YYYY-MM-DD) to Date object
   const getDateFromString = (dateStr: string): Date | undefined => {
@@ -320,6 +376,102 @@ export function OTManagement() {
     fetchPatientOTAllocations();
   }, []);
 
+  // Fetch staff, roles, and departments on mount
+  useEffect(() => {
+    fetchStaff();
+    fetchRoles();
+    fetchDepartments();
+  }, [fetchStaff, fetchRoles, fetchDepartments]);
+
+  // Fetch patient appointments, room admissions, and emergency bed slots on mount
+  useEffect(() => {
+    const fetchAllData = async () => {
+      try {
+        // Fetch patient appointments
+        const appointmentsResponse = await patientAppointmentsApi.getAll({ page: 1, limit: 1000 });
+        const appointments = Array.isArray(appointmentsResponse) ? appointmentsResponse : (appointmentsResponse?.data || []);
+        setAvailablePatientAppointments(appointments);
+
+        // Fetch room admissions (filter for Active ones)
+        const admissionsResponse = await admissionsApi.getAll();
+        const allAdmissions = Array.isArray(admissionsResponse) ? admissionsResponse : (admissionsResponse?.data || []);
+        const activeAdmissions = allAdmissions.filter((admission: Admission) => 
+          admission.status === 'Active' || admission.admissionStatus === 'Active'
+        );
+        setAvailableRoomAdmissions(activeAdmissions);
+
+        // Fetch emergency bed slots (Active emergency admissions)
+        const emergencyResponse = await emergencyAdmissionsApi.getAll({ status: 'Active' });
+        const emergencyAdmissions = Array.isArray(emergencyResponse) ? emergencyResponse : (emergencyResponse?.data || []);
+        setAvailableEmergencyBedSlots(emergencyAdmissions);
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+        setAvailablePatientAppointments([]);
+        setAvailableRoomAdmissions([]);
+        setAvailableEmergencyBedSlots([]);
+      }
+    };
+    fetchAllData();
+  }, []);
+
+  // Filter to show only doctors and surgeons from staff with department information
+  useEffect(() => {
+    if (!staff || !roles || !departments || staff.length === 0 || roles.length === 0 || departments.length === 0) {
+      setAvailableDoctors([]);
+      return;
+    }
+
+    const doctors = staff
+      .filter((member) => {
+        if (!member.RoleId) return false;
+        const role = roles.find(r => r.id === member.RoleId);
+        if (!role || !role.name) return false;
+        const roleNameLower = role.name.toLowerCase();
+        return roleNameLower.includes('doctor') || roleNameLower.includes('surgeon');
+      })
+      .map((member) => {
+        const department = member.DoctorDepartmentId 
+          ? departments.find(d => 
+              d.id.toString() === member.DoctorDepartmentId || 
+              d.id === Number(member.DoctorDepartmentId)
+            )
+          : null;
+        
+        return {
+          id: member.UserId || 0,
+          name: member.UserName || 'Unknown',
+          specialty: department?.name || 'General',
+          type: member.DoctorType === 'INHOUSE' ? 'inhouse' as const : 'consulting' as const,
+        } as Doctor;
+      });
+
+    setAvailableDoctors(doctors);
+  }, [staff, roles, departments]);
+
+  // Filter nurses from staff
+  useEffect(() => {
+    if (!staff || !roles || staff.length === 0 || roles.length === 0) {
+      setAvailableNurses([]);
+      return;
+    }
+
+    const nurses = staff
+      .filter((member) => {
+        if (!member.RoleId) return false;
+        const role = roles.find(r => r.id === member.RoleId);
+        if (!role || !role.name) return false;
+        const roleNameLower = role.name.toLowerCase();
+        return roleNameLower.includes('nurse');
+      })
+      .map((member) => ({
+        id: member.UserId || 0,
+        name: member.UserName || 'Unknown',
+        department: undefined, // Nurses might not have departments
+      }));
+
+    setAvailableNurses(nurses);
+  }, [staff, roles]);
+
   // Fetch OT slots when OT is selected in dialog
   useEffect(() => {
     const fetchOTSlotsForDialog = async () => {
@@ -359,6 +511,74 @@ export function OTManagement() {
     }
   };
 
+  // Function to upload files (for main OTManagement component)
+  const uploadFiles = async (files: File[], patientId: string): Promise<string[]> => {
+    if (files.length === 0) return [];
+    if (!patientId) {
+      throw new Error('Patient ID is required for file upload');
+    }
+    
+    const uploadedUrls: string[] = [];
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+    
+    for (const file of files) {
+      try {
+        const formData = new FormData();
+        // Append file with the exact field name 'file' that multer expects
+        formData.append('file', file, file.name);
+        // Append folder parameter (required by backend) - must be in FormData
+        formData.append('folder', 'ot-documents');
+        // Append PatientId parameter (required by backend, must be UUID) - also in query as fallback
+        formData.append('PatientId', patientId);
+        
+        // Debug: Log form data keys
+        console.log('Uploading file:', file.name, 'Size:', file.size, 'Type:', file.type);
+        console.log('FormData entries:');
+        for (const [key, value] of formData.entries()) {
+          if (value instanceof File) {
+            console.log(`  ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
+          } else {
+            console.log(`  ${key}:`, value);
+          }
+        }
+        
+        // Send folder and PatientId as query parameters too (as fallback for multer async issue)
+        // Construct URL properly - append /upload to the base URL
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        const uploadUrlObj = new URL(`${baseUrl}/upload`);
+        uploadUrlObj.searchParams.append('folder', 'ot-documents');
+        uploadUrlObj.searchParams.append('PatientId', patientId);
+        const uploadUrl = uploadUrlObj.toString();
+        
+        console.log('Constructed upload URL:', uploadUrl);
+        console.log('File being sent:', { name: file.name, size: file.size, type: file.type });
+        
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData,
+          // Don't set Content-Type header - browser will set it with boundary for multipart/form-data
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `Failed to upload ${file.name}`);
+        }
+        
+        const result = await response.json();
+        if (result.success && result.url) {
+          uploadedUrls.push(result.url);
+        } else {
+          throw new Error(`Invalid response for ${file.name}: ${JSON.stringify(result)}`);
+        }
+      } catch (error) {
+        console.error(`Error uploading file ${file.name}:`, error);
+        throw error;
+      }
+    }
+    
+    return uploadedUrls;
+  };
+
   // Handle form submission
   const handleAddOTAllocation = async () => {
     // Validate required fields
@@ -367,25 +587,75 @@ export function OTManagement() {
       return;
     }
 
-    // PatientId is required - must come from one of the sources
-    if (!formData.patientId && !formData.roomAdmissionId && !formData.patientAppointmentId && !formData.emergencyBedSlotId) {
-      alert('Please select a patient source (Patient, Room Admission, Patient Appointment, or Emergency Bed Slot).');
-      return;
-    }
-
-    // For now, we'll use patientId if available, otherwise we need to fetch it from the selected source
-    // This is a simplified version - in production, you'd need to fetch patientId from the selected source
-    if (!formData.patientId) {
-      alert('Please enter a Patient ID. Patient ID is required.');
+    // Patient source is required - must come from one of the sources
+    if (!formData.roomAdmissionId && !formData.patientAppointmentId && !formData.emergencyBedSlotId) {
+      alert('Please select a patient source (Room Admission, Patient Appointment, or Emergency Bed Slot).');
       return;
     }
 
     try {
+      // Extract patientId from the selected patient source FIRST (needed for file upload)
+      let patientId: string | undefined = undefined;
+      
+      if (formData.roomAdmissionId) {
+        const admission = availableRoomAdmissions.find(a => 
+          (a.roomAdmissionId?.toString() || a.id?.toString()) === formData.roomAdmissionId
+        );
+        patientId = admission?.patientId;
+        console.log('Extracted patientId from room admission:', patientId, 'Admission:', admission);
+      } else if (formData.patientAppointmentId) {
+        const appointment = availablePatientAppointments.find(a => 
+          a.id.toString() === formData.patientAppointmentId
+        );
+        patientId = appointment?.patientId;
+        console.log('Extracted patientId from appointment:', patientId, 'Appointment:', appointment);
+      } else if (formData.emergencyBedSlotId) {
+        // For emergency bed slots, find the emergency admission
+        // The formData.emergencyBedSlotId could be EmergencyAdmissionId or EmergencyBedSlotId
+        const emergencyAdmission = availableEmergencyBedSlots.find(s => {
+          // Check EmergencyAdmissionId first (most likely, since slot.id is EmergencyAdmissionId)
+          const admissionId = s.EmergencyAdmissionId?.toString() || s.emergencyAdmissionId?.toString() || s.id?.toString() || '';
+          // Also check EmergencyBedSlotId as fallback
+          const bedSlotId = s.EmergencyBedSlotId?.toString() || s.emergencyBedSlotId?.toString() || '';
+          return admissionId === formData.emergencyBedSlotId || bedSlotId === formData.emergencyBedSlotId;
+        });
+        // Try multiple field name variations for patientId
+        patientId = emergencyAdmission?.PatientId || 
+                    emergencyAdmission?.patientId || 
+                    (emergencyAdmission as any)?.PatientId ||
+                    (emergencyAdmission as any)?.patientId;
+        console.log('Extracted patientId from emergency admission:', patientId, 'Emergency Admission:', emergencyAdmission);
+      }
+
+      if (!patientId) {
+        console.error('Unable to extract patientId. Form data:', formData);
+        console.error('Available room admissions:', availableRoomAdmissions);
+        console.error('Available appointments:', availablePatientAppointments);
+        console.error('Available emergency bed slots:', availableEmergencyBedSlots);
+        alert('Unable to determine patient ID from selected source. Please try again.');
+        return;
+      }
+
+      // Upload files first if any are selected (now that we have patientId)
+      let documentUrls: string[] = [...uploadedDocumentUrls];
+      if (selectedFiles.length > 0) {
+        try {
+          const newUrls = await uploadFiles(selectedFiles, patientId);
+          documentUrls = [...documentUrls, ...newUrls];
+        } catch (error) {
+          alert(`Failed to upload files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          return;
+        }
+      }
+      
+      // Combine all document URLs (JSON array)
+      const combinedDocuments = documentUrls.length > 0 ? JSON.stringify(documentUrls) : null;
+
       const createData: CreatePatientOTAllocationDto = {
-        patientId: formData.patientId,
-        roomAdmissionId: formData.roomAdmissionId ? Number(formData.roomAdmissionId) : null,
-        patientAppointmentId: formData.patientAppointmentId ? Number(formData.patientAppointmentId) : null,
-        emergencyBedSlotId: formData.emergencyBedSlotId ? Number(formData.emergencyBedSlotId) : null,
+        patientId: patientId,
+        roomAdmissionId: formData.roomAdmissionId ? Number(formData.roomAdmissionId) : undefined,
+        patientAppointmentId: formData.patientAppointmentId ? Number(formData.patientAppointmentId) : undefined,
+        emergencyBedSlotId: formData.emergencyBedSlotId ? Number(formData.emergencyBedSlotId) : undefined,
         otId: Number(formData.otId),
         otSlotIds: formData.otSlotIds || [],
         surgeryId: formData.surgeryId ? Number(formData.surgeryId) : null,
@@ -404,7 +674,7 @@ export function OTManagement() {
         operationStatus: formData.operationStatus === 'InProgress' ? 'In Progress' : formData.operationStatus,
         preOperationNotes: formData.preOperationNotes || null,
         postOperationNotes: formData.postOperationNotes || null,
-        otDocuments: formData.otDocuments || null,
+        otDocuments: combinedDocuments,
         billId: formData.billId ? Number(formData.billId) : null,
         status: 'Active',
       };
@@ -416,6 +686,9 @@ export function OTManagement() {
       setPatientOTAllocations(allocations);
       
       // Reset form
+      setPatientAppointmentSearchTerm('');
+      setRoomAdmissionSearchTerm('');
+      setEmergencyBedSlotSearchTerm('');
       setFormData({
         patientId: '',
         roomAdmissionId: '',
@@ -443,11 +716,27 @@ export function OTManagement() {
         billId: '',
         status: 'Active',
       });
+      setSelectedFiles([]);
+      setUploadedDocumentUrls([]);
       setPatientSearchTerm('');
       setPatientHighlightIndex(-1);
       setSelectedOTId('');
-      setAddOtAllocationDateDisplay('');
       setIsDialogOpen(false);
+      setLeadSurgeonSearchTerm('');
+      setLeadSurgeonHighlightIndex(-1);
+      setAssistantDoctorSearchTerm('');
+      setAssistantDoctorHighlightIndex(-1);
+      setAnaesthetistSearchTerm('');
+      setAnaesthetistHighlightIndex(-1);
+      setNurseSearchTerm('');
+      setNurseHighlightIndex(-1);
+      setAssistantDoctorSearchTerm('');
+      setAssistantDoctorHighlightIndex(-1);
+      setAnaesthetistSearchTerm('');
+      setAnaesthetistHighlightIndex(-1);
+      setNurseSearchTerm('');
+      setNurseHighlightIndex(-1);
+      setAddOtAllocationDate(null);
       
       alert('OT Allocation created successfully!');
     } catch (err) {
@@ -500,202 +789,457 @@ export function OTManagement() {
               </DialogHeader>
               <div className="dialog-body-content-wrapper">
                 <div className="dialog-form-container space-y-4">
-                  <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded-md border border-gray-200">
-                    <p className="font-medium mb-1">Patient Source (Select one):</p>
-                    <p className="text-xs">Choose either Patient (Direct OT), Room Admission (IPD), Patient Appointment (OPD), or Emergency Bed</p>
+                  <div className="pb-1 px-3 bg-gray-50 rounded-md border border-gray-200">
+                    <Label className="dialog-label-standard">Patient Source (Select one) *</Label>
+                    <p className="text-xs text-gray-500 mt-1">Choose either Room Admission (IPD), Patient Appointment (OPD), or Emergency Bed</p>
                   </div>
-                  
-                  <div className="dialog-form-field">
-                    <Label htmlFor="add-patientId" className="dialog-label-standard">Patient (Direct OT - Optional)</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                    <Input
-                      id="add-patientId"
-                      autoComplete="off"
-                      placeholder="Search by Patient Name, Patient No, Phone, or Patient ID..."
-                      value={patientSearchTerm}
-                      onChange={(e) => {
-                        const newValue = e.target.value;
-                        setPatientSearchTerm(newValue);
-                        setPatientHighlightIndex(-1);
-                        // Clear patient selection if user edits the search term
-                        if (formData.patientId) {
-                          setFormData({ ...formData, patientId: '', roomAdmissionId: '', patientAppointmentId: '', emergencyBedSlotId: '' });
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        const filteredPatients = patients.filter(patient => {
-                          if (!patientSearchTerm) return false;
-                          const searchLower = patientSearchTerm.toLowerCase();
-                          const patientId = (patient as any).patientId || (patient as any).PatientId || '';
-                          const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
-                          const patientName = (patient as any).patientName || (patient as any).PatientName || '';
-                          const lastName = (patient as any).lastName || (patient as any).LastName || '';
-                          const fullName = `${patientName} ${lastName}`.trim();
-                          const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
-                          return (
-                            patientId.toLowerCase().includes(searchLower) ||
-                            patientNo.toLowerCase().includes(searchLower) ||
-                            fullName.toLowerCase().includes(searchLower) ||
-                            phoneNo.includes(patientSearchTerm)
-                          );
-                        });
-                        
-                        if (e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          setPatientHighlightIndex(prev => 
-                            prev < filteredPatients.length - 1 ? prev + 1 : prev
-                          );
-                        } else if (e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          setPatientHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
-                        } else if (e.key === 'Enter' && patientHighlightIndex >= 0 && filteredPatients[patientHighlightIndex]) {
-                          e.preventDefault();
-                          const patient = filteredPatients[patientHighlightIndex];
-                          const patientId = (patient as any).patientId || (patient as any).PatientId || '';
-                          const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
-                          const patientName = (patient as any).patientName || (patient as any).PatientName || '';
-                          const lastName = (patient as any).lastName || (patient as any).LastName || '';
-                          const fullName = `${patientName} ${lastName}`.trim();
+
+                  <div className="dialog-form-field -mt-4">
+                    <Label htmlFor="add-roomAdmissionId" className="dialog-label-standard">Room Admission (IPD)</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                      <Input
+                        id="add-roomAdmissionId"
+                        autoComplete="off"
+                        placeholder="Search by Patient Name, Bed Number, or Room Type..."
+                        value={roomAdmissionSearchTerm}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setRoomAdmissionSearchTerm(newValue);
+                          setRoomAdmissionHighlightIndex(-1);
+                          // Clear admission selection if user edits the search term
+                          if (formData.roomAdmissionId) {
+                            setFormData({ ...formData, roomAdmissionId: '', patientAppointmentId: '', emergencyBedSlotId: '' });
+                            setPatientAppointmentSearchTerm('');
+                            setEmergencyBedSlotSearchTerm('');
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          const filteredAdmissions = availableRoomAdmissions.filter(admission => {
+                            if (!roomAdmissionSearchTerm) return false;
+                            const searchLower = roomAdmissionSearchTerm.toLowerCase();
+                            const patientName = admission.patientName || '';
+                            const bedNumber = admission.bedNumber || '';
+                            const roomType = admission.roomType || '';
+                            const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
+                            return (
+                              patientName.toLowerCase().includes(searchLower) ||
+                              bedNumber.toLowerCase().includes(searchLower) ||
+                              roomType.toLowerCase().includes(searchLower) ||
+                              admissionId.includes(searchLower)
+                            );
+                          });
                           
-                          setFormData({ ...formData, patientId, roomAdmissionId: '', patientAppointmentId: '', emergencyBedSlotId: '' });
-                          setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
-                          setPatientHighlightIndex(-1);
-                        }
-                      }}
-                      className="dialog-input-standard pl-10"
-                    />
-                  </div>
-                  {patientSearchTerm && (() => {
-                    const filteredPatients = patients.filter(patient => {
-                      if (!patientSearchTerm) return false;
-                      const searchLower = patientSearchTerm.toLowerCase();
-                      const patientId = (patient as any).patientId || (patient as any).PatientId || '';
-                      const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
-                      const patientName = (patient as any).patientName || (patient as any).PatientName || '';
-                      const lastName = (patient as any).lastName || (patient as any).LastName || '';
-                      const fullName = `${patientName} ${lastName}`.trim();
-                      const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
-                      return (
-                        patientId.toLowerCase().includes(searchLower) ||
-                        patientNo.toLowerCase().includes(searchLower) ||
-                        fullName.toLowerCase().includes(searchLower) ||
-                        phoneNo.includes(patientSearchTerm)
-                      );
-                    });
-                    
-                    return filteredPatients.length > 0 ? (
-                      <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" style={{ zIndex: 1000 }}>
-                        <table className="w-full">
-                          <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
-                            <tr>
-                              <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Patient ID</th>
-                              <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
-                              <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Mobile</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredPatients.map((patient, index) => {
-                              const patientId = (patient as any).patientId || (patient as any).PatientId || '';
-                              const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
-                              const patientName = (patient as any).patientName || (patient as any).PatientName || '';
-                              const lastName = (patient as any).lastName || (patient as any).LastName || '';
-                              const fullName = `${patientName} ${lastName}`.trim();
-                              const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
-                              const isSelected = formData.patientId === patientId;
-                              const isHighlighted = patientHighlightIndex === index;
-                              return (
-                                <tr
-                                  key={patientId}
-                                  onClick={() => {
-                                    setFormData({ ...formData, patientId, roomAdmissionId: '', patientAppointmentId: '', emergencyBedSlotId: '' });
-                                    setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
-                                    setPatientHighlightIndex(-1);
-                                  }}
-                                  onMouseDown={(e) => {
-                                    // Prevent input from losing focus when clicking on dropdown
-                                    e.preventDefault();
-                                  }}
-                                  className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
-                                >
-                                  <td className="py-2 px-3 text-sm text-gray-900 font-mono">{patientNo || patientId.substring(0, 8)}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{fullName || 'Unknown'}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{phoneNo || '-'}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : null;
-                  })()}
-                    {formData.patientId && (
-                      <p className="text-xs text-gray-500 mt-1">Selected Patient ID: {formData.patientId}</p>
-                    )}
-                  </div>
-
-                  <div className="dialog-form-field">
-                    <Label htmlFor="add-roomAdmissionId" className="dialog-label-standard">Room Admission (IPD - Optional)</Label>
-                    <Input
-                      id="add-roomAdmissionId"
-                      placeholder="Enter Room Admission ID"
-                      value={formData.roomAdmissionId}
-                      onChange={(e) => setFormData({ ...formData, roomAdmissionId: e.target.value, patientId: '', patientAppointmentId: '', emergencyBedSlotId: '' })}
-                      className="dialog-input-standard"
-                    />
-                  </div>
-
-                  <div className="dialog-form-field">
-                    <Label htmlFor="add-patientAppointmentId" className="dialog-label-standard">Patient Appointment (OPD - Optional)</Label>
-                    <Input
-                      id="add-patientAppointmentId"
-                      placeholder="Enter Patient Appointment ID"
-                      value={formData.patientAppointmentId}
-                      onChange={(e) => setFormData({ ...formData, patientAppointmentId: e.target.value, patientId: '', roomAdmissionId: '', emergencyBedSlotId: '' })}
-                      className="dialog-input-standard"
-                    />
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setRoomAdmissionHighlightIndex(prev => 
+                              prev < filteredAdmissions.length - 1 ? prev + 1 : prev
+                            );
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setRoomAdmissionHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                          } else if (e.key === 'Enter' && roomAdmissionHighlightIndex >= 0 && filteredAdmissions[roomAdmissionHighlightIndex]) {
+                            e.preventDefault();
+                            const admission = filteredAdmissions[roomAdmissionHighlightIndex];
+                            const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
+                            setFormData({ ...formData, roomAdmissionId: admissionId, patientAppointmentId: '', emergencyBedSlotId: '' });
+                            setRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
+                            setRoomAdmissionHighlightIndex(-1);
+                            setPatientAppointmentSearchTerm('');
+                            setEmergencyBedSlotSearchTerm('');
+                          }
+                        }}
+                        className="pl-10"
+                      />
+                    </div>
+                    {roomAdmissionSearchTerm && (() => {
+                      const filteredAdmissions = availableRoomAdmissions.filter(admission => {
+                        if (!roomAdmissionSearchTerm) return false;
+                        const searchLower = roomAdmissionSearchTerm.toLowerCase();
+                        const patientName = admission.patientName || '';
+                        const bedNumber = admission.bedNumber || '';
+                        const roomType = admission.roomType || '';
+                        const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
+                        return (
+                          patientName.toLowerCase().includes(searchLower) ||
+                          bedNumber.toLowerCase().includes(searchLower) ||
+                          roomType.toLowerCase().includes(searchLower) ||
+                          admissionId.includes(searchLower)
+                        );
+                      });
+                      
+                      return filteredAdmissions.length > 0 ? (
+                        <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" id="add-roomAdmission-dropdown">
+                          <table className="w-full">
+                            <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Patient</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Bed Number</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Room Type</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Admission Date</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredAdmissions.map((admission, index) => {
+                                const isSelected = formData.roomAdmissionId === (admission.roomAdmissionId?.toString() || admission.id?.toString() || '');
+                                const isHighlighted = roomAdmissionHighlightIndex === index;
+                                const formattedDate = admission.admissionDate ? formatDateDisplayIST(admission.admissionDate) : 'N/A';
+                                return (
+                                  <tr
+                                    key={admission.roomAdmissionId || admission.id}
+                                    onClick={() => {
+                                      const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
+                                      setFormData({ ...formData, roomAdmissionId: admissionId, patientAppointmentId: '', emergencyBedSlotId: '' });
+                                      setRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
+                                      setRoomAdmissionHighlightIndex(-1);
+                                      setPatientAppointmentSearchTerm('');
+                                      setEmergencyBedSlotSearchTerm('');
+                                    }}
+                                    onMouseDown={(e) => {
+                                      // Prevent input from losing focus when clicking on dropdown
+                                      e.preventDefault();
+                                    }}
+                                    className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                  >
+                                    <td className="py-2 px-3 text-sm text-gray-900">{admission.patientName || 'Unknown'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600 font-mono">{admission.bedNumber || '-'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{admission.roomType || '-'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{formattedDate}</td>
+                                    <td className="py-2 px-3 text-sm">
+                                      <span className={`px-2 py-0.5 rounded text-xs ${
+                                        admission.status === 'Active' 
+                                          ? 'bg-green-100 text-green-700' 
+                                          : 'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {admission.status || 'Active'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
 
                   <div className="dialog-form-field">
-                    <Label htmlFor="add-emergencyBedSlotId" className="dialog-label-standard">Emergency Bed Slot (Optional)</Label>
-                    <Input
-                      id="add-emergencyBedSlotId"
-                      type="number"
-                      placeholder="Enter Emergency Bed Slot ID"
-                      value={formData.emergencyBedSlotId}
-                      onChange={(e) => setFormData({ ...formData, emergencyBedSlotId: e.target.value, patientId: '', roomAdmissionId: '', patientAppointmentId: '' })}
-                      className="dialog-input-standard"
-                    />
+                    <Label htmlFor="add-patientAppointmentId" className="dialog-label-standard">Patient Appointment (OPD)</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                      <Input
+                        id="add-patientAppointmentId"
+                        autoComplete="off"
+                        placeholder="Search by Token No, Patient Name, or Doctor Name..."
+                        value={patientAppointmentSearchTerm}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setPatientAppointmentSearchTerm(newValue);
+                          setPatientAppointmentHighlightIndex(-1);
+                          // Clear appointment selection if user edits the search term
+                          if (formData.patientAppointmentId) {
+                            setFormData({ ...formData, patientAppointmentId: '', roomAdmissionId: '', emergencyBedSlotId: '' });
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          const filteredAppointments = availablePatientAppointments.filter(appointment => {
+                            if (!patientAppointmentSearchTerm) return false;
+                            const searchLower = patientAppointmentSearchTerm.toLowerCase();
+                            const tokenNo = appointment.tokenNo || '';
+                            const patient = patients.find(p => 
+                              (p as any).patientId === appointment.patientId || 
+                              (p as any).PatientId === appointment.patientId
+                            );
+                            const patientName = patient 
+                              ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                              : '';
+                            const doctorName = availableDoctors.find(d => d.id.toString() === appointment.doctorId)?.name || '';
+                            return (
+                              tokenNo.toLowerCase().includes(searchLower) ||
+                              patientName.toLowerCase().includes(searchLower) ||
+                              doctorName.toLowerCase().includes(searchLower)
+                            );
+                          });
+                          
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setPatientAppointmentHighlightIndex(prev => 
+                              prev < filteredAppointments.length - 1 ? prev + 1 : prev
+                            );
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setPatientAppointmentHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                          } else if (e.key === 'Enter' && patientAppointmentHighlightIndex >= 0 && filteredAppointments[patientAppointmentHighlightIndex]) {
+                            e.preventDefault();
+                            const appointment = filteredAppointments[patientAppointmentHighlightIndex];
+                            setFormData({ ...formData, patientAppointmentId: appointment.id.toString(), roomAdmissionId: '', emergencyBedSlotId: '' });
+                            const patient = patients.find(p => 
+                              (p as any).patientId === appointment.patientId || 
+                              (p as any).PatientId === appointment.patientId
+                            );
+                            const patientName = patient 
+                              ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                              : appointment.patientId || 'Unknown';
+                            setPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
+                            setPatientAppointmentHighlightIndex(-1);
+                          }
+                        }}
+                        className="pl-10"
+                      />
+                    </div>
+                    {patientAppointmentSearchTerm && (() => {
+                      const filteredAppointments = availablePatientAppointments.filter(appointment => {
+                        if (!patientAppointmentSearchTerm) return false;
+                        const searchLower = patientAppointmentSearchTerm.toLowerCase();
+                        const tokenNo = appointment.tokenNo || '';
+                        const patient = patients.find(p => 
+                          (p as any).patientId === appointment.patientId || 
+                          (p as any).PatientId === appointment.patientId
+                        );
+                        const patientName = patient 
+                          ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                          : '';
+                        const doctorName = availableDoctors.find(d => d.id.toString() === appointment.doctorId)?.name || '';
+                        return (
+                          tokenNo.toLowerCase().includes(searchLower) ||
+                          patientName.toLowerCase().includes(searchLower) ||
+                          doctorName.toLowerCase().includes(searchLower)
+                        );
+                      });
+                      
+                      return filteredAppointments.length > 0 ? (
+                        <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" id="add-patientAppointment-dropdown">
+                          <table className="w-full">
+                            <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Token No</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Patient</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Doctor</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Date</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Time</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredAppointments.map((appointment, index) => {
+                                const isSelected = formData.patientAppointmentId === appointment.id.toString();
+                                const isHighlighted = patientAppointmentHighlightIndex === index;
+                                const patient = patients.find(p => 
+                                  (p as any).patientId === appointment.patientId || 
+                                  (p as any).PatientId === appointment.patientId
+                                );
+                                const patientName = patient 
+                                  ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                                  : appointment.patientId || 'Unknown';
+                                const doctorName = availableDoctors.find(d => d.id.toString() === appointment.doctorId)?.name || 'Unknown';
+                                const formattedDate = appointment.appointmentDate ? formatDateDisplayIST(appointment.appointmentDate) : 'N/A';
+                                return (
+                                  <tr
+                                    key={appointment.id}
+                                    onClick={() => {
+                                      setFormData({ ...formData, patientAppointmentId: appointment.id.toString(), roomAdmissionId: '', emergencyBedSlotId: '' });
+                                      setPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
+                                      setPatientAppointmentHighlightIndex(-1);
+                                    }}
+                                    onMouseDown={(e) => {
+                                      // Prevent input from losing focus when clicking on dropdown
+                                      e.preventDefault();
+                                    }}
+                                    className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                  >
+                                    <td className="py-2 px-3 text-sm text-gray-900 font-mono">{appointment.tokenNo || '-'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-900">{patientName}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{doctorName}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{formattedDate}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{appointment.appointmentTime || '-'}</td>
+                                    <td className="py-2 px-3 text-sm">
+                                      <span className={`px-2 py-0.5 rounded text-xs ${
+                                        appointment.appointmentStatus === 'Completed' 
+                                          ? 'bg-green-100 text-green-700' 
+                                          : appointment.appointmentStatus === 'Consulting'
+                                          ? 'bg-yellow-100 text-yellow-700'
+                                          : 'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {appointment.appointmentStatus || 'Waiting'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-emergencyBedSlotId" className="dialog-label-standard">Emergency Bed Slot</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                      <Input
+                        id="add-emergencyBedSlotId"
+                        autoComplete="off"
+                        placeholder="Search by Patient Name, Bed Slot No, or Bed No..."
+                        value={emergencyBedSlotSearchTerm}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setEmergencyBedSlotSearchTerm(newValue);
+                          setEmergencyBedSlotHighlightIndex(-1);
+                          // Clear emergency bed slot selection if user edits the search term
+                          if (formData.emergencyBedSlotId) {
+                            setFormData({ ...formData, emergencyBedSlotId: '', roomAdmissionId: '', patientAppointmentId: '' });
+                            setPatientAppointmentSearchTerm('');
+                            setRoomAdmissionSearchTerm('');
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          const filteredSlots = availableEmergencyBedSlots.filter(slot => {
+                            if (!emergencyBedSlotSearchTerm) return false;
+                            const searchLower = emergencyBedSlotSearchTerm.toLowerCase();
+                            const patientName = slot.PatientName || slot.patientName || '';
+                            const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
+                            const bedNo = slot.EmergencyBedNo || slot.emergencyBedNo || '';
+                            const slotId = slot.EmergencyBedSlotId?.toString() || slot.emergencyBedSlotId?.toString() || slot.id?.toString() || '';
+                            return (
+                              patientName.toLowerCase().includes(searchLower) ||
+                              bedSlotNo.toLowerCase().includes(searchLower) ||
+                              bedNo.toLowerCase().includes(searchLower) ||
+                              slotId.includes(searchLower)
+                            );
+                          });
+                          
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setEmergencyBedSlotHighlightIndex(prev => 
+                              prev < filteredSlots.length - 1 ? prev + 1 : prev
+                            );
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setEmergencyBedSlotHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                          } else if (e.key === 'Enter' && emergencyBedSlotHighlightIndex >= 0 && filteredSlots[emergencyBedSlotHighlightIndex]) {
+                            e.preventDefault();
+                            const slot = filteredSlots[emergencyBedSlotHighlightIndex];
+                            const slotId = slot.EmergencyBedSlotId?.toString() || slot.emergencyBedSlotId?.toString() || slot.id?.toString() || '';
+                            setFormData({ ...formData, emergencyBedSlotId: slotId, roomAdmissionId: '', patientAppointmentId: '' });
+                            const patientName = slot.PatientName || slot.patientName || 'Unknown';
+                            const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
+                            setEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
+                            setEmergencyBedSlotHighlightIndex(-1);
+                            setPatientAppointmentSearchTerm('');
+                            setRoomAdmissionSearchTerm('');
+                          }
+                        }}
+                        className="pl-10"
+                      />
+                    </div>
+                    {emergencyBedSlotSearchTerm && (() => {
+                      const filteredSlots = availableEmergencyBedSlots.filter(slot => {
+                        if (!emergencyBedSlotSearchTerm) return false;
+                        const searchLower = emergencyBedSlotSearchTerm.toLowerCase();
+                        const patientName = slot.PatientName || slot.patientName || '';
+                        const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
+                        const bedNo = slot.EmergencyBedNo || slot.emergencyBedNo || '';
+                        const slotId = slot.EmergencyBedSlotId?.toString() || slot.emergencyBedSlotId?.toString() || slot.id?.toString() || '';
+                        return (
+                          patientName.toLowerCase().includes(searchLower) ||
+                          bedSlotNo.toLowerCase().includes(searchLower) ||
+                          bedNo.toLowerCase().includes(searchLower) ||
+                          slotId.includes(searchLower)
+                        );
+                      });
+                      
+                      return filteredSlots.length > 0 ? (
+                        <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" id="add-emergencyBedSlot-dropdown">
+                          <table className="w-full">
+                            <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Patient</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Bed Slot No</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Bed No</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Admission Date</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredSlots.map((slot, index) => {
+                                const slotId = slot.EmergencyBedSlotId?.toString() || slot.emergencyBedSlotId?.toString() || slot.id?.toString() || '';
+                                const isSelected = formData.emergencyBedSlotId === slotId;
+                                const isHighlighted = emergencyBedSlotHighlightIndex === index;
+                                const patientName = slot.PatientName || slot.patientName || 'Unknown';
+                                const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '-';
+                                const bedNo = slot.EmergencyBedNo || slot.emergencyBedNo || '-';
+                                const admissionDate = slot.EmergencyAdmissionDate || slot.emergencyAdmissionDate || '';
+                                const formattedDate = admissionDate ? formatDateDisplayIST(typeof admissionDate === 'string' ? admissionDate : admissionDate.toString()) : 'N/A';
+                                const status = slot.Status || slot.status || 'Active';
+                                return (
+                                  <tr
+                                    key={slotId}
+                                    onClick={() => {
+                                      setFormData({ ...formData, emergencyBedSlotId: slotId, roomAdmissionId: '', patientAppointmentId: '' });
+                                      setEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
+                                      setEmergencyBedSlotHighlightIndex(-1);
+                                      setPatientAppointmentSearchTerm('');
+                                      setRoomAdmissionSearchTerm('');
+                                    }}
+                                    onMouseDown={(e) => {
+                                      // Prevent input from losing focus when clicking on dropdown
+                                      e.preventDefault();
+                                    }}
+                                    className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                  >
+                                    <td className="py-2 px-3 text-sm text-gray-900">{patientName}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600 font-mono">{bedSlotNo}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600 font-mono">{bedNo}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{formattedDate}</td>
+                                    <td className="py-2 px-3 text-sm">
+                                      <span className={`px-2 py-0.5 rounded text-xs ${
+                                        status === 'Active' 
+                                          ? 'bg-green-100 text-green-700' 
+                                          : 'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
 
                   <div className="dialog-form-field">
                     <Label htmlFor="add-otAllocationDate" className="dialog-label-standard">OT Allocation Date *</Label>
-                    <Popover open={addOtAllocationDatePickerOpen} onOpenChange={setAddOtAllocationDatePickerOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal"
-                        >
-                          <Calendar className="mr-2 size-4" />
-                          {formData.otAllocationDate ? formatDateToDisplay(formData.otAllocationDate) : 'Pick a date'}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 bg-white" align="start">
-                        <CalendarComponent
-                          mode="single"
-                          selected={getDateFromString(formData.otAllocationDate)}
-                          onSelect={(date) => {
-                            if (date) {
-                              const dateStr = getStringFromDate(date);
-                              setFormData({ ...formData, otAllocationDate: dateStr });
-                              setAddOtAllocationDateDisplay(formatDateToDisplay(dateStr));
-                              setAddOtAllocationDatePickerOpen(false);
-                            }
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <DatePicker
+                      id="add-otAllocationDate"
+                      selected={addOtAllocationDate}
+                      onChange={(date: Date | null) => {
+                        setAddOtAllocationDate(date);
+                        if (date) {
+                          const year = date.getFullYear();
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
+                          const dateStr = `${year}-${month}-${day}`;
+                          setFormData({ ...formData, otAllocationDate: dateStr });
+                        } else {
+                          setFormData({ ...formData, otAllocationDate: '' });
+                        }
+                      }}
+                      dateFormat="dd-MM-yyyy"
+                      placeholderText="dd-mm-yyyy"
+                      className="dialog-input-standard w-full"
+                      wrapperClassName="w-full"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={100}
+                      scrollableYearDropdown
+                    />
                   </div>
 
                   <div className="dialog-form-field">
@@ -719,7 +1263,7 @@ export function OTManagement() {
                   </div>
 
                   <div className="dialog-form-field">
-                    <Label className="dialog-label-standard">OT Slots (Optional)</Label>
+                    <Label className="dialog-label-standard">OT Slots</Label>
                     <div className="border border-gray-200 rounded-md p-3 max-h-48 overflow-y-auto mt-1">
                       {!formData.otId ? (
                         <p className="text-sm text-gray-500">Please select an OT first</p>
@@ -731,7 +1275,11 @@ export function OTManagement() {
                           return (
                             <label 
                               key={slot.id} 
-                              className="flex items-center gap-2 py-1 rounded px-2 cursor-pointer hover:bg-gray-50"
+                              className={`flex items-center gap-2 py-1 rounded px-2 ${
+                                isSlotOccupied 
+                                  ? 'cursor-not-allowed opacity-40 bg-gray-100' 
+                                  : 'cursor-pointer hover:bg-gray-50'
+                              }`}
                             >
                               <input
                                 type="checkbox"
@@ -746,11 +1294,16 @@ export function OTManagement() {
                                   }
                                   setFormData({ ...formData, otSlotIds: newSlotIds });
                                 }}
+                                disabled={isSlotOccupied}
                                 className="rounded border-gray-300"
                               />
-                              <span className="text-sm text-gray-700">
+                              <span className={`text-sm ${
+                                isSlotOccupied 
+                                  ? 'text-gray-400 line-through' 
+                                  : 'text-gray-700'
+                              }`}>
                                 {slot.otSlotNo} - {slot.slotStartTime} to {slot.slotEndTime}
-                                {isSlotOccupied && <span className="ml-2 text-xs text-red-600">(Occupied)</span>}
+                                {isSlotOccupied && <span className="ml-2 text-xs text-red-500">(Occupied)</span>}
                                 {slot.isAvailable && !isSlotOccupied && <span className="ml-2 text-xs text-green-600">(Available)</span>}
                               </span>
                             </label>
@@ -766,55 +1319,397 @@ export function OTManagement() {
                   <div className="dialog-form-field-grid">
                     <div className="dialog-field-single-column">
                       <Label htmlFor="add-leadSurgeonId" className="dialog-label-standard">Lead Surgeon *</Label>
-                      <Input
-                        id="add-leadSurgeonId"
-                        type="number"
-                        placeholder="Enter Lead Surgeon ID"
-                        value={formData.leadSurgeonId}
-                        onChange={(e) => setFormData({ ...formData, leadSurgeonId: e.target.value })}
-                        className="dialog-input-standard"
-                      />
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                        <Input
+                          id="add-leadSurgeonId"
+                          autoComplete="off"
+                          placeholder="Search by Doctor Name or Specialty..."
+                          value={leadSurgeonSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setLeadSurgeonSearchTerm(newValue);
+                            setLeadSurgeonHighlightIndex(-1);
+                            // Clear doctor selection if user edits the search term
+                            if (formData.leadSurgeonId) {
+                              setFormData({ ...formData, leadSurgeonId: '' });
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            const filteredDoctors = availableDoctors.filter(doctor => {
+                              if (!leadSurgeonSearchTerm) return false;
+                              const searchLower = leadSurgeonSearchTerm.toLowerCase();
+                              const doctorName = doctor.name || '';
+                              const specialty = doctor.specialty || '';
+                              return (
+                                doctorName.toLowerCase().includes(searchLower) ||
+                                specialty.toLowerCase().includes(searchLower)
+                              );
+                            });
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setLeadSurgeonHighlightIndex(prev => 
+                                prev < filteredDoctors.length - 1 ? prev + 1 : prev
+                              );
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setLeadSurgeonHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                            } else if (e.key === 'Enter' && leadSurgeonHighlightIndex >= 0 && filteredDoctors[leadSurgeonHighlightIndex]) {
+                              e.preventDefault();
+                              const doctor = filteredDoctors[leadSurgeonHighlightIndex];
+                              setFormData({ ...formData, leadSurgeonId: doctor.id.toString() });
+                              setLeadSurgeonSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                              setLeadSurgeonHighlightIndex(-1);
+                            }
+                          }}
+                          className="dialog-input-standard pl-10"
+                        />
+                      </div>
+                      {leadSurgeonSearchTerm && !formData.leadSurgeonId && (() => {
+                        const filteredDoctors = availableDoctors.filter(doctor => {
+                          if (!leadSurgeonSearchTerm) return false;
+                          const searchLower = leadSurgeonSearchTerm.toLowerCase();
+                          const doctorName = doctor.name || '';
+                          const specialty = doctor.specialty || '';
+                          return (
+                            doctorName.toLowerCase().includes(searchLower) ||
+                            specialty.toLowerCase().includes(searchLower)
+                          );
+                        });
+                        
+                        return filteredDoctors.length > 0 ? (
+                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" style={{ zIndex: 1000 }}>
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Department</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredDoctors.map((doctor, index) => {
+                                  const isSelected = formData.leadSurgeonId === doctor.id.toString();
+                                  const isHighlighted = leadSurgeonHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={doctor.id}
+                                      onClick={() => {
+                                        setFormData({ ...formData, leadSurgeonId: doctor.id.toString() });
+                                        setLeadSurgeonSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                                        setLeadSurgeonHighlightIndex(-1);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        // Prevent input from losing focus when clicking on dropdown
+                                        e.preventDefault();
+                                      }}
+                                      className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900">{doctor.name}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{doctor.specialty}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                     <div className="dialog-field-single-column">
-                      <Label htmlFor="add-assistantDoctorId" className="dialog-label-standard">Assistant Doctor (Optional)</Label>
-                      <Input
-                        id="add-assistantDoctorId"
-                        type="number"
-                        placeholder="Enter Assistant Doctor ID"
-                        value={formData.assistantDoctorId}
-                        onChange={(e) => setFormData({ ...formData, assistantDoctorId: e.target.value })}
-                        className="dialog-input-standard"
-                      />
+                      <Label htmlFor="add-assistantDoctorId" className="dialog-label-standard">Assistant Doctor</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                        <Input
+                          id="add-assistantDoctorId"
+                          autoComplete="off"
+                          placeholder="Search by Doctor Name or Department..."
+                          value={assistantDoctorSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setAssistantDoctorSearchTerm(newValue);
+                            setAssistantDoctorHighlightIndex(-1);
+                            // Clear doctor selection if user edits the search term
+                            if (formData.assistantDoctorId) {
+                              setFormData({ ...formData, assistantDoctorId: '' });
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            const filteredDoctors = availableDoctors.filter(doctor => {
+                              if (!assistantDoctorSearchTerm) return false;
+                              const searchLower = assistantDoctorSearchTerm.toLowerCase();
+                              const doctorName = doctor.name || '';
+                              const specialty = doctor.specialty || '';
+                              return (
+                                doctorName.toLowerCase().includes(searchLower) ||
+                                specialty.toLowerCase().includes(searchLower)
+                              );
+                            });
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setAssistantDoctorHighlightIndex(prev => 
+                                prev < filteredDoctors.length - 1 ? prev + 1 : prev
+                              );
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setAssistantDoctorHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                            } else if (e.key === 'Enter' && assistantDoctorHighlightIndex >= 0 && filteredDoctors[assistantDoctorHighlightIndex]) {
+                              e.preventDefault();
+                              const doctor = filteredDoctors[assistantDoctorHighlightIndex];
+                              setFormData({ ...formData, assistantDoctorId: doctor.id.toString() });
+                              setAssistantDoctorSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                              setAssistantDoctorHighlightIndex(-1);
+                            }
+                          }}
+                          className="dialog-input-standard pl-10"
+                        />
+                      </div>
+                      {assistantDoctorSearchTerm && !formData.assistantDoctorId && (() => {
+                        const filteredDoctors = availableDoctors.filter(doctor => {
+                          if (!assistantDoctorSearchTerm) return false;
+                          const searchLower = assistantDoctorSearchTerm.toLowerCase();
+                          const doctorName = doctor.name || '';
+                          const specialty = doctor.specialty || '';
+                          return (
+                            doctorName.toLowerCase().includes(searchLower) ||
+                            specialty.toLowerCase().includes(searchLower)
+                          );
+                        });
+                        
+                        return filteredDoctors.length > 0 ? (
+                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" style={{ zIndex: 1000 }}>
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Department</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredDoctors.map((doctor, index) => {
+                                  const isSelected = formData.assistantDoctorId === doctor.id.toString();
+                                  const isHighlighted = assistantDoctorHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={doctor.id}
+                                      onClick={() => {
+                                        setFormData({ ...formData, assistantDoctorId: doctor.id.toString() });
+                                        setAssistantDoctorSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                                        setAssistantDoctorHighlightIndex(-1);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        // Prevent input from losing focus when clicking on dropdown
+                                        e.preventDefault();
+                                      }}
+                                      className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900">{doctor.name}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{doctor.specialty}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
 
                   <div className="dialog-form-field-grid">
                     <div className="dialog-field-single-column">
-                      <Label htmlFor="add-anaesthetistId" className="dialog-label-standard">Anaesthetist (Optional)</Label>
-                      <Input
-                        id="add-anaesthetistId"
-                        type="number"
-                        placeholder="Enter Anaesthetist ID"
-                        value={formData.anaesthetistId}
-                        onChange={(e) => setFormData({ ...formData, anaesthetistId: e.target.value })}
-                        className="dialog-input-standard"
-                      />
+                      <Label htmlFor="add-anaesthetistId" className="dialog-label-standard">Anaesthetist</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                        <Input
+                          id="add-anaesthetistId"
+                          autoComplete="off"
+                          placeholder="Search by Doctor Name or Department..."
+                          value={anaesthetistSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setAnaesthetistSearchTerm(newValue);
+                            setAnaesthetistHighlightIndex(-1);
+                            // Clear doctor selection if user edits the search term
+                            if (formData.anaesthetistId) {
+                              setFormData({ ...formData, anaesthetistId: '' });
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            const filteredDoctors = availableDoctors.filter(doctor => {
+                              if (!anaesthetistSearchTerm) return false;
+                              const searchLower = anaesthetistSearchTerm.toLowerCase();
+                              const doctorName = doctor.name || '';
+                              const specialty = doctor.specialty || '';
+                              return (
+                                doctorName.toLowerCase().includes(searchLower) ||
+                                specialty.toLowerCase().includes(searchLower)
+                              );
+                            });
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setAnaesthetistHighlightIndex(prev => 
+                                prev < filteredDoctors.length - 1 ? prev + 1 : prev
+                              );
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setAnaesthetistHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                            } else if (e.key === 'Enter' && anaesthetistHighlightIndex >= 0 && filteredDoctors[anaesthetistHighlightIndex]) {
+                              e.preventDefault();
+                              const doctor = filteredDoctors[anaesthetistHighlightIndex];
+                              setFormData({ ...formData, anaesthetistId: doctor.id.toString() });
+                              setAnaesthetistSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                              setAnaesthetistHighlightIndex(-1);
+                            }
+                          }}
+                          className="dialog-input-standard pl-10"
+                        />
+                      </div>
+                      {anaesthetistSearchTerm && !formData.anaesthetistId && (() => {
+                        const filteredDoctors = availableDoctors.filter(doctor => {
+                          if (!anaesthetistSearchTerm) return false;
+                          const searchLower = anaesthetistSearchTerm.toLowerCase();
+                          const doctorName = doctor.name || '';
+                          const specialty = doctor.specialty || '';
+                          return (
+                            doctorName.toLowerCase().includes(searchLower) ||
+                            specialty.toLowerCase().includes(searchLower)
+                          );
+                        });
+                        
+                        return filteredDoctors.length > 0 ? (
+                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" style={{ zIndex: 1000 }}>
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Department</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredDoctors.map((doctor, index) => {
+                                  const isSelected = formData.anaesthetistId === doctor.id.toString();
+                                  const isHighlighted = anaesthetistHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={doctor.id}
+                                      onClick={() => {
+                                        setFormData({ ...formData, anaesthetistId: doctor.id.toString() });
+                                        setAnaesthetistSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                                        setAnaesthetistHighlightIndex(-1);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        // Prevent input from losing focus when clicking on dropdown
+                                        e.preventDefault();
+                                      }}
+                                      className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900">{doctor.name}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{doctor.specialty}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                     <div className="dialog-field-single-column">
-                      <Label htmlFor="add-nurseId" className="dialog-label-standard">Nurse (Optional)</Label>
-                      <Input
-                        id="add-nurseId"
-                        type="number"
-                        placeholder="Enter Nurse ID"
-                        value={formData.nurseId}
-                        onChange={(e) => setFormData({ ...formData, nurseId: e.target.value })}
-                        className="dialog-input-standard"
-                      />
+                      <Label htmlFor="add-nurseId" className="dialog-label-standard">Nurse</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                        <Input
+                          id="add-nurseId"
+                          autoComplete="off"
+                          placeholder="Search by Nurse Name..."
+                          value={nurseSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setNurseSearchTerm(newValue);
+                            setNurseHighlightIndex(-1);
+                            // Clear nurse selection if user edits the search term
+                            if (formData.nurseId) {
+                              setFormData({ ...formData, nurseId: '' });
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            const filteredNurses = availableNurses.filter(nurse => {
+                              if (!nurseSearchTerm) return false;
+                              const searchLower = nurseSearchTerm.toLowerCase();
+                              const nurseName = nurse.name || '';
+                              return nurseName.toLowerCase().includes(searchLower);
+                            });
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setNurseHighlightIndex(prev => 
+                                prev < filteredNurses.length - 1 ? prev + 1 : prev
+                              );
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setNurseHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                            } else if (e.key === 'Enter' && nurseHighlightIndex >= 0 && filteredNurses[nurseHighlightIndex]) {
+                              e.preventDefault();
+                              const nurse = filteredNurses[nurseHighlightIndex];
+                              setFormData({ ...formData, nurseId: nurse.id.toString() });
+                              setNurseSearchTerm(nurse.name);
+                              setNurseHighlightIndex(-1);
+                            }
+                          }}
+                          className="dialog-input-standard pl-10"
+                        />
+                      </div>
+                      {nurseSearchTerm && !formData.nurseId && (() => {
+                        const filteredNurses = availableNurses.filter(nurse => {
+                          if (!nurseSearchTerm) return false;
+                          const searchLower = nurseSearchTerm.toLowerCase();
+                          const nurseName = nurse.name || '';
+                          return nurseName.toLowerCase().includes(searchLower);
+                        });
+                        
+                        return filteredNurses.length > 0 ? (
+                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" style={{ zIndex: 1000 }}>
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredNurses.map((nurse, index) => {
+                                  const isSelected = formData.nurseId === nurse.id.toString();
+                                  const isHighlighted = nurseHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={nurse.id}
+                                      onClick={() => {
+                                        setFormData({ ...formData, nurseId: nurse.id.toString() });
+                                        setNurseSearchTerm(nurse.name);
+                                        setNurseHighlightIndex(-1);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        // Prevent input from losing focus when clicking on dropdown
+                                        e.preventDefault();
+                                      }}
+                                      className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900">{nurse.name}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
 
                   <div className="dialog-form-field">
-                    <Label htmlFor="add-duration" className="dialog-label-standard">Duration (Optional, in minutes)</Label>
+                    <Label htmlFor="add-duration" className="dialog-label-standard">Duration (in minutes)</Label>
                     <Input
                       id="add-duration"
                       type="number"
@@ -827,7 +1722,7 @@ export function OTManagement() {
 
                   <div className="dialog-form-field-grid">
                     <div className="dialog-field-single-column">
-                      <Label htmlFor="add-otActualStartTime" className="dialog-label-standard">OT Actual Start Time (Optional)</Label>
+                      <Label htmlFor="add-otActualStartTime" className="dialog-label-standard">OT Actual Start Time</Label>
                       <Input
                         id="add-otActualStartTime"
                         type="time"
@@ -837,7 +1732,7 @@ export function OTManagement() {
                       />
                     </div>
                     <div className="dialog-field-single-column">
-                      <Label htmlFor="add-otActualEndTime" className="dialog-label-standard">OT Actual End Time (Optional)</Label>
+                      <Label htmlFor="add-otActualEndTime" className="dialog-label-standard">OT Actual End Time</Label>
                       <Input
                         id="add-otActualEndTime"
                         type="time"
@@ -849,7 +1744,7 @@ export function OTManagement() {
                   </div>
 
                   <div className="dialog-form-field">
-                    <Label htmlFor="add-operationDescription" className="dialog-label-standard">Operation Description (Optional)</Label>
+                    <Label htmlFor="add-operationDescription" className="dialog-label-standard">Operation Description</Label>
                     <Textarea
                       id="add-operationDescription"
                       placeholder="Enter operation description..."
@@ -877,7 +1772,7 @@ export function OTManagement() {
                   </div>
 
                   <div className="dialog-form-field">
-                    <Label htmlFor="add-preOperationNotes" className="dialog-label-standard">Pre Operation Notes (Optional)</Label>
+                    <Label htmlFor="add-preOperationNotes" className="dialog-label-standard">Pre Operation Notes</Label>
                     <Textarea
                       id="add-preOperationNotes"
                       placeholder="e.g., ICU bed reserved post-surgery"
@@ -889,7 +1784,7 @@ export function OTManagement() {
                   </div>
 
                   <div className="dialog-form-field">
-                    <Label htmlFor="add-postOperationNotes" className="dialog-label-standard">Post Operation Notes (Optional)</Label>
+                    <Label htmlFor="add-postOperationNotes" className="dialog-label-standard">Post Operation Notes</Label>
                     <Textarea
                       id="add-postOperationNotes"
                       placeholder="Enter post operation notes..."
@@ -901,19 +1796,43 @@ export function OTManagement() {
                   </div>
 
                   <div className="dialog-form-field">
-                    <Label htmlFor="add-otDocuments" className="dialog-label-standard">OT Documents URL (Optional)</Label>
+                    <Label htmlFor="add-otDocuments" className="dialog-label-standard">OT Documents</Label>
                     <Input
                       id="add-otDocuments"
-                      type="url"
-                      placeholder="https://documents.example.com/..."
-                      value={formData.otDocuments}
-                      onChange={(e) => setFormData({ ...formData, otDocuments: e.target.value })}
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setSelectedFiles(prev => [...prev, ...files]);
+                      }}
                       className="dialog-input-standard"
                     />
+                    {selectedFiles.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {selectedFiles.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                            <span>{file.name}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                              }}
+                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Add OT Allocation"</p>
                   </div>
 
                   <div className="dialog-form-field">
-                    <Label htmlFor="add-billId" className="dialog-label-standard">Bill ID (Optional)</Label>
+                    <Label htmlFor="add-billId" className="dialog-label-standard">Bill ID</Label>
                     <Input
                       id="add-billId"
                       type="number"
@@ -926,7 +1845,19 @@ export function OTManagement() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-200">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="dialog-footer-button">Cancel</Button>
+                <Button variant="outline" onClick={() => {
+                  setIsDialogOpen(false);
+                  setLeadSurgeonSearchTerm('');
+                  setLeadSurgeonHighlightIndex(-1);
+                  setAssistantDoctorSearchTerm('');
+                  setAssistantDoctorHighlightIndex(-1);
+                  setAnaesthetistSearchTerm('');
+                  setAnaesthetistHighlightIndex(-1);
+                  setNurseSearchTerm('');
+                  setNurseHighlightIndex(-1);
+                  setSelectedFiles([]);
+                  setUploadedDocumentUrls([]);
+                }} className="dialog-footer-button">Cancel</Button>
                 <Button onClick={handleAddOTAllocation} className="dialog-footer-button">Add OT Allocation</Button>
               </div>
             </div>
@@ -1214,16 +2145,88 @@ export function OTManagement() {
         </TabsList>
 
         <TabsContent value="today">
-          <AllocationList allocations={todayAllocations} otRooms={otRooms} otSlotsByRoom={otSlotsByRoom} />
+          <AllocationList 
+            allocations={todayAllocations} 
+            otRooms={otRooms} 
+            otSlotsByRoom={otSlotsByRoom}
+            availableDoctors={availableDoctors}
+            patients={patients}
+            availableNurses={availableNurses}
+            availablePatientAppointments={availablePatientAppointments}
+            availableRoomAdmissions={availableRoomAdmissions}
+            availableEmergencyBedSlots={availableEmergencyBedSlots}
+            onRefresh={async () => {
+              try {
+                const allocations = await patientOTAllocationsApi.getAll();
+                setPatientOTAllocations(allocations);
+              } catch (err) {
+                console.error('Failed to refresh allocations:', err);
+              }
+            }}
+          />
         </TabsContent>
         <TabsContent value="progress">
-          <AllocationList allocations={inProgress} otRooms={otRooms} otSlotsByRoom={otSlotsByRoom} />
+          <AllocationList 
+            allocations={inProgress} 
+            otRooms={otRooms} 
+            otSlotsByRoom={otSlotsByRoom}
+            availableDoctors={availableDoctors}
+            patients={patients}
+            availableNurses={availableNurses}
+            availablePatientAppointments={availablePatientAppointments}
+            availableRoomAdmissions={availableRoomAdmissions}
+            availableEmergencyBedSlots={availableEmergencyBedSlots}
+            onRefresh={async () => {
+              try {
+                const allocations = await patientOTAllocationsApi.getAll();
+                setPatientOTAllocations(allocations);
+              } catch (err) {
+                console.error('Failed to refresh allocations:', err);
+              }
+            }}
+          />
         </TabsContent>
         <TabsContent value="scheduled">
-          <AllocationList allocations={scheduled} otRooms={otRooms} otSlotsByRoom={otSlotsByRoom} />
+          <AllocationList 
+            allocations={scheduled} 
+            otRooms={otRooms} 
+            otSlotsByRoom={otSlotsByRoom}
+            availableDoctors={availableDoctors}
+            patients={patients}
+            availableNurses={availableNurses}
+            availablePatientAppointments={availablePatientAppointments}
+            availableRoomAdmissions={availableRoomAdmissions}
+            availableEmergencyBedSlots={availableEmergencyBedSlots}
+            onRefresh={async () => {
+              try {
+                const allocations = await patientOTAllocationsApi.getAll();
+                setPatientOTAllocations(allocations);
+              } catch (err) {
+                console.error('Failed to refresh allocations:', err);
+              }
+            }}
+          />
         </TabsContent>
         <TabsContent value="completed">
-          <AllocationList allocations={completed} otRooms={otRooms} otSlotsByRoom={otSlotsByRoom} />
+          <AllocationList 
+            allocations={completed} 
+            otRooms={otRooms} 
+            otSlotsByRoom={otSlotsByRoom}
+            availableDoctors={availableDoctors}
+            patients={patients}
+            availableNurses={availableNurses}
+            availablePatientAppointments={availablePatientAppointments}
+            availableRoomAdmissions={availableRoomAdmissions}
+            availableEmergencyBedSlots={availableEmergencyBedSlots}
+            onRefresh={async () => {
+              try {
+                const allocations = await patientOTAllocationsApi.getAll();
+                setPatientOTAllocations(allocations);
+              } catch (err) {
+                console.error('Failed to refresh allocations:', err);
+              }
+            }}
+          />
         </TabsContent>
       </Tabs>
         </div>
@@ -1232,13 +2235,468 @@ export function OTManagement() {
   );
 }
 
-function AllocationList({ allocations, otRooms, otSlotsByRoom }: { allocations: PatientOTAllocation[]; otRooms: OTRoom[]; otSlotsByRoom: Map<number, OTSlot[]> }) {
+function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availableDoctors, patients, availableNurses, availablePatientAppointments, availableRoomAdmissions, availableEmergencyBedSlots }: { allocations: PatientOTAllocation[]; otRooms: OTRoom[]; otSlotsByRoom: Map<number, OTSlot[]>; onRefresh?: () => void; availableDoctors?: Doctor[]; patients?: Patient[]; availableNurses?: Array<{ id: number; name: string; department?: string }>; availablePatientAppointments?: PatientAppointment[]; availableRoomAdmissions?: Admission[]; availableEmergencyBedSlots?: any[] }) {
   const [fetchedPatients, setFetchedPatients] = useState<Map<string, Patient>>(new Map());
   const fetchingRef = useRef<Set<string>>(new Set());
   const [fetchedDoctors, setFetchedDoctors] = useState<Map<number, Doctor>>(new Map());
   const fetchingDoctorsRef = useRef<Set<number>>(new Set());
-  const [isViewDetailsDialogOpen, setIsViewDetailsDialogOpen] = useState(false);
+  const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
   const [selectedAllocation, setSelectedAllocation] = useState<PatientOTAllocation | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    patientId: '',
+    roomAdmissionId: '',
+    patientAppointmentId: '',
+    emergencyBedSlotId: '',
+    otId: '',
+    otSlotIds: [] as number[],
+    surgeryId: '',
+    leadSurgeonId: '',
+    assistantDoctorId: '',
+    anaesthetistId: '',
+    nurseId: '',
+    otAllocationDate: '',
+    duration: '',
+    otActualStartTime: '',
+    otActualEndTime: '',
+    operationDescription: '',
+    operationStatus: 'Scheduled' as PatientOTAllocation['operationStatus'],
+    preOperationNotes: '',
+    postOperationNotes: '',
+    otDocuments: '',
+    billId: '',
+    status: 'Active' as PatientOTAllocation['status'],
+  });
+  const [editSelectedFiles, setEditSelectedFiles] = useState<File[]>([]);
+  const [editUploadedDocumentUrls, setEditUploadedDocumentUrls] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isStartSurgeryDialogOpen, setIsStartSurgeryDialogOpen] = useState(false);
+  const [isCompleteSurgeryDialogOpen, setIsCompleteSurgeryDialogOpen] = useState(false);
+  const [startSurgeryTime, setStartSurgeryTime] = useState('');
+  const [completeSurgeryTime, setCompleteSurgeryTime] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editLeadSurgeonSearchTerm, setEditLeadSurgeonSearchTerm] = useState('');
+  const [editLeadSurgeonHighlightIndex, setEditLeadSurgeonHighlightIndex] = useState(-1);
+  const [editAssistantDoctorSearchTerm, setEditAssistantDoctorSearchTerm] = useState('');
+  const [editAssistantDoctorHighlightIndex, setEditAssistantDoctorHighlightIndex] = useState(-1);
+  const [editAnaesthetistSearchTerm, setEditAnaesthetistSearchTerm] = useState('');
+  const [editAnaesthetistHighlightIndex, setEditAnaesthetistHighlightIndex] = useState(-1);
+  const [editNurseSearchTerm, setEditNurseSearchTerm] = useState('');
+  const [editNurseHighlightIndex, setEditNurseHighlightIndex] = useState(-1);
+  const [editRoomAdmissionSearchTerm, setEditRoomAdmissionSearchTerm] = useState('');
+  const [editRoomAdmissionHighlightIndex, setEditRoomAdmissionHighlightIndex] = useState(-1);
+  const [editPatientAppointmentSearchTerm, setEditPatientAppointmentSearchTerm] = useState('');
+  const [editPatientAppointmentHighlightIndex, setEditPatientAppointmentHighlightIndex] = useState(-1);
+  const [editEmergencyBedSlotSearchTerm, setEditEmergencyBedSlotSearchTerm] = useState('');
+  const [editEmergencyBedSlotHighlightIndex, setEditEmergencyBedSlotHighlightIndex] = useState(-1);
+  const [editOtAllocationDate, setEditOtAllocationDate] = useState<Date | null>(null);
+  const [editOtSlots, setEditOtSlots] = useState<OTSlot[]>([]);
+  const [editSelectedOTId, setEditSelectedOTId] = useState<string>('');
+
+  // Handler to start surgery
+  const handleStartSurgery = async () => {
+    if (!selectedAllocation || !startSurgeryTime) {
+      alert('Please enter the actual start time.');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      await patientOTAllocationsApi.update({
+        id: selectedAllocation.id,
+        otActualStartTime: startSurgeryTime,
+        operationStatus: 'InProgress',
+      });
+      
+      alert('Surgery started successfully!');
+      setIsStartSurgeryDialogOpen(false);
+      setStartSurgeryTime('');
+      setSelectedAllocation(null);
+      
+      // Refresh allocations
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (err) {
+      console.error('Failed to start surgery:', err);
+      alert(`Failed to start surgery: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Function to upload files (for AllocationList component)
+  const uploadFiles = async (files: File[], patientId: string): Promise<string[]> => {
+    if (files.length === 0) return [];
+    if (!patientId) {
+      throw new Error('Patient ID is required for file upload');
+    }
+    
+    const uploadedUrls: string[] = [];
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+    
+    for (const file of files) {
+      try {
+        const formData = new FormData();
+        // Append file with the exact field name 'file' that multer expects
+        formData.append('file', file, file.name);
+        // Append folder parameter (required by backend) - must be in FormData
+        formData.append('folder', 'ot-documents');
+        // Append PatientId parameter (required by backend, must be UUID) - also in query as fallback
+        formData.append('PatientId', patientId);
+        
+        // Debug: Log form data keys
+        console.log('Uploading file:', file.name, 'Size:', file.size, 'Type:', file.type);
+        console.log('FormData entries:');
+        for (const [key, value] of formData.entries()) {
+          if (value instanceof File) {
+            console.log(`  ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
+          } else {
+            console.log(`  ${key}:`, value);
+          }
+        }
+        
+        // Send folder and PatientId as query parameters too (as fallback for multer async issue)
+        // Construct URL properly - append /upload to the base URL
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        const uploadUrlObj = new URL(`${baseUrl}/upload`);
+        uploadUrlObj.searchParams.append('folder', 'ot-documents');
+        uploadUrlObj.searchParams.append('PatientId', patientId);
+        const uploadUrl = uploadUrlObj.toString();
+        
+        console.log('Constructed upload URL:', uploadUrl);
+        console.log('File being sent:', { name: file.name, size: file.size, type: file.type });
+        
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData,
+          // Don't set Content-Type header - browser will set it with boundary for multipart/form-data
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `Failed to upload ${file.name}`);
+        }
+        
+        const result = await response.json();
+        if (result.success && result.url) {
+          uploadedUrls.push(result.url);
+        } else {
+          throw new Error(`Invalid response for ${file.name}: ${JSON.stringify(result)}`);
+        }
+      } catch (error) {
+        console.error(`Error uploading file ${file.name}:`, error);
+        throw error;
+      }
+    }
+    
+    return uploadedUrls;
+  };
+
+  // Function to delete a file manually (optional - backend handles automatic deletion on update)
+  const deleteFile = async (fileUrl: string): Promise<void> => {
+    try {
+      // Extract folder, patientNo, and filename from URL
+      // Example: http://localhost:4000/uploads/ot-documents/P2025_12_0001/document_1234567890_987654321.pdf
+      const url = new URL(fileUrl);
+      const pathParts = url.pathname.split('/').filter(p => p);
+      // pathParts: ['uploads', 'ot-documents', 'P2025_12_0001', 'document_1234567890_987654321.pdf']
+      
+      if (pathParts.length < 4 || pathParts[0] !== 'uploads') {
+        throw new Error('Invalid file URL format');
+      }
+      
+      const folder = pathParts[1]; // 'ot-docs' or 'ot-documents'
+      const patientNo = pathParts[2]; // 'P2025_12_0001'
+      const filename = pathParts.slice(3).join('/'); // 'document_1234567890_987654321.pdf'
+      
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${API_BASE_URL}/upload/${folder}/${patientNo}/${filename}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to delete file');
+      }
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      throw error;
+    }
+  };
+
+  // Fetch slots when OT is selected in edit dialog
+  useEffect(() => {
+    const fetchEditSlots = async () => {
+      if (!editSelectedOTId || !editFormData.otAllocationDate) {
+        setEditOtSlots([]);
+        return;
+      }
+      
+      try {
+        const numericOtId = parseInt(editSelectedOTId.replace('OT-', ''), 10);
+        if (isNaN(numericOtId)) {
+          setEditOtSlots([]);
+          return;
+        }
+        
+        const slots = await otSlotsApi.getAll(undefined, numericOtId, editFormData.otAllocationDate);
+        setEditOtSlots(slots);
+      } catch (err) {
+        console.error('Failed to fetch slots for edit:', err);
+        setEditOtSlots([]);
+      }
+    };
+    
+    fetchEditSlots();
+  }, [editSelectedOTId, editFormData.otAllocationDate]);
+
+  // Handler to save edited allocation
+  const handleSaveAllocation = async () => {
+    if (!selectedAllocation) return;
+
+    if (!editFormData.otId || !editFormData.leadSurgeonId || !editFormData.otAllocationDate) {
+      alert('Please fill in all required fields (OT, Lead Surgeon, Date).');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Extract patientId from the selected patient source
+      let patientId: string | undefined = undefined;
+
+      if (editFormData.roomAdmissionId) {
+        const admission = availableRoomAdmissions?.find(a =>
+          (a.roomAdmissionId?.toString() || a.id?.toString()) === editFormData.roomAdmissionId
+        );
+        patientId = admission?.patientId;
+      } else if (editFormData.patientAppointmentId) {
+        const appointment = availablePatientAppointments?.find(a =>
+          a.id.toString() === editFormData.patientAppointmentId
+        );
+        patientId = appointment?.patientId;
+      } else if (editFormData.emergencyBedSlotId) {
+        const emergencyAdmission = availableEmergencyBedSlots?.find(s => {
+          const admissionId = s.EmergencyAdmissionId?.toString() || s.emergencyAdmissionId?.toString() || s.id?.toString() || '';
+          const bedSlotId = s.EmergencyBedSlotId?.toString() || s.emergencyBedSlotId?.toString() || '';
+          return admissionId === editFormData.emergencyBedSlotId || bedSlotId === editFormData.emergencyBedSlotId;
+        });
+        patientId = emergencyAdmission?.PatientId ||
+                    emergencyAdmission?.patientId ||
+                    (emergencyAdmission as any)?.PatientId ||
+                    (emergencyAdmission as any)?.patientId;
+      } else if (editFormData.patientId) {
+        patientId = editFormData.patientId;
+      }
+
+      if (!patientId) {
+        alert('Unable to determine patient ID from selected source. Please select a patient source.');
+        setIsSaving(false);
+        return;
+      }
+
+      const updateData: any = {
+        id: selectedAllocation.id,
+        patientId: patientId,
+        otId: parseInt(editFormData.otId),
+        leadSurgeonId: parseInt(editFormData.leadSurgeonId),
+        otAllocationDate: editFormData.otAllocationDate,
+      };
+
+      if (editFormData.roomAdmissionId) {
+        updateData.roomAdmissionId = parseInt(editFormData.roomAdmissionId);
+      }
+      if (editFormData.patientAppointmentId) {
+        updateData.patientAppointmentId = editFormData.patientAppointmentId;
+      }
+      if (editFormData.emergencyBedSlotId) {
+        updateData.emergencyBedSlotId = parseInt(editFormData.emergencyBedSlotId);
+      }
+      if (editFormData.otSlotIds && editFormData.otSlotIds.length > 0) {
+        updateData.otSlotIds = editFormData.otSlotIds;
+      }
+      if (editFormData.surgeryId) {
+        updateData.surgeryId = parseInt(editFormData.surgeryId);
+      }
+      if (editFormData.assistantDoctorId) {
+        updateData.assistantDoctorId = parseInt(editFormData.assistantDoctorId);
+      }
+      if (editFormData.anaesthetistId) {
+        updateData.anaesthetistId = parseInt(editFormData.anaesthetistId);
+      }
+      if (editFormData.nurseId) {
+        updateData.nurseId = parseInt(editFormData.nurseId);
+      }
+      if (editFormData.duration) {
+        updateData.duration = editFormData.duration;
+      }
+      if (editFormData.otActualStartTime) {
+        updateData.otActualStartTime = editFormData.otActualStartTime;
+      }
+      if (editFormData.otActualEndTime) {
+        updateData.otActualEndTime = editFormData.otActualEndTime;
+      }
+      if (editFormData.operationDescription) {
+        updateData.operationDescription = editFormData.operationDescription;
+      }
+      if (editFormData.operationStatus) {
+        updateData.operationStatus = editFormData.operationStatus;
+        
+        // Release slots when status is Cancelled or Postponed
+        if (editFormData.operationStatus === 'Cancelled' || editFormData.operationStatus === 'Postponed') {
+          updateData.otSlotIds = [];
+          console.log('Releasing OT slots for cancelled/postponed allocation:', selectedAllocation.id);
+        }
+      }
+      if (editFormData.preOperationNotes) {
+        updateData.preOperationNotes = editFormData.preOperationNotes;
+      }
+      if (editFormData.postOperationNotes) {
+        updateData.postOperationNotes = editFormData.postOperationNotes;
+      }
+      // Step 1: Upload new files if any are selected
+      const uploadedUrls: string[] = [];
+      if (editSelectedFiles.length > 0) {
+        try {
+          const newUrls = await uploadFiles(editSelectedFiles, patientId);
+          uploadedUrls.push(...newUrls);
+        } catch (error) {
+          alert(`Failed to upload files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      // Step 2: Get existing OTDocuments from the allocation (following the example pattern)
+      let existingDocs: string[] = [];
+      try {
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+        const allocationResponse = await fetch(`${API_BASE_URL}/patient-ot-allocations/${selectedAllocation.id}`);
+        const allocationResult = await allocationResponse.json();
+        
+        if (allocationResult.success && allocationResult.data && allocationResult.data.OTDocuments) {
+          try {
+            // Try parsing as JSON array
+            existingDocs = JSON.parse(allocationResult.data.OTDocuments);
+          } catch (e) {
+            // Handle comma-separated format
+            existingDocs = allocationResult.data.OTDocuments.split(',').map((url: string) => url.trim()).filter((url: string) => url);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching existing allocation:', error);
+        // Fallback to using editUploadedDocumentUrls if fetch fails
+        existingDocs = [...editUploadedDocumentUrls];
+      }
+
+      // Step 3: Merge existing documents with newly uploaded URLs
+      // editUploadedDocumentUrls contains the documents the user wants to keep (after removing some)
+      // So we use that instead of existingDocs to respect user's removals
+      const allUrls = [...editUploadedDocumentUrls, ...uploadedUrls];
+      
+      // Step 4: Update with merged URLs (backend will auto-delete removed files)
+      if (allUrls.length > 0) {
+        updateData.otDocuments = JSON.stringify(allUrls);
+      } else {
+        updateData.otDocuments = null;
+      }
+      if (editFormData.billId) {
+        updateData.billId = parseInt(editFormData.billId);
+      }
+
+      await patientOTAllocationsApi.update(updateData);
+      
+      alert('OT Allocation updated successfully!');
+      setIsManageDialogOpen(false);
+      setEditFormData({
+        patientId: '',
+        roomAdmissionId: '',
+        patientAppointmentId: '',
+        emergencyBedSlotId: '',
+        otId: '',
+        otSlotIds: [],
+        surgeryId: '',
+        leadSurgeonId: '',
+        assistantDoctorId: '',
+        anaesthetistId: '',
+        nurseId: '',
+        otAllocationDate: '',
+        duration: '',
+        otActualStartTime: '',
+        otActualEndTime: '',
+        operationDescription: '',
+        operationStatus: 'Scheduled',
+        preOperationNotes: '',
+        postOperationNotes: '',
+        otDocuments: '',
+        billId: '',
+        status: 'Active',
+      });
+      setEditSelectedFiles([]);
+      setEditUploadedDocumentUrls([]);
+      setEditLeadSurgeonSearchTerm('');
+      setEditLeadSurgeonHighlightIndex(-1);
+      setEditAssistantDoctorSearchTerm('');
+      setEditAssistantDoctorHighlightIndex(-1);
+      setEditAnaesthetistSearchTerm('');
+      setEditAnaesthetistHighlightIndex(-1);
+      setEditNurseSearchTerm('');
+      setEditNurseHighlightIndex(-1);
+      setEditRoomAdmissionSearchTerm('');
+      setEditRoomAdmissionHighlightIndex(-1);
+      setEditPatientAppointmentSearchTerm('');
+      setEditPatientAppointmentHighlightIndex(-1);
+      setEditEmergencyBedSlotSearchTerm('');
+      setEditEmergencyBedSlotHighlightIndex(-1);
+      setEditOtAllocationDate(null);
+      setEditOtSlots([]);
+      setEditSelectedOTId('');
+      setEditSelectedFiles([]);
+      setEditUploadedDocumentUrls([]);
+      setSelectedAllocation(null);
+      
+      // Refresh allocations
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (err) {
+      console.error('Failed to update allocation:', err);
+      alert(`Failed to update allocation: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handler to complete surgery
+  const handleCompleteSurgery = async () => {
+    if (!selectedAllocation || !completeSurgeryTime) {
+      alert('Please enter the actual end time.');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      await patientOTAllocationsApi.update({
+        id: selectedAllocation.id,
+        otActualEndTime: completeSurgeryTime,
+        operationStatus: 'Completed',
+      });
+      
+      alert('Surgery completed successfully!');
+      setIsCompleteSurgeryDialogOpen(false);
+      setCompleteSurgeryTime('');
+      setSelectedAllocation(null);
+      
+      // Refresh allocations
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (err) {
+      console.error('Failed to complete surgery:', err);
+      alert(`Failed to complete surgery: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   // Fetch patients for each unique patientId in allocations
   useEffect(() => {
@@ -1635,16 +3093,218 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom }: { allocations: 
                     size="sm"
                     onClick={() => {
                       setSelectedAllocation(allocation);
-                      setIsViewDetailsDialogOpen(true);
+                      // Initialize form data with current allocation values
+                      // Get current patient info
+                      const currentPatient = allocation.patientId ? fetchedPatients.get(allocation.patientId) : null;
+                      const currentPatientName = currentPatient 
+                        ? `${(currentPatient as any).PatientName || (currentPatient as any).patientName || ''} ${(currentPatient as any).LastName || (currentPatient as any).lastName || ''}`.trim() 
+                        : (allocation as any)?.PatientName || '';
+                      const currentPatientNo = currentPatient 
+                        ? (currentPatient as any).PatientNo || (currentPatient as any).patientNo || ''
+                        : (allocation as any)?.PatientNo || '';
+                      
+                      // Get current surgeon info
+                      const currentSurgeon = allocation.leadSurgeonId && typeof allocation.leadSurgeonId === 'number' 
+                        ? fetchedDoctors.get(allocation.leadSurgeonId) 
+                        : null;
+                      const currentSurgeonName = currentSurgeon?.name || (allocation as any)?.LeadSurgeonName || '';
+                      const currentSurgeonId = allocation.leadSurgeonId;
+                      
+                      // Handle otAllocationDate - convert to Date object for DatePicker
+                      let otAllocationDateObj: Date | null = null;
+                      if (allocation.otAllocationDate) {
+                        try {
+                          // Try parsing as YYYY-MM-DD
+                          if (allocation.otAllocationDate.includes('-') && allocation.otAllocationDate.split('-')[0].length === 4) {
+                            otAllocationDateObj = new Date(allocation.otAllocationDate);
+                          } else if (allocation.otAllocationDate.includes('-')) {
+                            // Try DD-MM-YYYY format
+                            const parts = allocation.otAllocationDate.split('-');
+                            if (parts.length === 3 && parts[0].length === 2) {
+                              otAllocationDateObj = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                            }
+                          } else {
+                            otAllocationDateObj = new Date(allocation.otAllocationDate);
+                          }
+                          if (isNaN(otAllocationDateObj.getTime())) {
+                            otAllocationDateObj = null;
+                          }
+                        } catch {
+                          otAllocationDateObj = null;
+                        }
+                      }
+                      
+                      // Get assistant doctor, anaesthetist, nurse info
+                      const assistantDoctor = allocation.assistantDoctorId && typeof allocation.assistantDoctorId === 'number' 
+                        ? fetchedDoctors.get(allocation.assistantDoctorId) 
+                        : null;
+                      const anaesthetist = allocation.anaesthetistId && typeof allocation.anaesthetistId === 'number' 
+                        ? fetchedDoctors.get(allocation.anaesthetistId) 
+                        : null;
+                      
+                      setEditFormData({
+                        patientId: allocation.patientId || '',
+                        roomAdmissionId: allocation.roomAdmissionId?.toString() || '',
+                        patientAppointmentId: allocation.patientAppointmentId || '',
+                        emergencyBedSlotId: allocation.emergencyBedSlotId?.toString() || '',
+                        otId: allocation.otId?.toString() || '',
+                        otSlotIds: allocation.otSlotIds || [],
+                        surgeryId: allocation.surgeryId?.toString() || '',
+                        leadSurgeonId: currentSurgeonId?.toString() || '',
+                        assistantDoctorId: allocation.assistantDoctorId?.toString() || '',
+                        anaesthetistId: allocation.anaesthetistId?.toString() || '',
+                        nurseId: allocation.nurseId?.toString() || '',
+                        otAllocationDate: allocation.otAllocationDate || '',
+                        duration: allocation.duration || '',
+                        otActualStartTime: allocation.otActualStartTime || '',
+                        otActualEndTime: allocation.otActualEndTime || '',
+                        operationDescription: allocation.operationDescription || '',
+                        operationStatus: allocation.operationStatus,
+                        preOperationNotes: allocation.preOperationNotes || '',
+                        postOperationNotes: allocation.postOperationNotes || '',
+                        otDocuments: allocation.otDocuments || '',
+                        billId: allocation.billId?.toString() || '',
+                        status: allocation.status || 'Active',
+                      });
+                      
+                      // Set search terms for dropdowns
+                      if (currentSurgeon) {
+                        setEditLeadSurgeonSearchTerm(`${currentSurgeon.name} - ${currentSurgeon.specialty}`);
+                      } else if (currentSurgeonId) {
+                        setEditLeadSurgeonSearchTerm(`ID: ${currentSurgeonId}`);
+                      } else {
+                        setEditLeadSurgeonSearchTerm('');
+                      }
+                      
+                      if (assistantDoctor) {
+                        setEditAssistantDoctorSearchTerm(`${assistantDoctor.name} - ${assistantDoctor.specialty}`);
+                      } else {
+                        setEditAssistantDoctorSearchTerm('');
+                      }
+                      
+                      if (anaesthetist) {
+                        setEditAnaesthetistSearchTerm(`${anaesthetist.name} - ${anaesthetist.specialty}`);
+                      } else {
+                        setEditAnaesthetistSearchTerm('');
+                      }
+                      
+                      // Set patient source search terms based on which source is used
+                      if (allocation.roomAdmissionId) {
+                        const admission = availableRoomAdmissions?.find(a => 
+                          (a.roomAdmissionId?.toString() || a.id?.toString()) === allocation.roomAdmissionId?.toString()
+                        );
+                        if (admission) {
+                          setEditRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
+                        }
+                      } else if (allocation.patientAppointmentId) {
+                        const appointment = availablePatientAppointments?.find(a => a.id.toString() === allocation.patientAppointmentId);
+                        if (appointment) {
+                          const patient = patients?.find(p => 
+                            (p as any).patientId === appointment.patientId || 
+                            (p as any).PatientId === appointment.patientId
+                          );
+                          const patientName = patient 
+                            ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                            : appointment.patientId || 'Unknown';
+                          setEditPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
+                        }
+                      } else if (allocation.emergencyBedSlotId) {
+                        const slot = availableEmergencyBedSlots?.find(s => {
+                          const slotId = s.EmergencyBedSlotId?.toString() || s.emergencyBedSlotId?.toString() || s.id?.toString() || '';
+                          return slotId === allocation.emergencyBedSlotId?.toString();
+                        });
+                        if (slot) {
+                          const patientName = slot.PatientName || slot.patientName || 'Unknown';
+                          const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
+                          setEditEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
+                        }
+                      }
+                      
+                      // Set date picker value
+                      setEditOtAllocationDate(otAllocationDateObj);
+                      setEditSelectedOTId(allocation.otId?.toString() || '');
+                      
+                      // Parse existing documents from otDocuments field
+                      let existingDocUrls: string[] = [];
+                      if (allocation.otDocuments) {
+                        try {
+                          // Try parsing as JSON array first
+                          const parsed = JSON.parse(allocation.otDocuments);
+                          if (Array.isArray(parsed)) {
+                            existingDocUrls = parsed;
+                          } else if (typeof parsed === 'string') {
+                            existingDocUrls = [parsed];
+                          }
+                        } catch {
+                          // If not JSON, treat as comma-separated string or single URL
+                          if (allocation.otDocuments.includes(',')) {
+                            existingDocUrls = allocation.otDocuments.split(',').map(url => url.trim()).filter(url => url);
+                          } else {
+                            existingDocUrls = [allocation.otDocuments];
+                          }
+                        }
+                      }
+                      setEditUploadedDocumentUrls(existingDocUrls);
+                      setEditSelectedFiles([]);
+                      
+                      // Fetch slots for the OT
+                      const fetchEditSlots = async () => {
+                        if (allocation.otId) {
+                          try {
+                            const numericOtId = typeof allocation.otId === 'number' ? allocation.otId : parseInt(String(allocation.otId).replace('OT-', ''), 10);
+                            if (!isNaN(numericOtId)) {
+                              const slots = await otSlotsApi.getAll(undefined, numericOtId, allocation.otAllocationDate);
+                              setEditOtSlots(slots);
+                            } else {
+                              setEditOtSlots([]);
+                            }
+                          } catch (err) {
+                            console.error('Failed to fetch slots for edit:', err);
+                            setEditOtSlots([]);
+                          }
+                        } else {
+                          setEditOtSlots([]);
+                        }
+                      };
+                      fetchEditSlots();
+                      
+                      setIsManageDialogOpen(true);
                     }}
                   >
-                    View Details
+                    Manage
                   </Button>
                   {allocation.operationStatus === 'Scheduled' && (
-                    <Button size="sm" variant="default">Start Surgery</Button>
+                    <Button 
+                      size="sm" 
+                      variant="default"
+                      onClick={() => {
+                        setSelectedAllocation(allocation);
+                        // Set current time as default
+                        const now = new Date();
+                        const hours = String(now.getHours()).padStart(2, '0');
+                        const minutes = String(now.getMinutes()).padStart(2, '0');
+                        setStartSurgeryTime(`${hours}:${minutes}`);
+                        setIsStartSurgeryDialogOpen(true);
+                      }}
+                    >
+                      Start Surgery
+                    </Button>
                   )}
                   {allocation.operationStatus === 'InProgress' && (
-                    <Button size="sm" variant="default" className="bg-green-600 hover:bg-green-700">
+                    <Button 
+                      size="sm" 
+                      variant="default" 
+                      className="bg-green-600 hover:bg-green-700"
+                      onClick={() => {
+                        setSelectedAllocation(allocation);
+                        // Set current time as default
+                        const now = new Date();
+                        const hours = String(now.getHours()).padStart(2, '0');
+                        const minutes = String(now.getMinutes()).padStart(2, '0');
+                        setCompleteSurgeryTime(`${hours}:${minutes}`);
+                        setIsCompleteSurgeryDialogOpen(true);
+                      }}
+                    >
                       Complete Surgery
                     </Button>
                   )}
@@ -1662,240 +3322,1457 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom }: { allocations: 
         </Card>
       )}
 
-      {/* View Details Dialog */}
-      <Dialog open={isViewDetailsDialogOpen} onOpenChange={setIsViewDetailsDialogOpen}>
+      {/* Manage Dialog */}
+      <Dialog open={isManageDialogOpen} onOpenChange={setIsManageDialogOpen}>
         <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
           <div className="dialog-scrollable-wrapper dialog-content-scrollable">
             <DialogHeader className="dialog-header-standard">
-              <DialogTitle className="dialog-title-standard">Operation Details</DialogTitle>
+              <DialogTitle className="dialog-title-standard">Manage OT Allocation</DialogTitle>
             </DialogHeader>
             <div className="dialog-body-content-wrapper">
-              {selectedAllocation && (() => {
-                const otRoom = otRooms?.find(ot => ot && ot.id === selectedAllocation.otId);
-                const patient = selectedAllocation.patientId ? fetchedPatients.get(selectedAllocation.patientId) : null;
-                const patientName = patient 
-                  ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
-                  : (selectedAllocation as any)?.PatientName || '';
-                const patientNo = patient 
-                  ? (patient as any).PatientNo || (patient as any).patientNo || ''
-                  : (selectedAllocation as any)?.PatientNo || '';
-                const surgeon = selectedAllocation.leadSurgeonId && typeof selectedAllocation.leadSurgeonId === 'number' 
-                  ? fetchedDoctors.get(selectedAllocation.leadSurgeonId) 
-                  : null;
-                const surgeonName = surgeon?.name || (selectedAllocation as any)?.LeadSurgeonName || '';
-                const otNumber = otRoom?.otNo || `OT-${selectedAllocation.otId || ''}`;
-                const operationDescription = selectedAllocation.operationDescription || 'Operation';
-                const allocationDate = selectedAllocation.otAllocationDate ? formatDateDisplayIST(selectedAllocation.otAllocationDate, 'numeric') : '';
-                const allocationTime = selectedAllocation.otActualStartTime || selectedAllocation.otStartTime || '';
-                const slotNumbers = formatSlotNumbers(selectedAllocation, selectedAllocation.otId || 0);
-                const contiguousTimeRange = getLongestContiguousTimeRange(selectedAllocation, selectedAllocation.otId || 0);
-                const calculatedDuration = contiguousTimeRange ? calculateDurationFromTimeRange(contiguousTimeRange) : '';
-                const duration = calculatedDuration || (selectedAllocation.duration ? `${selectedAllocation.duration} minutes` : '-');
+              <div className="dialog-form-container space-y-4">
+                  <div className="pb-1 px-3 bg-gray-50 rounded-md border border-gray-200">
+                    <Label className="dialog-label-standard">Patient Source (Select one) *</Label>
+                    <p className="text-xs text-gray-500 mt-1">Choose either Room Admission (IPD), Patient Appointment (OPD), or Emergency Bed</p>
+                  </div>
 
-                return (
-                  <div className="dialog-form-container space-y-4">
-                    <div className="dialog-form-field-grid">
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">OT Number</Label>
-                        <Input
-                          value={otNumber}
-                          disabled
-                          className="dialog-input-standard dialog-input-disabled"
-                        />
-                      </div>
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">Operation Status</Label>
-                        <div className="mt-1">
-                          {getStatusBadge(selectedAllocation.operationStatus)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="dialog-form-field">
-                      <Label className="dialog-label-standard">Operation Description</Label>
+                  <div className="dialog-form-field -mt-4">
+                    <Label htmlFor="edit-roomAdmissionId" className="dialog-label-standard">Room Admission (IPD)</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                       <Input
-                        value={operationDescription}
-                        disabled
-                        className="dialog-input-standard dialog-input-disabled"
+                        id="edit-roomAdmissionId"
+                        autoComplete="off"
+                        placeholder="Search by Patient Name, Bed Number, or Room Type..."
+                        value={editRoomAdmissionSearchTerm}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setEditRoomAdmissionSearchTerm(newValue);
+                          setEditRoomAdmissionHighlightIndex(-1);
+                          if (editFormData.roomAdmissionId) {
+                            setEditFormData({ ...editFormData, roomAdmissionId: '', patientAppointmentId: '', emergencyBedSlotId: '' });
+                            setEditPatientAppointmentSearchTerm('');
+                            setEditEmergencyBedSlotSearchTerm('');
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          const filteredAdmissions = (availableRoomAdmissions || []).filter(admission => {
+                            if (!editRoomAdmissionSearchTerm) return false;
+                            const searchLower = editRoomAdmissionSearchTerm.toLowerCase();
+                            const patientName = admission.patientName || '';
+                            const bedNumber = admission.bedNumber || '';
+                            const roomType = admission.roomType || '';
+                            const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
+                            return (
+                              patientName.toLowerCase().includes(searchLower) ||
+                              bedNumber.toLowerCase().includes(searchLower) ||
+                              roomType.toLowerCase().includes(searchLower) ||
+                              admissionId.includes(searchLower)
+                            );
+                          });
+                          
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setEditRoomAdmissionHighlightIndex(prev => 
+                              prev < filteredAdmissions.length - 1 ? prev + 1 : prev
+                            );
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setEditRoomAdmissionHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                          } else if (e.key === 'Enter' && editRoomAdmissionHighlightIndex >= 0 && filteredAdmissions[editRoomAdmissionHighlightIndex]) {
+                            e.preventDefault();
+                            const admission = filteredAdmissions[editRoomAdmissionHighlightIndex];
+                            const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
+                            setEditFormData({ ...editFormData, roomAdmissionId: admissionId, patientAppointmentId: '', emergencyBedSlotId: '' });
+                            setEditRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
+                            setEditRoomAdmissionHighlightIndex(-1);
+                            setEditPatientAppointmentSearchTerm('');
+                            setEditEmergencyBedSlotSearchTerm('');
+                          }
+                        }}
+                        className="pl-10 dialog-input-standard"
                       />
                     </div>
+                    {editRoomAdmissionSearchTerm && (() => {
+                      const filteredAdmissions = (availableRoomAdmissions || []).filter(admission => {
+                        if (!editRoomAdmissionSearchTerm) return false;
+                        const searchLower = editRoomAdmissionSearchTerm.toLowerCase();
+                        const patientName = admission.patientName || '';
+                        const bedNumber = admission.bedNumber || '';
+                        const roomType = admission.roomType || '';
+                        const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
+                        return (
+                          patientName.toLowerCase().includes(searchLower) ||
+                          bedNumber.toLowerCase().includes(searchLower) ||
+                          roomType.toLowerCase().includes(searchLower) ||
+                          admissionId.includes(searchLower)
+                        );
+                      });
+                      
+                      return filteredAdmissions.length > 0 ? (
+                        <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" id="edit-roomAdmission-dropdown">
+                          <table className="w-full">
+                            <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Patient</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Bed Number</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Room Type</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Admission Date</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredAdmissions.map((admission, index) => {
+                                const isSelected = editFormData.roomAdmissionId === (admission.roomAdmissionId?.toString() || admission.id?.toString() || '');
+                                const isHighlighted = editRoomAdmissionHighlightIndex === index;
+                                const formattedDate = admission.admissionDate ? formatDateDisplayIST(admission.admissionDate) : 'N/A';
+                                return (
+                                  <tr
+                                    key={admission.roomAdmissionId || admission.id}
+                                    onClick={() => {
+                                      const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
+                                      setEditFormData({ ...editFormData, roomAdmissionId: admissionId, patientAppointmentId: '', emergencyBedSlotId: '' });
+                                      setEditRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
+                                      setEditRoomAdmissionHighlightIndex(-1);
+                                      setEditPatientAppointmentSearchTerm('');
+                                      setEditEmergencyBedSlotSearchTerm('');
+                                    }}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                  >
+                                    <td className="py-2 px-3 text-sm text-gray-900">{admission.patientName || 'Unknown'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600 font-mono">{admission.bedNumber || '-'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{admission.roomType || '-'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{formattedDate}</td>
+                                    <td className="py-2 px-3 text-sm">
+                                      <span className={`px-2 py-0.5 rounded text-xs ${
+                                        admission.status === 'Active' 
+                                          ? 'bg-green-100 text-green-700' 
+                                          : 'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {admission.status || 'Active'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
 
-                    <div className="dialog-form-field-grid">
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">Patient Name</Label>
-                        <Input
-                          value={patientName || '-'}
-                          disabled
-                          className="dialog-input-standard dialog-input-disabled"
-                        />
-                      </div>
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">Patient No</Label>
-                        <Input
-                          value={patientNo || '-'}
-                          disabled
-                          className="dialog-input-standard dialog-input-disabled"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="dialog-form-field">
-                      <Label className="dialog-label-standard">Lead Surgeon</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-patientAppointmentId" className="dialog-label-standard">Patient Appointment (OPD)</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                       <Input
-                        value={surgeonName || (selectedAllocation.leadSurgeonId ? `ID: ${selectedAllocation.leadSurgeonId}` : '-')}
-                        disabled
-                        className="dialog-input-standard dialog-input-disabled"
+                        id="edit-patientAppointmentId"
+                        autoComplete="off"
+                        placeholder="Search by Token No, Patient Name, or Doctor Name..."
+                        value={editPatientAppointmentSearchTerm}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setEditPatientAppointmentSearchTerm(newValue);
+                          setEditPatientAppointmentHighlightIndex(-1);
+                          if (editFormData.patientAppointmentId) {
+                            setEditFormData({ ...editFormData, patientAppointmentId: '', roomAdmissionId: '', emergencyBedSlotId: '' });
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          const filteredAppointments = (availablePatientAppointments || []).filter(appointment => {
+                            if (!editPatientAppointmentSearchTerm) return false;
+                            const searchLower = editPatientAppointmentSearchTerm.toLowerCase();
+                            const tokenNo = appointment.tokenNo || '';
+                            const patient = patients?.find(p => 
+                              (p as any).patientId === appointment.patientId || 
+                              (p as any).PatientId === appointment.patientId
+                            );
+                            const patientName = patient 
+                              ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                              : '';
+                            const doctorName = availableDoctors?.find(d => d.id.toString() === appointment.doctorId)?.name || '';
+                            return (
+                              tokenNo.toLowerCase().includes(searchLower) ||
+                              patientName.toLowerCase().includes(searchLower) ||
+                              doctorName.toLowerCase().includes(searchLower)
+                            );
+                          });
+                          
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setEditPatientAppointmentHighlightIndex(prev => 
+                              prev < filteredAppointments.length - 1 ? prev + 1 : prev
+                            );
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setEditPatientAppointmentHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                          } else if (e.key === 'Enter' && editPatientAppointmentHighlightIndex >= 0 && filteredAppointments[editPatientAppointmentHighlightIndex]) {
+                            e.preventDefault();
+                            const appointment = filteredAppointments[editPatientAppointmentHighlightIndex];
+                            setEditFormData({ ...editFormData, patientAppointmentId: appointment.id.toString(), roomAdmissionId: '', emergencyBedSlotId: '' });
+                            const patient = patients?.find(p => 
+                              (p as any).patientId === appointment.patientId || 
+                              (p as any).PatientId === appointment.patientId
+                            );
+                            const patientName = patient 
+                              ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                              : appointment.patientId || 'Unknown';
+                            setEditPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
+                            setEditPatientAppointmentHighlightIndex(-1);
+                          }
+                        }}
+                        className="pl-10 dialog-input-standard"
                       />
                     </div>
-
-                    <div className="dialog-form-field-grid">
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">OT Allocation Date</Label>
-                        <Input
-                          value={allocationDate || '-'}
-                          disabled
-                          className="dialog-input-standard dialog-input-disabled"
-                        />
-                      </div>
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">Date of Operation</Label>
-                        <Input
-                          value={selectedAllocation.dateOfOperation ? formatDateDisplayIST(selectedAllocation.dateOfOperation, 'numeric') : '-'}
-                          disabled
-                          className="dialog-input-standard dialog-input-disabled"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="dialog-form-field-grid">
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">Start Time</Label>
-                        <Input
-                          value={selectedAllocation.otStartTime || '-'}
-                          disabled
-                          className="dialog-input-standard dialog-input-disabled"
-                        />
-                      </div>
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">End Time</Label>
-                        <Input
-                          value={selectedAllocation.otEndTime || '-'}
-                          disabled
-                          className="dialog-input-standard dialog-input-disabled"
-                        />
-                      </div>
-                    </div>
-
-                    {selectedAllocation.otActualStartTime && (
-                      <div className="dialog-form-field-grid">
-                        <div className="dialog-form-field">
-                          <Label className="dialog-label-standard">Actual Start Time</Label>
-                          <Input
-                            value={selectedAllocation.otActualStartTime}
-                            disabled
-                            className="dialog-input-standard dialog-input-disabled"
-                          />
+                    {editPatientAppointmentSearchTerm && (() => {
+                      const filteredAppointments = (availablePatientAppointments || []).filter(appointment => {
+                        if (!editPatientAppointmentSearchTerm) return false;
+                        const searchLower = editPatientAppointmentSearchTerm.toLowerCase();
+                        const tokenNo = appointment.tokenNo || '';
+                        const patient = patients?.find(p => 
+                          (p as any).patientId === appointment.patientId || 
+                          (p as any).PatientId === appointment.patientId
+                        );
+                        const patientName = patient 
+                          ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                          : '';
+                        const doctorName = availableDoctors?.find(d => d.id.toString() === appointment.doctorId)?.name || '';
+                        return (
+                          tokenNo.toLowerCase().includes(searchLower) ||
+                          patientName.toLowerCase().includes(searchLower) ||
+                          doctorName.toLowerCase().includes(searchLower)
+                        );
+                      });
+                      
+                      return filteredAppointments.length > 0 ? (
+                        <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" id="edit-patientAppointment-dropdown">
+                          <table className="w-full">
+                            <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Token No</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Patient</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Doctor</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Date</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Time</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredAppointments.map((appointment, index) => {
+                                const isSelected = editFormData.patientAppointmentId === appointment.id.toString();
+                                const isHighlighted = editPatientAppointmentHighlightIndex === index;
+                                const patient = patients?.find(p => 
+                                  (p as any).patientId === appointment.patientId || 
+                                  (p as any).PatientId === appointment.patientId
+                                );
+                                const patientName = patient 
+                                  ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                                  : appointment.patientId || 'Unknown';
+                                const doctorName = availableDoctors?.find(d => d.id.toString() === appointment.doctorId)?.name || 'Unknown';
+                                const formattedDate = appointment.appointmentDate ? formatDateDisplayIST(appointment.appointmentDate) : 'N/A';
+                                return (
+                                  <tr
+                                    key={appointment.id}
+                                    onClick={() => {
+                                      setEditFormData({ ...editFormData, patientAppointmentId: appointment.id.toString(), roomAdmissionId: '', emergencyBedSlotId: '' });
+                                      setEditPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
+                                      setEditPatientAppointmentHighlightIndex(-1);
+                                    }}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                  >
+                                    <td className="py-2 px-3 text-sm text-gray-900 font-mono">{appointment.tokenNo || '-'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-900">{patientName}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{doctorName}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{formattedDate}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{appointment.appointmentTime || '-'}</td>
+                                    <td className="py-2 px-3 text-sm">
+                                      <span className={`px-2 py-0.5 rounded text-xs ${
+                                        appointment.appointmentStatus === 'Completed' 
+                                          ? 'bg-green-100 text-green-700' 
+                                          : appointment.appointmentStatus === 'Consulting'
+                                          ? 'bg-yellow-100 text-yellow-700'
+                                          : 'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {appointment.appointmentStatus || 'Waiting'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
-                        <div className="dialog-form-field">
-                          <Label className="dialog-label-standard">Actual End Time</Label>
-                          <Input
-                            value={selectedAllocation.otActualEndTime || '-'}
-                            disabled
-                            className="dialog-input-standard dialog-input-disabled"
-                          />
-                        </div>
-                      </div>
-                    )}
+                      ) : null;
+                    })()}
+                  </div>
 
-                    {slotNumbers && (
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">OT Slots</Label>
-                        <Input
-                          value={slotNumbers}
-                          disabled
-                          className="dialog-input-standard dialog-input-disabled"
-                        />
-                      </div>
-                    )}
-
-                    {contiguousTimeRange && (
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">Time Range</Label>
-                        <Input
-                          value={contiguousTimeRange}
-                          disabled
-                          className="dialog-input-standard dialog-input-disabled"
-                        />
-                      </div>
-                    )}
-
-                    <div className="dialog-form-field">
-                      <Label className="dialog-label-standard">Duration</Label>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-emergencyBedSlotId" className="dialog-label-standard">Emergency Bed Slot</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                       <Input
-                        value={duration}
-                        disabled
-                        className="dialog-input-standard dialog-input-disabled"
+                        id="edit-emergencyBedSlotId"
+                        autoComplete="off"
+                        placeholder="Search by Patient Name, Bed Slot No, or Bed No..."
+                        value={editEmergencyBedSlotSearchTerm}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setEditEmergencyBedSlotSearchTerm(newValue);
+                          setEditEmergencyBedSlotHighlightIndex(-1);
+                          if (editFormData.emergencyBedSlotId) {
+                            setEditFormData({ ...editFormData, emergencyBedSlotId: '', roomAdmissionId: '', patientAppointmentId: '' });
+                            setEditPatientAppointmentSearchTerm('');
+                            setEditRoomAdmissionSearchTerm('');
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          const filteredSlots = (availableEmergencyBedSlots || []).filter(slot => {
+                            if (!editEmergencyBedSlotSearchTerm) return false;
+                            const searchLower = editEmergencyBedSlotSearchTerm.toLowerCase();
+                            const patientName = slot.PatientName || slot.patientName || '';
+                            const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
+                            const bedNo = slot.EmergencyBedNo || slot.emergencyBedNo || '';
+                            const slotId = slot.EmergencyBedSlotId?.toString() || slot.emergencyBedSlotId?.toString() || slot.id?.toString() || '';
+                            return (
+                              patientName.toLowerCase().includes(searchLower) ||
+                              bedSlotNo.toLowerCase().includes(searchLower) ||
+                              bedNo.toLowerCase().includes(searchLower) ||
+                              slotId.includes(searchLower)
+                            );
+                          });
+                          
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setEditEmergencyBedSlotHighlightIndex(prev => 
+                              prev < filteredSlots.length - 1 ? prev + 1 : prev
+                            );
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setEditEmergencyBedSlotHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                          } else if (e.key === 'Enter' && editEmergencyBedSlotHighlightIndex >= 0 && filteredSlots[editEmergencyBedSlotHighlightIndex]) {
+                            e.preventDefault();
+                            const slot = filteredSlots[editEmergencyBedSlotHighlightIndex];
+                            const slotId = slot.EmergencyBedSlotId?.toString() || slot.emergencyBedSlotId?.toString() || slot.id?.toString() || '';
+                            setEditFormData({ ...editFormData, emergencyBedSlotId: slotId, roomAdmissionId: '', patientAppointmentId: '' });
+                            const patientName = slot.PatientName || slot.patientName || 'Unknown';
+                            const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
+                            setEditEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
+                            setEditEmergencyBedSlotHighlightIndex(-1);
+                            setEditPatientAppointmentSearchTerm('');
+                            setEditRoomAdmissionSearchTerm('');
+                          }
+                        }}
+                        className="pl-10 dialog-input-standard"
                       />
                     </div>
+                    {editEmergencyBedSlotSearchTerm && (() => {
+                      const filteredSlots = (availableEmergencyBedSlots || []).filter(slot => {
+                        if (!editEmergencyBedSlotSearchTerm) return false;
+                        const searchLower = editEmergencyBedSlotSearchTerm.toLowerCase();
+                        const patientName = slot.PatientName || slot.patientName || '';
+                        const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
+                        const bedNo = slot.EmergencyBedNo || slot.emergencyBedNo || '';
+                        const slotId = slot.EmergencyBedSlotId?.toString() || slot.emergencyBedSlotId?.toString() || slot.id?.toString() || '';
+                        return (
+                          patientName.toLowerCase().includes(searchLower) ||
+                          bedSlotNo.toLowerCase().includes(searchLower) ||
+                          bedNo.toLowerCase().includes(searchLower) ||
+                          slotId.includes(searchLower)
+                        );
+                      });
+                      
+                      return filteredSlots.length > 0 ? (
+                        <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" id="edit-emergencyBedSlot-dropdown">
+                          <table className="w-full">
+                            <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Patient</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Bed Slot No</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Bed No</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Admission Date</th>
+                                <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredSlots.map((slot, index) => {
+                                const slotId = slot.EmergencyBedSlotId?.toString() || slot.emergencyBedSlotId?.toString() || slot.id?.toString() || '';
+                                const isSelected = editFormData.emergencyBedSlotId === slotId;
+                                const isHighlighted = editEmergencyBedSlotHighlightIndex === index;
+                                const patientName = slot.PatientName || slot.patientName || 'Unknown';
+                                const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '-';
+                                const bedNo = slot.EmergencyBedNo || slot.emergencyBedNo || '-';
+                                const admissionDate = slot.EmergencyAdmissionDate || slot.emergencyAdmissionDate || '';
+                                const formattedDate = admissionDate ? formatDateDisplayIST(typeof admissionDate === 'string' ? admissionDate : admissionDate.toString()) : 'N/A';
+                                const status = slot.Status || slot.status || 'Active';
+                                return (
+                                  <tr
+                                    key={slotId}
+                                    onClick={() => {
+                                      setEditFormData({ ...editFormData, emergencyBedSlotId: slotId, roomAdmissionId: '', patientAppointmentId: '' });
+                                      setEditEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
+                                      setEditEmergencyBedSlotHighlightIndex(-1);
+                                      setEditPatientAppointmentSearchTerm('');
+                                      setEditRoomAdmissionSearchTerm('');
+                                    }}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                  >
+                                    <td className="py-2 px-3 text-sm text-gray-900">{patientName}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600 font-mono">{bedSlotNo}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600 font-mono">{bedNo}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{formattedDate}</td>
+                                    <td className="py-2 px-3 text-sm">
+                                      <span className={`px-2 py-0.5 rounded text-xs ${
+                                        status === 'Active' 
+                                          ? 'bg-green-100 text-green-700' 
+                                          : 'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
 
-                    {selectedAllocation.preOperationNotes && (
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">Pre-Operation Notes</Label>
-                        <Textarea
-                          value={selectedAllocation.preOperationNotes}
-                          disabled
-                          rows={4}
-                          className="dialog-textarea-standard dialog-input-disabled"
-                        />
-                      </div>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-otAllocationDate" className="dialog-label-standard">OT Allocation Date *</Label>
+                    <DatePicker
+                      id="edit-otAllocationDate"
+                      selected={editOtAllocationDate}
+                      onChange={(date: Date | null) => {
+                        setEditOtAllocationDate(date);
+                        if (date) {
+                          const year = date.getFullYear();
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
+                          const dateStr = `${year}-${month}-${day}`;
+                          setEditFormData({ ...editFormData, otAllocationDate: dateStr });
+                        } else {
+                          setEditFormData({ ...editFormData, otAllocationDate: '' });
+                        }
+                      }}
+                      dateFormat="dd-MM-yyyy"
+                      placeholderText="dd-mm-yyyy"
+                      className="dialog-input-standard w-full"
+                      wrapperClassName="w-full"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={100}
+                      scrollableYearDropdown
+                    />
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-otId" className="dialog-label-standard">OT *</Label>
+                    <select
+                      id="edit-otId"
+                      className="dialog-select-standard"
+                      value={editFormData.otId}
+                      onChange={(e) => {
+                        setEditSelectedOTId(e.target.value);
+                        setEditFormData({ ...editFormData, otId: e.target.value, otSlotIds: [] });
+                      }}
+                    >
+                      <option value="">Select OT</option>
+                      {otRooms.map(ot => (
+                        <option key={ot.id} value={ot.id.toString()}>
+                          {ot.otNo} - {ot.otName} ({ot.otType})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label className="dialog-label-standard">OT Slots</Label>
+                    <div className="border border-gray-200 rounded-md p-3 max-h-48 overflow-y-auto mt-1">
+                      {!editFormData.otId ? (
+                        <p className="text-sm text-gray-500">Please select an OT first</p>
+                      ) : editOtSlots.length === 0 ? (
+                        <p className="text-sm text-gray-500">No slots available for this OT</p>
+                      ) : (
+                        editOtSlots.map(slot => {
+                          // Check if this slot is part of the current allocation's selected slots
+                          const isSlotInCurrentAllocation = (editFormData.otSlotIds || []).includes(slot.id) || 
+                            (selectedAllocation?.otSlotIds || []).includes(slot.id);
+                          
+                          // Check if slot is occupied by this surgery
+                          // Compare with both id and patientOTAllocationId, and also check if it's in the allocation's slot list
+                          const currentAllocationId = selectedAllocation?.id || selectedAllocation?.patientOTAllocationId;
+                          const slotAllocationId = slot.patientOTAllocationId;
+                          const isSlotOccupiedByThis = isSlotInCurrentAllocation || 
+                            (slot.isOccupied === true && 
+                             slotAllocationId !== null && 
+                             slotAllocationId !== undefined &&
+                             (slotAllocationId === selectedAllocation?.id || 
+                              slotAllocationId === selectedAllocation?.patientOTAllocationId ||
+                              slotAllocationId === currentAllocationId));
+                          
+                          // Slot is occupied by another surgery (not this one)
+                          const isSlotOccupiedByOther = slot.isOccupied === true && !isSlotOccupiedByThis;
+                          
+                          return (
+                            <label 
+                              key={slot.id} 
+                              className={`flex items-center gap-2 py-1 rounded px-2 ${
+                                isSlotOccupiedByOther 
+                                  ? 'cursor-not-allowed opacity-40 bg-gray-100' 
+                                  : 'cursor-pointer hover:bg-gray-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={(editFormData.otSlotIds || []).includes(slot.id)}
+                                onChange={(e) => {
+                                  const currentSlotIds = editFormData.otSlotIds || [];
+                                  let newSlotIds: number[];
+                                  if (e.target.checked) {
+                                    newSlotIds = [...currentSlotIds, slot.id];
+                                  } else {
+                                    newSlotIds = currentSlotIds.filter(id => id !== slot.id);
+                                  }
+                                  setEditFormData({ ...editFormData, otSlotIds: newSlotIds });
+                                }}
+                                disabled={isSlotOccupiedByOther}
+                                className="rounded border-gray-300"
+                              />
+                              <span className={`text-sm ${
+                                isSlotOccupiedByOther 
+                                  ? 'text-gray-400 line-through' 
+                                  : 'text-gray-700'
+                              }`}>
+                                {slot.otSlotNo} - {slot.slotStartTime} to {slot.slotEndTime}
+                                {isSlotOccupiedByOther && <span className="ml-2 text-xs text-red-500">(Occupied)</span>}
+                                {!isSlotOccupiedByOther && !isSlotOccupiedByThis && slot.isAvailable && <span className="ml-2 text-xs text-green-600">(Available)</span>}
+                              </span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                    {editFormData.otSlotIds && editFormData.otSlotIds.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">Selected: {editFormData.otSlotIds.length} slot(s)</p>
                     )}
+                  </div>
 
-                    {selectedAllocation.postOperationNotes && (
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">Post-Operation Notes</Label>
-                        <Textarea
-                          value={selectedAllocation.postOperationNotes}
-                          disabled
-                          rows={4}
-                          className="dialog-textarea-standard dialog-input-disabled"
-                        />
-                      </div>
-                    )}
-
-                    {selectedAllocation.otDocuments && (
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">OT Documents URL</Label>
+                  <div className="dialog-form-field-grid">
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="edit-leadSurgeonId" className="dialog-label-standard">Lead Surgeon *</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                         <Input
-                          value={selectedAllocation.otDocuments}
-                          disabled
-                          className="dialog-input-standard dialog-input-disabled"
+                          id="edit-leadSurgeonId"
+                          autoComplete="off"
+                          placeholder="Search by Doctor Name or Specialty..."
+                          value={editLeadSurgeonSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setEditLeadSurgeonSearchTerm(newValue);
+                            setEditLeadSurgeonHighlightIndex(-1);
+                            if (editFormData.leadSurgeonId) {
+                              setEditFormData({ ...editFormData, leadSurgeonId: '' });
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            const filteredDoctors = (availableDoctors || []).filter(doctor => {
+                              if (!editLeadSurgeonSearchTerm) return false;
+                              const searchLower = editLeadSurgeonSearchTerm.toLowerCase();
+                              const doctorName = doctor.name || '';
+                              const specialty = doctor.specialty || '';
+                              return (
+                                doctorName.toLowerCase().includes(searchLower) ||
+                                specialty.toLowerCase().includes(searchLower)
+                              );
+                            });
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setEditLeadSurgeonHighlightIndex(prev => 
+                                prev < filteredDoctors.length - 1 ? prev + 1 : prev
+                              );
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setEditLeadSurgeonHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                            } else if (e.key === 'Enter' && editLeadSurgeonHighlightIndex >= 0 && filteredDoctors[editLeadSurgeonHighlightIndex]) {
+                              e.preventDefault();
+                              const doctor = filteredDoctors[editLeadSurgeonHighlightIndex];
+                              setEditFormData({ ...editFormData, leadSurgeonId: doctor.id.toString() });
+                              setEditLeadSurgeonSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                              setEditLeadSurgeonHighlightIndex(-1);
+                            }
+                          }}
+                          className="dialog-input-standard pl-10"
                         />
                       </div>
-                    )}
-
-                    {selectedAllocation.billId && (
-                      <div className="dialog-form-field">
-                        <Label className="dialog-label-standard">Bill ID</Label>
+                      {editLeadSurgeonSearchTerm && !editFormData.leadSurgeonId && availableDoctors && (() => {
+                        const filteredDoctors = (availableDoctors || []).filter(doctor => {
+                          if (!editLeadSurgeonSearchTerm) return false;
+                          const searchLower = editLeadSurgeonSearchTerm.toLowerCase();
+                          const doctorName = doctor.name || '';
+                          const specialty = doctor.specialty || '';
+                          return (
+                            doctorName.toLowerCase().includes(searchLower) ||
+                            specialty.toLowerCase().includes(searchLower)
+                          );
+                        });
+                        
+                        return filteredDoctors.length > 0 ? (
+                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" style={{ zIndex: 1000 }}>
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Department</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredDoctors.map((doctor, index) => {
+                                  const isSelected = editFormData.leadSurgeonId === doctor.id.toString();
+                                  const isHighlighted = editLeadSurgeonHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={doctor.id}
+                                      onClick={() => {
+                                        setEditFormData({ ...editFormData, leadSurgeonId: doctor.id.toString() });
+                                        setEditLeadSurgeonSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                                        setEditLeadSurgeonHighlightIndex(-1);
+                                      }}
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900">{doctor.name}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{doctor.specialty}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="edit-assistantDoctorId" className="dialog-label-standard">Assistant Doctor</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                         <Input
-                          value={selectedAllocation.billId}
-                          disabled
-                          className="dialog-input-standard dialog-input-disabled"
+                          id="edit-assistantDoctorId"
+                          autoComplete="off"
+                          placeholder="Search by Doctor Name or Department..."
+                          value={editAssistantDoctorSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setEditAssistantDoctorSearchTerm(newValue);
+                            setEditAssistantDoctorHighlightIndex(-1);
+                            if (editFormData.assistantDoctorId) {
+                              setEditFormData({ ...editFormData, assistantDoctorId: '' });
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            const filteredDoctors = (availableDoctors || []).filter(doctor => {
+                              if (!editAssistantDoctorSearchTerm) return false;
+                              const searchLower = editAssistantDoctorSearchTerm.toLowerCase();
+                              const doctorName = doctor.name || '';
+                              const specialty = doctor.specialty || '';
+                              return (
+                                doctorName.toLowerCase().includes(searchLower) ||
+                                specialty.toLowerCase().includes(searchLower)
+                              );
+                            });
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setEditAssistantDoctorHighlightIndex(prev => 
+                                prev < filteredDoctors.length - 1 ? prev + 1 : prev
+                              );
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setEditAssistantDoctorHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                            } else if (e.key === 'Enter' && editAssistantDoctorHighlightIndex >= 0 && filteredDoctors[editAssistantDoctorHighlightIndex]) {
+                              e.preventDefault();
+                              const doctor = filteredDoctors[editAssistantDoctorHighlightIndex];
+                              setEditFormData({ ...editFormData, assistantDoctorId: doctor.id.toString() });
+                              setEditAssistantDoctorSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                              setEditAssistantDoctorHighlightIndex(-1);
+                            }
+                          }}
+                          className="dialog-input-standard pl-10"
                         />
                       </div>
-                    )}
-
-                    <div className="flex justify-end gap-2 mt-4">
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setIsViewDetailsDialogOpen(false)}
-                        className="dialog-footer-button"
-                      >
-                        Close
-                      </Button>
+                      {editAssistantDoctorSearchTerm && !editFormData.assistantDoctorId && availableDoctors && (() => {
+                        const filteredDoctors = (availableDoctors || []).filter(doctor => {
+                          if (!editAssistantDoctorSearchTerm) return false;
+                          const searchLower = editAssistantDoctorSearchTerm.toLowerCase();
+                          const doctorName = doctor.name || '';
+                          const specialty = doctor.specialty || '';
+                          return (
+                            doctorName.toLowerCase().includes(searchLower) ||
+                            specialty.toLowerCase().includes(searchLower)
+                          );
+                        });
+                        
+                        return filteredDoctors.length > 0 ? (
+                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" style={{ zIndex: 1000 }}>
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Department</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredDoctors.map((doctor, index) => {
+                                  const isSelected = editFormData.assistantDoctorId === doctor.id.toString();
+                                  const isHighlighted = editAssistantDoctorHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={doctor.id}
+                                      onClick={() => {
+                                        setEditFormData({ ...editFormData, assistantDoctorId: doctor.id.toString() });
+                                        setEditAssistantDoctorSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                                        setEditAssistantDoctorHighlightIndex(-1);
+                                      }}
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900">{doctor.name}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{doctor.specialty}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
-                );
-              })()}
+
+                  <div className="dialog-form-field-grid">
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="edit-anaesthetistId" className="dialog-label-standard">Anaesthetist</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                        <Input
+                          id="edit-anaesthetistId"
+                          autoComplete="off"
+                          placeholder="Search by Doctor Name or Department..."
+                          value={editAnaesthetistSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setEditAnaesthetistSearchTerm(newValue);
+                            setEditAnaesthetistHighlightIndex(-1);
+                            if (editFormData.anaesthetistId) {
+                              setEditFormData({ ...editFormData, anaesthetistId: '' });
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            const filteredDoctors = (availableDoctors || []).filter(doctor => {
+                              if (!editAnaesthetistSearchTerm) return false;
+                              const searchLower = editAnaesthetistSearchTerm.toLowerCase();
+                              const doctorName = doctor.name || '';
+                              const specialty = doctor.specialty || '';
+                              return (
+                                doctorName.toLowerCase().includes(searchLower) ||
+                                specialty.toLowerCase().includes(searchLower)
+                              );
+                            });
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setEditAnaesthetistHighlightIndex(prev => 
+                                prev < filteredDoctors.length - 1 ? prev + 1 : prev
+                              );
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setEditAnaesthetistHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                            } else if (e.key === 'Enter' && editAnaesthetistHighlightIndex >= 0 && filteredDoctors[editAnaesthetistHighlightIndex]) {
+                              e.preventDefault();
+                              const doctor = filteredDoctors[editAnaesthetistHighlightIndex];
+                              setEditFormData({ ...editFormData, anaesthetistId: doctor.id.toString() });
+                              setEditAnaesthetistSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                              setEditAnaesthetistHighlightIndex(-1);
+                            }
+                          }}
+                          className="dialog-input-standard pl-10"
+                        />
+                      </div>
+                      {editAnaesthetistSearchTerm && !editFormData.anaesthetistId && availableDoctors && (() => {
+                        const filteredDoctors = (availableDoctors || []).filter(doctor => {
+                          if (!editAnaesthetistSearchTerm) return false;
+                          const searchLower = editAnaesthetistSearchTerm.toLowerCase();
+                          const doctorName = doctor.name || '';
+                          const specialty = doctor.specialty || '';
+                          return (
+                            doctorName.toLowerCase().includes(searchLower) ||
+                            specialty.toLowerCase().includes(searchLower)
+                          );
+                        });
+                        
+                        return filteredDoctors.length > 0 ? (
+                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" style={{ zIndex: 1000 }}>
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Department</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredDoctors.map((doctor, index) => {
+                                  const isSelected = editFormData.anaesthetistId === doctor.id.toString();
+                                  const isHighlighted = editAnaesthetistHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={doctor.id}
+                                      onClick={() => {
+                                        setEditFormData({ ...editFormData, anaesthetistId: doctor.id.toString() });
+                                        setEditAnaesthetistSearchTerm(`${doctor.name} - ${doctor.specialty}`);
+                                        setEditAnaesthetistHighlightIndex(-1);
+                                      }}
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900">{doctor.name}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{doctor.specialty}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="edit-nurseId" className="dialog-label-standard">Nurse</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                        <Input
+                          id="edit-nurseId"
+                          autoComplete="off"
+                          placeholder="Search by Nurse Name..."
+                          value={editNurseSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setEditNurseSearchTerm(newValue);
+                            setEditNurseHighlightIndex(-1);
+                            if (editFormData.nurseId) {
+                              setEditFormData({ ...editFormData, nurseId: '' });
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            const filteredNurses = (availableNurses || []).filter(nurse => {
+                              if (!editNurseSearchTerm) return false;
+                              const searchLower = editNurseSearchTerm.toLowerCase();
+                              const nurseName = nurse.name || '';
+                              return nurseName.toLowerCase().includes(searchLower);
+                            });
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setEditNurseHighlightIndex(prev => 
+                                prev < filteredNurses.length - 1 ? prev + 1 : prev
+                              );
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setEditNurseHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                            } else if (e.key === 'Enter' && editNurseHighlightIndex >= 0 && filteredNurses[editNurseHighlightIndex]) {
+                              e.preventDefault();
+                              const nurse = filteredNurses[editNurseHighlightIndex];
+                              setEditFormData({ ...editFormData, nurseId: nurse.id.toString() });
+                              setEditNurseSearchTerm(nurse.name);
+                              setEditNurseHighlightIndex(-1);
+                            }
+                          }}
+                          className="dialog-input-standard pl-10"
+                        />
+                      </div>
+                      {editNurseSearchTerm && !editFormData.nurseId && availableNurses && (() => {
+                        const filteredNurses = (availableNurses || []).filter(nurse => {
+                          if (!editNurseSearchTerm) return false;
+                          const searchLower = editNurseSearchTerm.toLowerCase();
+                          const nurseName = nurse.name || '';
+                          return nurseName.toLowerCase().includes(searchLower);
+                        });
+                        
+                        return filteredNurses.length > 0 ? (
+                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto mt-1" style={{ zIndex: 1000 }}>
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                  <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredNurses.map((nurse, index) => {
+                                  const isSelected = editFormData.nurseId === nurse.id.toString();
+                                  const isHighlighted = editNurseHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={nurse.id}
+                                      onClick={() => {
+                                        setEditFormData({ ...editFormData, nurseId: nurse.id.toString() });
+                                        setEditNurseSearchTerm(nurse.name);
+                                        setEditNurseHighlightIndex(-1);
+                                      }}
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      className={`cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900">{nurse.name}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-duration" className="dialog-label-standard">Duration (in minutes)</Label>
+                    <Input
+                      id="edit-duration"
+                      type="number"
+                      placeholder="e.g., 120"
+                      value={editFormData.duration}
+                      onChange={(e) => setEditFormData({ ...editFormData, duration: e.target.value })}
+                      className="dialog-input-standard"
+                    />
+                  </div>
+
+                  <div className="dialog-form-field-grid">
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="edit-otActualStartTime" className="dialog-label-standard">OT Actual Start Time</Label>
+                      <Input
+                        id="edit-otActualStartTime"
+                        type="time"
+                        value={editFormData.otActualStartTime}
+                        onChange={(e) => setEditFormData({ ...editFormData, otActualStartTime: e.target.value })}
+                        className="dialog-input-standard"
+                      />
+                    </div>
+                    <div className="dialog-field-single-column">
+                      <Label htmlFor="edit-otActualEndTime" className="dialog-label-standard">OT Actual End Time</Label>
+                      <Input
+                        id="edit-otActualEndTime"
+                        type="time"
+                        value={editFormData.otActualEndTime}
+                        onChange={(e) => setEditFormData({ ...editFormData, otActualEndTime: e.target.value })}
+                        className="dialog-input-standard"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-operationDescription" className="dialog-label-standard">Operation Description</Label>
+                    <Textarea
+                      id="edit-operationDescription"
+                      placeholder="Enter operation description..."
+                      value={editFormData.operationDescription}
+                      onChange={(e) => setEditFormData({ ...editFormData, operationDescription: e.target.value })}
+                      rows={3}
+                      className="dialog-textarea-standard"
+                    />
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-preOperationNotes" className="dialog-label-standard">Pre Operation Notes</Label>
+                    <Textarea
+                      id="edit-preOperationNotes"
+                      placeholder="e.g., ICU bed reserved post-surgery"
+                      value={editFormData.preOperationNotes}
+                      onChange={(e) => setEditFormData({ ...editFormData, preOperationNotes: e.target.value })}
+                      rows={2}
+                      className="dialog-textarea-standard"
+                    />
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-postOperationNotes" className="dialog-label-standard">Post Operation Notes</Label>
+                    <Textarea
+                      id="edit-postOperationNotes"
+                      placeholder="Enter post operation notes..."
+                      value={editFormData.postOperationNotes}
+                      onChange={(e) => setEditFormData({ ...editFormData, postOperationNotes: e.target.value })}
+                      rows={2}
+                      className="dialog-textarea-standard"
+                    />
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-otDocuments" className="dialog-label-standard">OT Documents</Label>
+                    
+                    {/* Display existing uploaded documents */}
+                    {editUploadedDocumentUrls.length > 0 && (
+                      <div className="mb-3 space-y-2">
+                        <p className="text-sm text-gray-600 font-medium">Uploaded Documents:</p>
+                        <div className="space-y-1">
+                          {editUploadedDocumentUrls.map((url, index) => {
+                            const fileName = url.split('/').pop() || `Document ${index + 1}`;
+                            return (
+                              <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-2"
+                                >
+                                  <span>{fileName}</span>
+                                  <span className="text-xs text-gray-500">(opens in new tab)</span>
+                                </a>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditUploadedDocumentUrls(prev => prev.filter((_, i) => i !== index));
+                                  }}
+                                  className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                                >
+                                  ×
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* File input for adding more documents */}
+                    <Input
+                      id="edit-otDocuments"
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setEditSelectedFiles(prev => [...prev, ...files]);
+                        // Reset the input so the same file can be selected again
+                        e.target.value = '';
+                      }}
+                      className="dialog-input-standard"
+                    />
+                    {editSelectedFiles.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-sm text-gray-600 font-medium">New Files to Upload:</p>
+                        {editSelectedFiles.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-blue-50 p-2 rounded">
+                            <span>{file.name}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                              }}
+                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Update"</p>
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-billId" className="dialog-label-standard">Bill ID</Label>
+                    <Input
+                      id="edit-billId"
+                      type="number"
+                      placeholder="Enter Bill ID"
+                      value={editFormData.billId}
+                      onChange={(e) => setEditFormData({ ...editFormData, billId: e.target.value })}
+                      className="dialog-input-standard"
+                    />
+                  </div>
+
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-operationStatus" className="dialog-label-standard">Operation Status</Label>
+                    <select
+                      id="edit-operationStatus"
+                      className="dialog-select-standard"
+                      value={editFormData.operationStatus}
+                      onChange={(e) => setEditFormData({ ...editFormData, operationStatus: e.target.value as PatientOTAllocation['operationStatus'] })}
+                    >
+                      <option value="Scheduled">Scheduled</option>
+                      <option value="InProgress">In Progress</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Cancelled">Cancelled</option>
+                      <option value="Postponed">Postponed</option>
+                    </select>
+                  </div>
+
+                    <div className="dialog-form-field">
+                      <Label htmlFor="edit-duration" className="dialog-label-standard">Duration (minutes)</Label>
+                      <Input
+                        id="edit-duration"
+                        type="number"
+                        value={editFormData.duration !== undefined ? editFormData.duration : (selectedAllocation.duration || '')}
+                        onChange={(e) => setEditFormData({ ...editFormData, duration: e.target.value })}
+                        className="dialog-input-standard"
+                        placeholder="Enter duration in minutes"
+                      />
+                    </div>
+
+                    <div className="dialog-form-field-grid">
+                      <div className="dialog-form-field">
+                        <Label htmlFor="edit-otActualStartTime" className="dialog-label-standard">Actual Start Time</Label>
+                        <Input
+                          id="edit-otActualStartTime"
+                          type="time"
+                          value={editFormData.otActualStartTime !== undefined ? editFormData.otActualStartTime : (selectedAllocation.otActualStartTime || '')}
+                          onChange={(e) => setEditFormData({ ...editFormData, otActualStartTime: e.target.value })}
+                          className="dialog-input-standard"
+                        />
+                      </div>
+                      <div className="dialog-form-field">
+                        <Label htmlFor="edit-otActualEndTime" className="dialog-label-standard">Actual End Time</Label>
+                        <Input
+                          id="edit-otActualEndTime"
+                          type="time"
+                          value={editFormData.otActualEndTime !== undefined ? editFormData.otActualEndTime : (selectedAllocation.otActualEndTime || '')}
+                          onChange={(e) => setEditFormData({ ...editFormData, otActualEndTime: e.target.value })}
+                          className="dialog-input-standard"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="dialog-form-field">
+                      <Label htmlFor="edit-preOperationNotes" className="dialog-label-standard">Pre-Operation Notes</Label>
+                      <Textarea
+                        id="edit-preOperationNotes"
+                        value={editFormData.preOperationNotes !== undefined ? editFormData.preOperationNotes : (selectedAllocation.preOperationNotes || '')}
+                        onChange={(e) => setEditFormData({ ...editFormData, preOperationNotes: e.target.value })}
+                        rows={4}
+                        className="dialog-textarea-standard"
+                        placeholder="Enter pre-operation notes"
+                      />
+                    </div>
+
+                    <div className="dialog-form-field">
+                      <Label htmlFor="edit-postOperationNotes" className="dialog-label-standard">Post-Operation Notes</Label>
+                      <Textarea
+                        id="edit-postOperationNotes"
+                        value={editFormData.postOperationNotes !== undefined ? editFormData.postOperationNotes : (selectedAllocation.postOperationNotes || '')}
+                        onChange={(e) => setEditFormData({ ...editFormData, postOperationNotes: e.target.value })}
+                        rows={4}
+                        className="dialog-textarea-standard"
+                        placeholder="Enter post-operation notes"
+                      />
+                    </div>
+
+                    <div className="dialog-form-field">
+                      <Label htmlFor="edit-otDocuments" className="dialog-label-standard">OT Documents</Label>
+                      
+                      {/* Display existing uploaded documents */}
+                      {editUploadedDocumentUrls.length > 0 && (
+                        <div className="mb-3 space-y-2">
+                          <p className="text-sm text-gray-600 font-medium">Uploaded Documents:</p>
+                          <div className="space-y-1">
+                            {editUploadedDocumentUrls.map((url, index) => {
+                              const fileName = url.split('/').pop() || `Document ${index + 1}`;
+                              return (
+                                <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                  <a
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-2"
+                                  >
+                                    <span>{fileName}</span>
+                                    <span className="text-xs text-gray-500">(opens in new tab)</span>
+                                  </a>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      // Remove from UI - backend will auto-delete when Update is clicked
+                                      setEditUploadedDocumentUrls(prev => prev.filter((_, i) => i !== index));
+                                    }}
+                                    className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                                    title="Remove file (will be deleted when you click Update)"
+                                  >
+                                    ×
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* File input for adding more documents */}
+                      <Input
+                        id="edit-otDocuments"
+                        type="file"
+                        multiple
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          setEditSelectedFiles(prev => [...prev, ...files]);
+                          // Reset the input so the same file can be selected again
+                          e.target.value = '';
+                        }}
+                        className="dialog-input-standard"
+                      />
+                      {editSelectedFiles.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-sm text-gray-600 font-medium">New Files to Upload:</p>
+                          {editSelectedFiles.map((file, index) => (
+                            <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-blue-50 p-2 rounded">
+                              <span>{file.name}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setEditSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                                }}
+                                className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Update"</p>
+                    </div>
+
+                    <div className="dialog-form-field">
+                      <Label htmlFor="edit-billId" className="dialog-label-standard">Bill ID</Label>
+                      <Input
+                        id="edit-billId"
+                        type="number"
+                        placeholder="Enter Bill ID"
+                        value={editFormData.billId}
+                        onChange={(e) => setEditFormData({ ...editFormData, billId: e.target.value })}
+                        className="dialog-input-standard"
+                      />
+                    </div>
+
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-200">
+              <Button variant="outline" onClick={() => {
+                setIsManageDialogOpen(false);
+                setEditFormData({
+                  patientId: '',
+                  roomAdmissionId: '',
+                  patientAppointmentId: '',
+                  emergencyBedSlotId: '',
+                  otId: '',
+                  otSlotIds: [],
+                  surgeryId: '',
+                  leadSurgeonId: '',
+                  assistantDoctorId: '',
+                  anaesthetistId: '',
+                  nurseId: '',
+                  otAllocationDate: '',
+                  duration: '',
+                  otActualStartTime: '',
+                  otActualEndTime: '',
+                  operationDescription: '',
+                  operationStatus: 'Scheduled',
+                  preOperationNotes: '',
+                  postOperationNotes: '',
+                  otDocuments: '',
+                  billId: '',
+                  status: 'Active',
+                });
+                setEditLeadSurgeonSearchTerm('');
+                setEditLeadSurgeonHighlightIndex(-1);
+                setEditAssistantDoctorSearchTerm('');
+                setEditAssistantDoctorHighlightIndex(-1);
+                setEditAnaesthetistSearchTerm('');
+                setEditAnaesthetistHighlightIndex(-1);
+                setEditNurseSearchTerm('');
+                setEditNurseHighlightIndex(-1);
+                setEditRoomAdmissionSearchTerm('');
+                setEditRoomAdmissionHighlightIndex(-1);
+                setEditPatientAppointmentSearchTerm('');
+                setEditPatientAppointmentHighlightIndex(-1);
+                setEditEmergencyBedSlotSearchTerm('');
+                setEditEmergencyBedSlotHighlightIndex(-1);
+                setEditOtAllocationDate(null);
+                setEditOtSlots([]);
+                setEditSelectedOTId('');
+                setEditSelectedFiles([]);
+                setEditUploadedDocumentUrls([]);
+                setSelectedAllocation(null);
+              }} className="dialog-footer-button" disabled={isSaving}>Cancel</Button>
+              <Button onClick={handleSaveAllocation} className="dialog-footer-button" disabled={isSaving}>
+                {isSaving ? 'Updating...' : 'Update'}
+              </Button>
+            </div>
+          </div>
+        </ResizableDialogContent>
+      </Dialog>
+
+      {/* Start Surgery Dialog */}
+      <Dialog open={isStartSurgeryDialogOpen} onOpenChange={setIsStartSurgeryDialogOpen}>
+        <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
+          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+            <DialogHeader className="dialog-header-standard">
+              <DialogTitle className="dialog-title-standard">Start Surgery</DialogTitle>
+            </DialogHeader>
+            <div className="dialog-body-content-wrapper">
+              {selectedAllocation && (
+                <div className="dialog-form-container space-y-4">
+                  <div className="dialog-form-field">
+                    <Label className="dialog-label-standard">Patient</Label>
+                    <Input
+                      value={(() => {
+                        const patient = selectedAllocation.patientId ? fetchedPatients.get(selectedAllocation.patientId) : null;
+                        const patientName = patient 
+                          ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                          : (selectedAllocation as any)?.PatientName || 'Unknown';
+                        return patientName;
+                      })()}
+                      disabled
+                      className="dialog-input-standard dialog-input-disabled"
+                    />
+                  </div>
+                  <div className="dialog-form-field">
+                    <Label className="dialog-label-standard">Operation Description</Label>
+                    <Input
+                      value={selectedAllocation.operationDescription || '-'}
+                      disabled
+                      className="dialog-input-standard dialog-input-disabled"
+                    />
+                  </div>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="start-surgery-time" className="dialog-label-standard">Actual Start Time *</Label>
+                    <Input
+                      id="start-surgery-time"
+                      type="time"
+                      value={startSurgeryTime}
+                      onChange={(e) => setStartSurgeryTime(e.target.value)}
+                      className="dialog-input-standard"
+                      required
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 mt-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setIsStartSurgeryDialogOpen(false);
+                        setStartSurgeryTime('');
+                        setSelectedAllocation(null);
+                      }}
+                      className="dialog-footer-button"
+                      disabled={isUpdating}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      variant="default"
+                      onClick={handleStartSurgery}
+                      className="dialog-footer-button"
+                      disabled={isUpdating || !startSurgeryTime}
+                    >
+                      {isUpdating ? 'Starting...' : 'Start Surgery'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </ResizableDialogContent>
+      </Dialog>
+
+      {/* Complete Surgery Dialog */}
+      <Dialog open={isCompleteSurgeryDialogOpen} onOpenChange={setIsCompleteSurgeryDialogOpen}>
+        <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
+          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+            <DialogHeader className="dialog-header-standard">
+              <DialogTitle className="dialog-title-standard">Complete Surgery</DialogTitle>
+            </DialogHeader>
+            <div className="dialog-body-content-wrapper">
+              {selectedAllocation && (
+                <div className="dialog-form-container space-y-4">
+                  <div className="dialog-form-field">
+                    <Label className="dialog-label-standard">Patient</Label>
+                    <Input
+                      value={(() => {
+                        const patient = selectedAllocation.patientId ? fetchedPatients.get(selectedAllocation.patientId) : null;
+                        const patientName = patient 
+                          ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                          : (selectedAllocation as any)?.PatientName || 'Unknown';
+                        return patientName;
+                      })()}
+                      disabled
+                      className="dialog-input-standard dialog-input-disabled"
+                    />
+                  </div>
+                  <div className="dialog-form-field">
+                    <Label className="dialog-label-standard">Operation Description</Label>
+                    <Input
+                      value={selectedAllocation.operationDescription || '-'}
+                      disabled
+                      className="dialog-input-standard dialog-input-disabled"
+                    />
+                  </div>
+                  {selectedAllocation.otActualStartTime && (
+                    <div className="dialog-form-field">
+                      <Label className="dialog-label-standard">Actual Start Time</Label>
+                      <Input
+                        value={selectedAllocation.otActualStartTime}
+                        disabled
+                        className="dialog-input-standard dialog-input-disabled"
+                      />
+                    </div>
+                  )}
+                  <div className="dialog-form-field">
+                    <Label htmlFor="complete-surgery-time" className="dialog-label-standard">Actual End Time *</Label>
+                    <Input
+                      id="complete-surgery-time"
+                      type="time"
+                      value={completeSurgeryTime}
+                      onChange={(e) => setCompleteSurgeryTime(e.target.value)}
+                      className="dialog-input-standard"
+                      required
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 mt-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setIsCompleteSurgeryDialogOpen(false);
+                        setCompleteSurgeryTime('');
+                        setSelectedAllocation(null);
+                      }}
+                      className="dialog-footer-button"
+                      disabled={isUpdating}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      variant="default"
+                      onClick={handleCompleteSurgery}
+                      className="dialog-footer-button bg-green-600 hover:bg-green-700"
+                      disabled={isUpdating || !completeSurgeryTime}
+                    >
+                      {isUpdating ? 'Completing...' : 'Complete Surgery'}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </ResizableDialogContent>

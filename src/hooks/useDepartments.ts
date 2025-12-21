@@ -5,10 +5,9 @@ import { Department, DepartmentCategory } from '../types/departments';
 
 export function useDepartments(category?: DepartmentCategory) {
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Always fetch fresh from network - no caching
   const fetchDepartments = useCallback(async () => {
     try {
       setLoading(true);
@@ -17,24 +16,22 @@ export function useDepartments(category?: DepartmentCategory) {
         ? await departmentsApi.getByCategory(category)
         : await departmentsApi.getAll();
       setDepartments(data);
-      return data;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch departments';
-      setError(errorMessage);
-      setDepartments([]);
-      throw err;
+      setError(err instanceof Error ? err.message : 'Failed to fetch departments');
     } finally {
       setLoading(false);
     }
   }, [category]);
 
-  // No auto-fetch on mount - component must call fetchDepartments explicitly
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
 
   const createDepartment = useCallback(async (data: CreateDepartmentDto) => {
     try {
       setError(null);
       const newDepartment = await departmentsApi.create(data);
-      // Don't update local state - always fetch fresh from network
+      setDepartments(prev => [...prev, newDepartment]);
       return newDepartment;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create department';
@@ -47,7 +44,7 @@ export function useDepartments(category?: DepartmentCategory) {
     try {
       setError(null);
       const updatedDepartment = await departmentsApi.update(data);
-      // Don't update local state - always fetch fresh from network
+      setDepartments(prev => prev.map(d => d.id === data.id ? updatedDepartment : d));
       return updatedDepartment;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update department';
@@ -60,7 +57,7 @@ export function useDepartments(category?: DepartmentCategory) {
     try {
       setError(null);
       await departmentsApi.delete(id);
-      // Don't update local state - always fetch fresh from network
+      setDepartments(prev => prev.filter(d => d.id !== id));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete department';
       setError(errorMessage);

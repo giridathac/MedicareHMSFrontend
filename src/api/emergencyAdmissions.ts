@@ -116,6 +116,7 @@ function mapEmergencyAdmissionResponseToEmergencyAdmission(item: EmergencyAdmiss
         ? new Date(item.AdmissionCreatedAt).toISOString() 
         : undefined,
     status: item.Status as EmergencyAdmission['status'],
+    numberOfDays: item.NumberOfDays ?? undefined,
     // Additional response fields
     patientName: item.PatientName ?? undefined,
     patientNo: item.PatientNo ?? undefined,

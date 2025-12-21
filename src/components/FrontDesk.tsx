@@ -597,14 +597,47 @@ export function FrontDesk() {
       });
     }
     
-    return { activeAppointments: active, inactiveAppointments: inactive, filteredActiveAppointments: filtered };
+    // Sort filtered appointments by date and time
+    const sortedFiltered = [...filtered].sort((a, b) => {
+      // First sort by appointment date (YYYY-MM-DD format)
+      const dateA = a.appointmentDate || '';
+      const dateB = b.appointmentDate || '';
+      const dateCompare = dateA.localeCompare(dateB);
+      
+      if (dateCompare !== 0) {
+        return dateCompare; // Different dates, sort by date
+      }
+      
+      // Same date, sort by appointment time (HH:mm format)
+      const timeA = a.appointmentTime || '';
+      const timeB = b.appointmentTime || '';
+      return timeA.localeCompare(timeB);
+    });
+
+    return { activeAppointments: active, inactiveAppointments: inactive, filteredActiveAppointments: sortedFiltered };
   }, [patientAppointments, searchTerm, patients, appointmentDoctors]);
 
   // For backward compatibility, use filteredActiveAppointments
   const filteredAppointments = filteredActiveAppointments;
 
   const getAppointmentsByStatus = (status: PatientAppointment['appointmentStatus']) => {
-    return filteredAppointments.filter(a => a.appointmentStatus === status);
+    const statusAppointments = filteredAppointments.filter(a => a.appointmentStatus === status);
+    // Sort by date and time
+    return statusAppointments.sort((a, b) => {
+      // First sort by appointment date (YYYY-MM-DD format)
+      const dateA = a.appointmentDate || '';
+      const dateB = b.appointmentDate || '';
+      const dateCompare = dateA.localeCompare(dateB);
+      
+      if (dateCompare !== 0) {
+        return dateCompare; // Different dates, sort by date
+      }
+      
+      // Same date, sort by appointment time (HH:mm format)
+      const timeA = a.appointmentTime || '';
+      const timeB = b.appointmentTime || '';
+      return timeA.localeCompare(timeB);
+    });
   };
 
   const getStatusBadge = (status: PatientAppointment['appointmentStatus']) => {
@@ -746,11 +779,28 @@ export function FrontDesk() {
 
   // Helper function to render appointments table
   const renderAppointmentsTable = (appointments: PatientAppointment[]) => {
+    // Sort appointments by date and time
+    const sortedAppointments = [...appointments].sort((a, b) => {
+      // First sort by appointment date (YYYY-MM-DD format)
+      const dateA = a.appointmentDate || '';
+      const dateB = b.appointmentDate || '';
+      const dateCompare = dateA.localeCompare(dateB);
+      
+      if (dateCompare !== 0) {
+        return dateCompare; // Different dates, sort by date
+      }
+      
+      // Same date, sort by appointment time (HH:mm format)
+      const timeA = a.appointmentTime || '';
+      const timeB = b.appointmentTime || '';
+      return timeA.localeCompare(timeB);
+    });
+
     // Show inactive appointments at the end only when not searching
     const showInactive = !searchTerm && inactiveAppointments.length > 0;
     const allAppointments = showInactive 
-      ? [...appointments, ...inactiveAppointments]
-      : appointments;
+      ? [...sortedAppointments, ...inactiveAppointments]
+      : sortedAppointments;
     
     return (
       <Card>
@@ -1956,32 +2006,40 @@ export function FrontDesk() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="edit-appointmentStatus">Appointment Status</Label>
-                      <select
-                        id="edit-appointmentStatus"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                        value={editFormData.appointmentStatus}
-                        onChange={(e) => setEditFormData({ ...editFormData, appointmentStatus: e.target.value as PatientAppointment['appointmentStatus'] })}
-                      >
-                        <option value="Waiting">Waiting</option>
-                        <option value="Consulting">Consulting</option>
-                        <option value="Completed">Completed</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label htmlFor="edit-consultationCharge">Consultation Charge (₹) *</Label>
-                      <Input
-                        id="edit-consultationCharge"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="e.g., 500"
-                        value={editFormData.consultationCharge}
-                        onChange={(e) => setEditFormData({ ...editFormData, consultationCharge: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
+                  <div>
+                    <Label htmlFor="edit-consultationCharge">Consultation Charge (₹) *</Label>
+                    <Input
+                      id="edit-consultationCharge"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g., 500"
+                      value={editFormData.consultationCharge}
+                      onChange={(e) => setEditFormData({ ...editFormData, consultationCharge: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-followUpDetails">Follow Up Details</Label>
+                    <Textarea
+                      id="edit-followUpDetails"
+                      placeholder="Enter follow up details..."
+                      value={editFormData.followUpDetails}
+                      onChange={(e) => setEditFormData({ ...editFormData, followUpDetails: e.target.value })}
+                      rows={2}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-appointmentStatus">Appointment Status</Label>
+                    <select
+                      id="edit-appointmentStatus"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                      value={editFormData.appointmentStatus}
+                      onChange={(e) => setEditFormData({ ...editFormData, appointmentStatus: e.target.value as PatientAppointment['appointmentStatus'] })}
+                    >
+                      <option value="Waiting">Waiting</option>
+                      <option value="Consulting">Consulting</option>
+                      <option value="Completed">Completed</option>
+                    </select>
                   </div>
                   <div>
                     <div className="flex items-center gap-3">
@@ -2004,16 +2062,6 @@ export function FrontDesk() {
                         />
                       </div>
                     </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-followUpDetails">Follow Up Details</Label>
-                    <Textarea
-                      id="edit-followUpDetails"
-                      placeholder="Enter follow up details..."
-                      value={editFormData.followUpDetails}
-                      onChange={(e) => setEditFormData({ ...editFormData, followUpDetails: e.target.value })}
-                      rows={2}
-                    />
                   </div>
                 </div>
                 </div>

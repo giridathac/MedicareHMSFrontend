@@ -104,6 +104,7 @@ export function ResizableDialogContent({
       element.style.setProperty('max-height', `${effectiveMaxHeight}px`, 'important');
       element.style.setProperty('min-width', `${minWidth}px`, 'important');
       element.style.setProperty('min-height', `${minHeight}px`, 'important');
+      element.style.setProperty('border-radius', '0.875rem', 'important');
       
       // Only set position if not already set (during resize it's handled by handleMouseMove)
       const currentPosition = window.getComputedStyle(element).position;
@@ -188,6 +189,7 @@ export function ResizableDialogContent({
         element.style.setProperty('height', `${newHeight}px`, 'important');
         element.style.setProperty('max-width', 'none', 'important');
         element.style.setProperty('max-height', 'none', 'important');
+        element.style.setProperty('border-radius', '0.875rem', 'important');
       }
     };
 
@@ -302,8 +304,36 @@ export function ResizableDialogContent({
         .resizable-dialog-handle-top-right:hover::before,
         .resizable-dialog-handle-top-right:hover::after,
         .resizable-dialog-handle-bottom-left:hover::before,
-        .resizable-dialog-handle-bottom-left:hover::after {
+        .resizable-dialog-handle-bottom-left:hover::after,
+        .resizable-dialog-handle-bottom-right:hover::before,
+        .resizable-dialog-handle-bottom-right:hover::after {
           background: rgb(75, 85, 99) !important;
+        }
+        .resizable-dialog-handle-bottom-right {
+          bottom: 0 !important;
+          right: 0 !important;
+          width: 12px !important;
+          height: 12px !important;
+          cursor: nwse-resize !important;
+          z-index: 100000 !important;
+        }
+        .resizable-dialog-handle-bottom-right::before {
+          content: '' !important;
+          position: absolute !important;
+          width: 6px !important;
+          height: 1px !important;
+          background: rgb(156, 163, 175) !important;
+          bottom: 2px !important;
+          right: 2px !important;
+        }
+        .resizable-dialog-handle-bottom-right::after {
+          content: '' !important;
+          position: absolute !important;
+          width: 1px !important;
+          height: 6px !important;
+          background: rgb(156, 163, 175) !important;
+          bottom: 2px !important;
+          right: 2px !important;
         }
       `}</style>
       <DialogContent
@@ -316,6 +346,7 @@ export function ResizableDialogContent({
           minWidth: `${minWidth}px`,
           minHeight: `${minHeight}px`,
           position: 'relative',
+          borderRadius: '0.875rem',
         }}
         {...props}
       >
@@ -357,6 +388,11 @@ export function ResizableDialogContent({
         <div
           className="resizable-dialog-handle resizable-dialog-handle-bottom-left"
           onMouseDown={(e) => handleResizeStart(e, 'bottom-left')}
+          title="Drag to resize"
+        />
+        <div
+          className="resizable-dialog-handle resizable-dialog-handle-bottom-right"
+          onMouseDown={(e) => handleResizeStart(e, 'bottom-right')}
           title="Drag to resize"
         />
       </DialogContent>

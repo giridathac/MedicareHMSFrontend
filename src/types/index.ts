@@ -271,6 +271,7 @@ export interface EmergencyAdmission {
   emergencyBedId?: number; // The bed ID (new field)
   emergencyAdmissionDate: string;
   emergencyStatus: 'Admitted' | 'IPD' | 'OT' | 'ICU' | 'Discharged' | 'Movedout';
+  numberOfDays?: number | null;
   diagnosis?: string;
   treatmentDetails?: string; // Note: API may use "TreatementDetails" (typo)
   patientCondition: 'Critical' | 'Stable';

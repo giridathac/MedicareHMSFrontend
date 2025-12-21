@@ -1152,24 +1152,6 @@ export function Admissions() {
                       )}
                     </div>
                   )}
-                  {addAdmissionForm.patientId && (
-                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-gray-700">
-                      Selected: {(() => {
-                        const selectedPatient = patientOptions.find((p: any) => {
-                          const pid = (p as any).patientId || (p as any).PatientId || '';
-                          return pid === addAdmissionForm.patientId;
-                        });
-                        if (selectedPatient) {
-                          const patientNo = (selectedPatient as any).patientNo || (selectedPatient as any).PatientNo || '';
-                          const patientName = (selectedPatient as any).patientName || (selectedPatient as any).PatientName || '';
-                          const lastName = (selectedPatient as any).lastName || (selectedPatient as any).LastName || '';
-                          const fullName = `${patientName} ${lastName}`.trim();
-                          return `${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`;
-                        }
-                        return 'Unknown';
-                      })()}
-                    </div>
-                  )}
                 </div>
 
                 {/* Patient Type */}
@@ -1355,23 +1337,6 @@ export function Admissions() {
                       )}
                     </div>
                   )}
-                  {addAdmissionForm.roomBedId && (
-                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-gray-700">
-                      Selected: {(() => {
-                        const selectedBed = roomBedOptions.find((b: any) => {
-                          const bid = (b as any).roomBedId || (b as any).RoomBedsId || (b as any).id || '';
-                          return String(bid) === addAdmissionForm.roomBedId;
-                        });
-                        if (selectedBed) {
-                          const roomNo = (selectedBed as any).roomNo || (selectedBed as any).RoomNo || '';
-                          const bedNo = (selectedBed as any).bedNo || (selectedBed as any).BedNo || '';
-                          const roomType = (selectedBed as any).roomType || (selectedBed as any).RoomType || '';
-                          return `${roomNo} - ${bedNo} (${roomType})`;
-                        }
-                        return 'Unknown';
-                      })()}
-                    </div>
-                  )}
                 </div>
 
                 {/* Doctor Selection - Same pattern as Patient selection */}
@@ -1461,22 +1426,6 @@ export function Admissions() {
                           No doctors found. Try a different search term.
                         </div>
                       )}
-                    </div>
-                  )}
-                  {addAdmissionForm.admittedByDoctorId && (
-                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-gray-700">
-                      Selected: {(() => {
-                        const selectedDoctor = doctorOptions.find((d: any) => {
-                          const did = String((d as any).id || (d as any).Id || (d as any).UserId || '');
-                          return did === addAdmissionForm.admittedByDoctorId;
-                        });
-                        if (selectedDoctor) {
-                          const doctorName = (selectedDoctor as any).name || (selectedDoctor as any).Name || (selectedDoctor as any).UserName || '';
-                          const specialty = (selectedDoctor as any).specialty || (selectedDoctor as any).Specialty || (selectedDoctor as any).DoctorDepartmentName || '';
-                          return `${doctorName}${specialty ? ` - ${specialty}` : ''}`;
-                        }
-                        return 'Unknown';
-                      })()}
                     </div>
                   )}
               </div>
@@ -1673,24 +1622,6 @@ export function Admissions() {
                                 })}
                             </tbody>
                           </table>
-                        </div>
-                      )}
-                      {addAdmissionForm.patientId && (
-                        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-gray-700">
-                          Selected: {(() => {
-                            const selectedPatient = patientOptions.find((p: any) => {
-                              const pid = (p as any).patientId || (p as any).PatientId || '';
-                              return pid === addAdmissionForm.patientId;
-                            });
-                            if (selectedPatient) {
-                              const patientNo = (selectedPatient as any).patientNo || (selectedPatient as any).PatientNo || '';
-                              const patientName = (selectedPatient as any).patientName || (selectedPatient as any).PatientName || '';
-                              const lastName = (selectedPatient as any).lastName || (selectedPatient as any).LastName || '';
-                              const fullName = `${patientName} ${lastName}`.trim();
-                              return `${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`;
-                            }
-                            return 'Unknown';
-                          })()}
                         </div>
                       )}
       </div>
