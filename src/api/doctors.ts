@@ -1,60 +1,6 @@
 // Doctors API service
-import { apiRequest, ENABLE_STUB_DATA } from './base';
+import { apiRequest } from './base';
 import { Doctor } from '../types';
-
-// Stub data
-const stubDoctors: Doctor[] = [
-  { id: 1, name: 'Dr. Sarah Johnson', specialty: 'Cardiology', type: 'inhouse' },
-  { id: 2, name: 'Dr. Michael Chen', specialty: 'Orthopedics', type: 'inhouse' },
-  { id: 3, name: 'Dr. James Miller', specialty: 'Neurology', type: 'consulting' },
-  { id: 4, name: 'Dr. Emily Davis', specialty: 'General Medicine', type: 'inhouse' },
-  { id: 5, name: 'Dr. Robert Lee', specialty: 'Pediatrics', type: 'consulting' },
-  { id: 6, name: 'Dr. Maria Garcia', specialty: 'Gynecology', type: 'inhouse' },
-  { id: 7, name: 'Dr. David Wilson', specialty: 'Dermatology', type: 'consulting' },
-  { id: 8, name: 'Dr. Jennifer Martinez', specialty: 'Oncology', type: 'inhouse' },
-  { id: 9, name: 'Dr. Christopher Brown', specialty: 'Urology', type: 'inhouse' },
-  { id: 10, name: 'Dr. Amanda White', specialty: 'Psychiatry', type: 'consulting' },
-  { id: 11, name: 'Dr. Daniel Harris', specialty: 'Gastroenterology', type: 'inhouse' },
-  { id: 12, name: 'Dr. Lauren Clark', specialty: 'Endocrinology', type: 'inhouse' },
-  { id: 13, name: 'Dr. Ryan Lewis', specialty: 'Pulmonology', type: 'consulting' },
-  { id: 14, name: 'Dr. Nicole Walker', specialty: 'Rheumatology', type: 'inhouse' },
-  { id: 15, name: 'Dr. Kevin Allen', specialty: 'Nephrology', type: 'inhouse' },
-  { id: 16, name: 'Dr. Samantha Young', specialty: 'Hematology', type: 'consulting' },
-  { id: 17, name: 'Dr. Brandon King', specialty: 'Infectious Disease', type: 'inhouse' },
-  { id: 18, name: 'Dr. Rachel Wright', specialty: 'Allergy & Immunology', type: 'consulting' },
-  { id: 19, name: 'Dr. Justin Lopez', specialty: 'Cardiac Surgery', type: 'inhouse' },
-  { id: 20, name: 'Dr. Michelle Hill', specialty: 'Plastic Surgery', type: 'inhouse' },
-  { id: 21, name: 'Dr. Tyler Scott', specialty: 'Vascular Surgery', type: 'consulting' },
-  { id: 22, name: 'Dr. Stephanie Green', specialty: 'Thoracic Surgery', type: 'inhouse' },
-  { id: 23, name: 'Dr. Eric Adams', specialty: 'Ophthalmology', type: 'inhouse' },
-  { id: 24, name: 'Dr. Melissa Baker', specialty: 'Anesthesiology', type: 'inhouse' },
-  { id: 25, name: 'Dr. Jason Nelson', specialty: 'Emergency Medicine', type: 'inhouse' },
-  { id: 26, name: 'Dr. Ashley Carter', specialty: 'Radiology', type: 'consulting' },
-  { id: 27, name: 'Dr. Nathan Mitchell', specialty: 'Pathology', type: 'inhouse' },
-];
-
-// Attendance stub data
-interface AttendanceRecord {
-  id: number;
-  doctorId: number;
-  date: string;
-  status: 'present' | 'absent' | 'on-leave' | 'half-day';
-  checkIn?: string;
-  checkOut?: string;
-  notes?: string;
-}
-
-const stubAttendance: AttendanceRecord[] = [
-  { id: 1, doctorId: 1, date: '2025-11-14', status: 'present', checkIn: '08:00 AM', checkOut: '05:00 PM' },
-  { id: 2, doctorId: 2, date: '2025-11-14', status: 'present', checkIn: '08:30 AM', checkOut: '04:30 PM' },
-  { id: 3, doctorId: 3, date: '2025-11-14', status: 'on-leave' },
-  { id: 4, doctorId: 4, date: '2025-11-14', status: 'present', checkIn: '09:00 AM', checkOut: '06:00 PM' },
-  { id: 5, doctorId: 5, date: '2025-11-14', status: 'half-day', checkIn: '09:00 AM', checkOut: '01:00 PM' },
-  { id: 6, doctorId: 6, date: '2025-11-14', status: 'present', checkIn: '08:00 AM', checkOut: '05:00 PM' },
-  { id: 7, doctorId: 7, date: '2025-11-14', status: 'absent' },
-];
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export interface CreateDoctorDto {
   name: string;
@@ -111,34 +57,9 @@ export const doctorsApi = {
       }
     } catch (error) {
       console.error('Error fetching doctors:', error);
-      // If stub data is disabled and API fails, throw the error
-      if (!ENABLE_STUB_DATA) {
-        throw error;
-      }
+      throw error;
     }
     
-    // Append stub data if enabled
-    if (ENABLE_STUB_DATA) {
-      // Filter out stub data that might conflict with API data (by ID)
-      const apiIds = new Set(apiData.map(d => d.id));
-      const uniqueStubData = stubDoctors.filter(d => !apiIds.has(d.id));
-      
-      if (uniqueStubData.length > 0) {
-        console.log(`Appending ${uniqueStubData.length} stub doctors to ${apiData.length} API records`);
-      }
-      
-      // If API returned no data, use stub data as fallback
-      if (apiData.length === 0) {
-        console.warn('No doctors data received from API, using stub data');
-        await delay(300);
-        return [...stubDoctors];
-      }
-      
-      // Combine API data with stub data
-      return [...apiData, ...uniqueStubData];
-    }
-    
-    // Return only API data if stub data is disabled
     return apiData;
   },
 
@@ -159,99 +80,108 @@ export const doctorsApi = {
         return doctor;
       }
       
-      // If API returns no data and stub data is enabled, fall back to stub
-      if (ENABLE_STUB_DATA) {
-        await delay(200);
-        const doctor = stubDoctors.find(d => d.id === id);
-        if (doctor) {
-          return Promise.resolve(doctor);
-        }
-      }
-      
       throw new Error(`Doctor with id ${id} not found`);
     } catch (error) {
       console.error(`Error fetching doctor with id ${id}:`, error);
-      
-      // If stub data is enabled and API fails, try stub data
-      if (ENABLE_STUB_DATA) {
-        await delay(200);
-        const doctor = stubDoctors.find(d => d.id === id);
-        if (doctor) {
-          return Promise.resolve(doctor);
-        }
-      }
-      
       throw error;
     }
   },
 
   async create(data: CreateDoctorDto): Promise<Doctor> {
-    // Replace with: return apiRequest<Doctor>('/doctors', { method: 'POST', body: JSON.stringify(data) });
-    await delay(400);
-    const newDoctor: Doctor = {
-      id: stubDoctors.length + 1,
-      ...data,
-    };
-    stubDoctors.push(newDoctor);
-    return Promise.resolve(newDoctor);
+    try {
+      const response = await apiRequest<any>('/doctors', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      const doctorData = response?.data || response;
+      return {
+        id: doctorData.id || doctorData.UserId || 0,
+        name: doctorData.name || doctorData.UserName || data.name,
+        specialty: doctorData.specialty || doctorData.DoctorDepartmentName || data.specialty,
+        type: doctorData.type || (doctorData.DoctorType === 'INHOUSE' ? 'inhouse' : 'consulting') as 'inhouse' | 'consulting',
+      };
+    } catch (error) {
+      console.error('Error creating doctor:', error);
+      throw error;
+    }
   },
 
   async update(data: UpdateDoctorDto): Promise<Doctor> {
-    // Replace with: return apiRequest<Doctor>(`/doctors/${data.id}`, { method: 'PUT', body: JSON.stringify(data) });
-    await delay(400);
-    const index = stubDoctors.findIndex(d => d.id === data.id);
-    if (index === -1) {
-      throw new Error(`Doctor with id ${data.id} not found`);
+    try {
+      const response = await apiRequest<any>(`/doctors/${data.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      const doctorData = response?.data || response;
+      return {
+        id: doctorData.id || doctorData.UserId || data.id,
+        name: doctorData.name || doctorData.UserName || data.name || '',
+        specialty: doctorData.specialty || doctorData.DoctorDepartmentName || data.specialty || '',
+        type: doctorData.type || (doctorData.DoctorType === 'INHOUSE' ? 'inhouse' : 'consulting') as 'inhouse' | 'consulting',
+      };
+    } catch (error) {
+      console.error('Error updating doctor:', error);
+      throw error;
     }
-    stubDoctors[index] = { ...stubDoctors[index], ...data };
-    return Promise.resolve(stubDoctors[index]);
   },
 
   async delete(id: number): Promise<void> {
-    // Replace with: return apiRequest<void>(`/doctors/${id}`, { method: 'DELETE' });
-    await delay(300);
-    const index = stubDoctors.findIndex(d => d.id === id);
-    if (index === -1) {
-      throw new Error(`Doctor with id ${id} not found`);
+    try {
+      await apiRequest<void>(`/doctors/${id}`, {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      console.error('Error deleting doctor:', error);
+      throw error;
     }
-    stubDoctors.splice(index, 1);
-    return Promise.resolve();
   },
 
   // Attendance methods
   async getAttendance(doctorId?: number, date?: string): Promise<AttendanceRecord[]> {
-    // Replace with: return apiRequest<AttendanceRecord[]>(`/doctors/attendance${doctorId ? `?doctorId=${doctorId}` : ''}${date ? `&date=${date}` : ''}`);
-    await delay(300);
-    let filtered = [...stubAttendance];
-    if (doctorId) {
-      filtered = filtered.filter(a => a.doctorId === doctorId);
+    try {
+      let endpoint = '/doctors/attendance';
+      const queryParams: string[] = [];
+      if (doctorId) {
+        queryParams.push(`doctorId=${doctorId}`);
+      }
+      if (date) {
+        queryParams.push(`date=${date}`);
+      }
+      if (queryParams.length > 0) {
+        endpoint += `?${queryParams.join('&')}`;
+      }
+      const response = await apiRequest<AttendanceRecord[]>(endpoint);
+      return Array.isArray(response) ? response : (response?.data || []);
+    } catch (error) {
+      console.error('Error fetching attendance:', error);
+      throw error;
     }
-    if (date) {
-      filtered = filtered.filter(a => a.date === date);
-    }
-    return Promise.resolve(filtered);
   },
 
   async createAttendance(data: CreateAttendanceDto): Promise<AttendanceRecord> {
-    // Replace with: return apiRequest<AttendanceRecord>('/doctors/attendance', { method: 'POST', body: JSON.stringify(data) });
-    await delay(400);
-    const newRecord: AttendanceRecord = {
-      id: stubAttendance.length + 1,
-      ...data,
-    };
-    stubAttendance.push(newRecord);
-    return Promise.resolve(newRecord);
+    try {
+      const response = await apiRequest<AttendanceRecord>('/doctors/attendance', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return response?.data || response;
+    } catch (error) {
+      console.error('Error creating attendance:', error);
+      throw error;
+    }
   },
 
   async updateAttendance(id: number, data: Partial<CreateAttendanceDto>): Promise<AttendanceRecord> {
-    // Replace with: return apiRequest<AttendanceRecord>(`/doctors/attendance/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-    await delay(400);
-    const index = stubAttendance.findIndex(a => a.id === id);
-    if (index === -1) {
-      throw new Error(`Attendance record with id ${id} not found`);
+    try {
+      const response = await apiRequest<AttendanceRecord>(`/doctors/attendance/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      return response?.data || response;
+    } catch (error) {
+      console.error('Error updating attendance:', error);
+      throw error;
     }
-    stubAttendance[index] = { ...stubAttendance[index], ...data };
-    return Promise.resolve(stubAttendance[index]);
   },
 };
 

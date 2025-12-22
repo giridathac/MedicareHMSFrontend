@@ -1,5 +1,5 @@
 // Roles API service
-import { apiRequest, ENABLE_STUB_DATA } from './base';
+import { apiRequest } from './base';
 import { Role, RoleName, RoleDto } from '../types/roles';
 
 // Default roles
@@ -16,16 +16,6 @@ const defaultRoles: RoleName[] = [
   'Pharmacyadmin',
 ];
 
-// Stub data (for fallback/testing only - will be replaced by API)
-const stubRoles: Role[] = defaultRoles.map((name, index) => ({
-  id: `stub-${index + 1}`,
-  name,
-  description: getDefaultDescription(name),
-  permissions: getDefaultPermissions(name),
-  createdAt: new Date(2024, 0, 1).toISOString(),
-  updatedAt: new Date(2024, 0, 1).toISOString(),
-  isSuperAdmin: name.toLowerCase() === 'superadmin',
-}));
 
 function getDefaultDescription(name: RoleName): string {
   const descriptions: Record<string, string> = {
@@ -112,34 +102,9 @@ export const rolesApi = {
       }
     } catch (error) {
       console.error('Error fetching roles from /api/roles:', error);
-      // If stub data is disabled and API fails, throw the error
-      if (!ENABLE_STUB_DATA) {
-        throw error;
-      }
+      throw error;
     }
     
-    // Append stub data if enabled
-    if (ENABLE_STUB_DATA) {
-      // Filter out stub data that might conflict with API data (by ID)
-      const apiIds = new Set(apiData.map(role => role.id));
-      const uniqueStubData = stubRoles.filter(role => !apiIds.has(role.id));
-      
-      if (uniqueStubData.length > 0) {
-        console.log(`Appending ${uniqueStubData.length} stub roles to ${apiData.length} API records`);
-      }
-      
-      // If API returned no data, use stub data as fallback
-      if (apiData.length === 0) {
-        console.warn('No roles data received from API, using stub data');
-        await delay(300);
-        return [...stubRoles];
-      }
-      
-      // Combine API data with stub data
-      return [...apiData, ...uniqueStubData];
-    }
-    
-    // Return only API data if stub data is disabled
     return apiData;
   },
 

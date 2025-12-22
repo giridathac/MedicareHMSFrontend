@@ -148,6 +148,20 @@
   border-radius: 0.375rem; /* rounded-md */
 }
 
+/* Select dropdown options - ensure they have a solid background */
+.dialog-select-standard option {
+  background-color: white;
+  color: rgb(55, 65, 81); /* text-gray-700 */
+  padding: 0.5rem;
+}
+
+/* Select dropdown options - hover state */
+.dialog-select-standard option:hover,
+.dialog-select-standard option:checked {
+  background-color: rgb(243, 244, 246); /* bg-gray-100 */
+  color: rgb(17, 24, 39); /* text-gray-900 */
+}
+
 @media (min-width: 768px) {
   .dialog-select-standard {
     font-size: 0.875rem; /* 14px - matches FrontDesk md:text-sm on desktop */

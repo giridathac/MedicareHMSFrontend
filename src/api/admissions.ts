@@ -1,5 +1,5 @@
 // Admissions API service
-import { apiRequest, ApiError, ENABLE_STUB_DATA } from './base';
+import { apiRequest, ApiError } from './base';
 
 export interface Admission {
   id: number;
@@ -216,11 +216,6 @@ export interface PatientAdmitVisitVitals {
   status?: string;
 }
 
-// Stub data for Admissions Management
-const stubAdmissions: Admission[] = [
-];
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper function to normalize status
 function normalizeStatus(status: any): 'Active' | 'Discharged' | 'Moved to ICU' | 'Surgery Scheduled' {
@@ -295,12 +290,6 @@ function normalizeRoomType(roomType: any): 'Regular Ward' | 'Special Shared Room
   return 'Regular Ward';
 }
 
-// Stub data for Room Capacity Overview
-const stubRoomCapacity: RoomCapacityOverview = {
-  'Regular Ward': { total: 50, occupied: 35, available: 15 },
-  'Special Shared Room': { total: 20, occupied: 14, available: 6 },
-  'Special Room': { total: 15, occupied: 8, available: 7 },
-};
 
 // Module-level array to store ICU admissions extracted from bed layout
 let icuAdmissionsArray: any[] = [];
@@ -630,34 +619,9 @@ export const admissionsApi = {
       }
     } catch (error) {
       console.error('Error fetching admissions:', error);
-      // If stub data is disabled and API fails, throw the error
-      if (!ENABLE_STUB_DATA) {
-        throw error;
-      }
+      throw error;
     }
     
-    // Append stub data if enabled
-    if (ENABLE_STUB_DATA) {
-      // Filter out stub data that might conflict with API data (by ID)
-      const apiIds = new Set(apiData.map(admission => admission.id));
-      const uniqueStubData = stubAdmissions.filter(admission => !apiIds.has(admission.id));
-      
-      if (uniqueStubData.length > 0) {
-        console.log(`Appending ${uniqueStubData.length} stub admissions to ${apiData.length} API records`);
-      }
-      
-      // If API returned no data, use stub data as fallback
-      if (apiData.length === 0) {
-        console.warn('No admissions data received from API, using stub data');
-        await delay(300);
-        return [...stubAdmissions];
-      }
-      
-      // Combine API data with stub data
-      return [...apiData, ...uniqueStubData];
-    }
-    
-    // Return only API data if stub data is disabled
     return apiData;
   },
 
@@ -1599,13 +1563,6 @@ export const admissionsApi = {
     } catch (error: any) {
       console.error('Error fetching room capacity overview:', error);
       
-      // If stub data is enabled and API fails, return stub data
-      if (ENABLE_STUB_DATA) {
-        console.warn('No room capacity data received from API, using stub data');
-        await delay(300);
-        return { ...stubRoomCapacity };
-      }
-      
       // Provide more detailed error message
       if (error instanceof ApiError) {
         const errorData = error.data as any;
@@ -1701,21 +1658,6 @@ export const admissionsApi = {
       return mappedMetrics;
     } catch (error) {
       console.error('Error fetching dashboard metrics:', error);
-      
-      // If stub data is enabled, return stub data
-      if (ENABLE_STUB_DATA) {
-        console.log('Using stub dashboard metrics data');
-        await delay(300);
-        return {
-          totalAdmissions: 0,
-          activePatients: 0,
-          bedOccupancy: 0,
-          totalOccupied: 0,
-          totalCapacity: 0,
-          availableBeds: 0,
-          avgStay: 0,
-        };
-      }
       
       // Provide more detailed error message
       if (error instanceof ApiError) {

@@ -1,14 +1,6 @@
 // RoomBeds API service
-import { apiRequest, ApiError, ENABLE_STUB_DATA } from './base';
+import { apiRequest, ApiError } from './base';
 import { RoomBed } from '../types';
-
-// Stub data for Room & Beds Management
-const stubRoomBeds: RoomBed[] = [
-  // Floor 1 - Regular AC Rooms
-
-];
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper function to normalize status to 'Active' or 'Inactive'
 function normalizeStatus(status: any): 'Active' | 'Inactive' {
@@ -124,34 +116,9 @@ export const roomBedsApi = {
       }
     } catch (error) {
       console.error('Error fetching room beds:', error);
-      // If stub data is disabled and API fails, throw the error
-      if (!ENABLE_STUB_DATA) {
-        throw error;
-      }
+      throw error;
     }
     
-    // Append stub data if enabled
-    if (ENABLE_STUB_DATA) {
-      // Filter out stub data that might conflict with API data (by roomBedId)
-      const apiIds = new Set(apiData.map(bed => bed.roomBedId));
-      const uniqueStubData = stubRoomBeds.filter(bed => !apiIds.has(bed.roomBedId));
-      
-      if (uniqueStubData.length > 0) {
-        console.log(`Appending ${uniqueStubData.length} stub room beds to ${apiData.length} API records`);
-      }
-      
-      // If API returned no data, use stub data as fallback
-      if (apiData.length === 0) {
-        console.warn('No room beds data received from API, using stub data');
-        await delay(300);
-        return [...stubRoomBeds];
-      }
-      
-      // Combine API data with stub data
-      return [...apiData, ...uniqueStubData];
-    }
-    
-    // Return only API data if stub data is disabled
     return apiData;
   },
 
@@ -229,15 +196,55 @@ export const roomBedsApi = {
   },
 
   async getByRoomNo(roomNo: string): Promise<RoomBed[]> {
-    // Replace with: return apiRequest<RoomBed[]>(`/roombeds?roomNo=${roomNo}`);
-    await delay(200);
-    return Promise.resolve(stubRoomBeds.filter(r => r.roomNo === roomNo));
+    try {
+      const response = await apiRequest<any>(`/room-beds?roomNo=${encodeURIComponent(roomNo)}`);
+      const roomBedsData = response?.data || response || [];
+      if (Array.isArray(roomBedsData)) {
+        return roomBedsData.map((roomBed: any) => ({
+          id: roomBed.id || 0,
+          roomBedId: Number(roomBed.RoomBedsId || roomBed.roomBedsId || roomBed.roomBedId || roomBed.RoomBedId || 0),
+          bedNo: roomBed.bedNo || roomBed.BedNo || '',
+          roomNo: roomBed.roomNo || roomBed.RoomNo || '',
+          roomCategory: roomBed.roomCategory || roomBed.RoomCategory || '',
+          roomType: roomBed.roomType || roomBed.RoomType || '',
+          numberOfBeds: roomBed.numberOfBeds || roomBed.NumberOfBeds || 1,
+          chargesPerDay: Number(roomBed.chargesPerDay || roomBed.ChargesPerDay || 0),
+          status: normalizeStatus(roomBed.status || roomBed.Status || 'Active'),
+          createdBy: roomBed.createdBy || roomBed.CreatedBy || '',
+          createdAt: roomBed.createdAt || roomBed.CreatedAt || new Date().toISOString(),
+        })) as RoomBed[];
+      }
+      return [];
+    } catch (error) {
+      console.error(`Error fetching room beds by room number ${roomNo}:`, error);
+      throw error;
+    }
   },
 
   async getByCategory(category: string): Promise<RoomBed[]> {
-    // Replace with: return apiRequest<RoomBed[]>(`/roombeds?category=${category}`);
-    await delay(200);
-    return Promise.resolve(stubRoomBeds.filter(r => r.roomCategory === category));
+    try {
+      const response = await apiRequest<any>(`/room-beds?category=${encodeURIComponent(category)}`);
+      const roomBedsData = response?.data || response || [];
+      if (Array.isArray(roomBedsData)) {
+        return roomBedsData.map((roomBed: any) => ({
+          id: roomBed.id || 0,
+          roomBedId: Number(roomBed.RoomBedsId || roomBed.roomBedsId || roomBed.roomBedId || roomBed.RoomBedId || 0),
+          bedNo: roomBed.bedNo || roomBed.BedNo || '',
+          roomNo: roomBed.roomNo || roomBed.RoomNo || '',
+          roomCategory: roomBed.roomCategory || roomBed.RoomCategory || '',
+          roomType: roomBed.roomType || roomBed.RoomType || '',
+          numberOfBeds: roomBed.numberOfBeds || roomBed.NumberOfBeds || 1,
+          chargesPerDay: Number(roomBed.chargesPerDay || roomBed.ChargesPerDay || 0),
+          status: normalizeStatus(roomBed.status || roomBed.Status || 'Active'),
+          createdBy: roomBed.createdBy || roomBed.CreatedBy || '',
+          createdAt: roomBed.createdAt || roomBed.CreatedAt || new Date().toISOString(),
+        })) as RoomBed[];
+      }
+      return [];
+    } catch (error) {
+      console.error(`Error fetching room beds by category ${category}:`, error);
+      throw error;
+    }
   },
 
   async create(data: CreateRoomBedDto): Promise<RoomBed> {
@@ -524,6 +531,7 @@ export const roomBedsApi = {
     }
   },
 };
+
 
 
 

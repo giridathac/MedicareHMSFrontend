@@ -228,3 +228,41 @@ export function isTodayIST(date: string | Date): boolean {
   const dateStr = formatDateIST(date);
   return today === dateStr;
 }
+
+/**
+ * Get the previous day's date in IST as YYYY-MM-DD string
+ * @param date - Optional date to get previous day from (defaults to today)
+ * @returns Previous day's date in IST format (YYYY-MM-DD)
+ */
+export function getPreviousDayIST(date?: string | Date): string {
+  const baseDate = date ? convertToIST(date) : convertToIST(new Date());
+  const previousDay = new Date(baseDate);
+  previousDay.setUTCDate(previousDay.getUTCDate() - 1);
+  
+  const year = previousDay.getUTCFullYear();
+  const month = String(previousDay.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(previousDay.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Check if a time slot spans midnight (starts on one day and ends on the next)
+ * @param slotStartTime - Slot start time (HH:mm format)
+ * @param slotEndTime - Slot end time (HH:mm format)
+ * @returns true if slot spans midnight
+ */
+export function doesSlotSpanMidnight(slotStartTime: string, slotEndTime: string): boolean {
+  if (!slotStartTime || !slotEndTime) return false;
+  
+  const startParts = slotStartTime.split(':');
+  const endParts = slotEndTime.split(':');
+  
+  if (startParts.length < 2 || endParts.length < 2) return false;
+  
+  const startHour = parseInt(startParts[0], 10);
+  const endHour = parseInt(endParts[0], 10);
+  
+  // If end hour is less than start hour, it spans midnight
+  // Or if start hour is late (>= 20) and end hour is early (<= 6), it likely spans midnight
+  return endHour < startHour || (startHour >= 20 && endHour <= 6);
+}

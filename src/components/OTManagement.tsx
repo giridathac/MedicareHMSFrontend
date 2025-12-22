@@ -1,17 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { ResizableDialogContent } from './ResizableDialogContent';
+import { CustomResizableDialog, CustomResizableDialogHeader, CustomResizableDialogTitle, CustomResizableDialogClose } from './CustomResizableDialog';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Scissors, Plus, Clock, CheckCircle, AlertCircle, Calendar as CalendarIcon, Calendar, ChevronUp, ChevronDown, Search } from 'lucide-react';
 import { otRoomsApi } from '../api/otRooms';
 import { otSlotsApi } from '../api/otSlots';
 import { patientOTAllocationsApi, CreatePatientOTAllocationDto } from '../api/patientOTAllocations';
-import { formatDateToDDMMYYYY, formatDateIST, getTodayIST, formatDateDisplayIST, convertToIST } from '../utils/timeUtils';
+import { formatDateToDDMMYYYY, formatDateIST, getTodayIST, formatDateDisplayIST, convertToIST, getPreviousDayIST, doesSlotSpanMidnight } from '../utils/timeUtils';
+import { getTodayISTDate } from '../config/timezone';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar as CalendarComponent } from './ui/calendar';
 import { Textarea } from './ui/textarea';
@@ -195,6 +195,13 @@ export function OTManagement() {
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadedDocumentUrls, setUploadedDocumentUrls] = useState<string[]>([]);
+  const [patientSourceType, setPatientSourceType] = useState<'IPD' | 'OPD' | 'EmergencyBed' | ''>('');
+  // Store selected IDs for each source type to persist when switching
+  const [savedPatientSourceIds, setSavedPatientSourceIds] = useState<{
+    IPD?: string;
+    OPD?: string;
+    EmergencyBed?: string;
+  }>({});
 
   // Sync date picker with form data
   useEffect(() => {
@@ -613,8 +620,12 @@ export function OTManagement() {
     }
 
     // Patient source is required - must come from one of the sources
+    if (!patientSourceType) {
+      alert('Please select a Patient Source.');
+      return;
+    }
     if (!formData.roomAdmissionId && !formData.patientAppointmentId && !formData.emergencyBedSlotId) {
-      alert('Please select a patient source (Room Admission, Patient Appointment, or Emergency Bed Slot).');
+      alert(`Please select a ${patientSourceType === 'IPD' ? 'Room Admission' : patientSourceType === 'OPD' ? 'Patient Appointment' : 'Emergency Bed Slot'}.`);
       return;
     }
 
@@ -674,7 +685,7 @@ export function OTManagement() {
       }
       
       // Combine all document URLs (JSON array)
-      const combinedDocuments = documentUrls.length > 0 ? JSON.stringify(documentUrls) : null;
+      const combinedDocuments = documentUrls.length > 0 ? JSON.stringify(documentUrls) : undefined;
 
       const createData: CreatePatientOTAllocationDto = {
         patientId: patientId,
@@ -683,24 +694,24 @@ export function OTManagement() {
         emergencyBedSlotId: formData.emergencyBedSlotId ? Number(formData.emergencyBedSlotId) : undefined,
         otId: Number(formData.otId),
         otSlotIds: formData.otSlotIds || [],
-        surgeryId: formData.surgeryId ? Number(formData.surgeryId) : null,
+        surgeryId: formData.surgeryId ? Number(formData.surgeryId) : undefined,
         leadSurgeonId: Number(formData.leadSurgeonId),
-        assistantDoctorId: formData.assistantDoctorId ? Number(formData.assistantDoctorId) : null,
-        anaesthetistId: formData.anaesthetistId ? Number(formData.anaesthetistId) : null,
-        nurseId: formData.nurseId ? Number(formData.nurseId) : null,
+        assistantDoctorId: formData.assistantDoctorId ? Number(formData.assistantDoctorId) : undefined,
+        anaesthetistId: formData.anaesthetistId ? Number(formData.anaesthetistId) : undefined,
+        nurseId: formData.nurseId ? Number(formData.nurseId) : undefined,
         otAllocationDate: formData.otAllocationDate,
-        dateOfOperation: formData.dateOfOperation || null,
-        duration: formData.duration ? Number(formData.duration) : null,
-        otStartTime: formData.otStartTime || null,
-        otEndTime: formData.otEndTime || null,
-        otActualStartTime: formData.otActualStartTime || null,
-        otActualEndTime: formData.otActualEndTime || null,
-        operationDescription: formData.operationDescription || null,
+        dateOfOperation: formData.dateOfOperation || undefined,
+        duration: formData.duration ? Number(formData.duration) : undefined,
+        otStartTime: formData.otStartTime || undefined,
+        otEndTime: formData.otEndTime || undefined,
+        otActualStartTime: formData.otActualStartTime || undefined,
+        otActualEndTime: formData.otActualEndTime || undefined,
+        operationDescription: formData.operationDescription || undefined,
         operationStatus: formData.operationStatus === 'InProgress' ? 'In Progress' : formData.operationStatus,
-        preOperationNotes: formData.preOperationNotes || null,
-        postOperationNotes: formData.postOperationNotes || null,
+        preOperationNotes: formData.preOperationNotes || undefined,
+        postOperationNotes: formData.postOperationNotes || undefined,
         otDocuments: combinedDocuments,
-        billId: formData.billId ? Number(formData.billId) : null,
+        billId: formData.billId ? Number(formData.billId) : undefined,
         status: 'Active',
       };
 
@@ -743,6 +754,8 @@ export function OTManagement() {
       });
       setSelectedFiles([]);
       setUploadedDocumentUrls([]);
+      setPatientSourceType('');
+      setSavedPatientSourceIds({});
       setPatientSearchTerm('');
       setPatientHighlightIndex(-1);
       setSelectedOTId('');
@@ -795,32 +808,506 @@ export function OTManagement() {
     <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
       <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
         <div className="px-6 pt-6 pb-0 flex-shrink-0">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-gray-900 mb-2">Operation Theater Management</h1>
-          <p className="text-gray-500">Schedule and monitor surgical procedures</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-gray-900 mb-2">Operation Theater Management</h1>
+              <p className="text-gray-500">Schedule and monitor surgical procedures</p>
+            </div>
+            <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
               <Plus className="size-4" />
               Schedule Surgery
             </Button>
-          </DialogTrigger>
-          <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
-            <div className="dialog-scrollable-wrapper dialog-content-scrollable">
-              <DialogHeader className="dialog-header-standard">
-                <DialogTitle className="dialog-title-standard">Add New Patient OT Allocation</DialogTitle>
-              </DialogHeader>
-              <div className="dialog-body-content-wrapper">
-                <div className="dialog-form-container space-y-4">
-                  <div className="pb-1 px-3 bg-gray-50 rounded-md border border-gray-200">
-                    <Label className="dialog-label-standard">Patient Source (Select one) *</Label>
-                    <p className="text-xs text-gray-500 mt-1">Choose either Room Admission (IPD), Patient Appointment (OPD), or Emergency Bed</p>
-                  </div>
+          </div>
+        </div>
+        <div className="px-6 pt-4 pb-4 flex-1">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">Today's Surgeries</p>
+              <Scissors className="size-5 text-blue-600" />
+            </div>
+            <h3 className="text-gray-900">{todayAllocations.length}</h3>
+            <p className="text-xs text-gray-500">Scheduled for today</p>
+          </CardContent>
+        </Card>
 
-                  <div className="dialog-form-field -mt-4">
-                    <Label htmlFor="add-roomAdmissionId" className="dialog-label-standard">Room Admission (IPD)</Label>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">In Progress</p>
+              <Badge variant="default">{inProgress.length}</Badge>
+            </div>
+            <h3 className="text-gray-900">{inProgress.length}</h3>
+            <p className="text-xs text-gray-500">Currently in surgery</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">Scheduled</p>
+              <CalendarIcon className="size-5 text-green-600" />
+            </div>
+            <h3 className="text-gray-900">{scheduled.length}</h3>
+            <p className="text-xs text-gray-500">Upcoming surgeries</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">Completed</p>
+              <CheckCircle className="size-5 text-blue-600" />
+            </div>
+            <h3 className="text-gray-900">{completed.length}</h3>
+            <p className="text-xs text-gray-500">Finished today</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* OT Room Slot Status */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center gap-4">
+            <CardTitle>OT Room Slot Status</CardTitle>
+            <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-40 justify-start text-left font-normal"
+                >
+                  <Calendar className="mr-2 size-4" />
+                  {selectedDate ? formatDateToDDMMYYYYDisplay(selectedDate) : 'Pick a date'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 bg-white" align="start" style={{ opacity: 1 }}>
+                <CalendarComponent
+                  mode="single"
+                  selected={getDateFromString(selectedDate)}
+                  onSelect={(date) => {
+                    if (date) {
+                      const dateStr = getStringFromDate(date);
+                      setSelectedDate(dateStr);
+                      setDatePickerOpen(false);
+                    }
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">Loading OT rooms...</div>
+          ) : loadingSlots ? (
+            <div className="text-center py-8 text-gray-500">Loading slots...</div>
+          ) : (
+            (() => {
+              // Collect all occupied and unoccupied slots from all rooms
+              const allOccupiedSlots: Array<{ slot: OTSlot; room: OTRoom }> = [];
+              const allUnoccupiedSlots: Array<{ slot: OTSlot; room: OTRoom }> = [];
+              
+              otRooms.forEach((ot) => {
+                const numericOtId = typeof ot.otId === 'string' 
+                  ? parseInt(ot.otId.replace('OT-', ''), 10)
+                  : ot.id;
+                const slots = otSlotsByRoom.get(numericOtId) || [];
+                // Only consider a slot as occupied if it's actually not available for the selected date
+                const occupiedSlots = slots.filter(s => s.isOccupied === true && s.isAvailable === false);
+                const unoccupiedSlots = slots.filter(s => s.isAvailable === true || (s.isOccupied !== true && s.isAvailable !== false));
+                
+                occupiedSlots.forEach(slot => {
+                  allOccupiedSlots.push({ slot, room: ot });
+                });
+                
+                unoccupiedSlots.forEach(slot => {
+                  allUnoccupiedSlots.push({ slot, room: ot });
+                });
+              });
+              
+              if (allOccupiedSlots.length === 0 && allUnoccupiedSlots.length === 0) {
+                return (
+                  <div className="text-center py-8 text-gray-500">
+                    No slots found for the selected date
+                  </div>
+                );
+              }
+              
+              return (
+                <>
+                  {/* Occupied Slots Section */}
+                  {allOccupiedSlots.length > 0 && (
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Occupied ({allOccupiedSlots.length})</h3>
+                      <div className="grid grid-cols-4 gap-4">
+                        {allOccupiedSlots.map(({ slot, room }) => {
+                    const operationStatus = slot.operationStatus;
+                    const isCompleted = operationStatus === 'Completed';
+                    const isScheduled = operationStatus === 'Scheduled';
+                    const isInProgress = operationStatus === 'InProgress';
+                    
+                    return (
+                            <div
+                              key={`${room.id}-${slot.id}`}
+                              className="p-3 border-2 rounded-lg border-red-300 bg-red-50"
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <div>
+                                  <h3 className="text-sm font-semibold text-gray-900">
+                                    {room.otName || room.otNo || room.otId}
+                                  </h3>
+                                  {room.otType && (
+                                    <p className="text-xs text-gray-500">
+                                      {room.otType}
+                                    </p>
+                                  )}
+                                </div>
+                                <span className="size-3 rounded-full bg-red-500" />
+                              </div>
+                              
+                              {/* Slot Time */}
+                              {slot.slotStartTime && slot.slotEndTime && (
+                                <div className="mb-2">
+                                  <p className="text-xs text-gray-500 mb-0.5">
+                                    {slot.otSlotNo || `Slot ${slot.id}`}
+                                  </p>
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    <Clock className="size-3 text-gray-600" />
+                                    <span className="font-medium text-gray-700">
+                                      {slot.slotStartTime} - {slot.slotEndTime}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Patient Information */}
+                              {slot.patientName && (
+                                <div className="mb-1.5">
+                                  <p className="text-xs text-gray-500 mb-0.5">Patient</p>
+                                  <p className="text-xs font-medium text-gray-900">{slot.patientName}</p>
+                                  {slot.patientNo && (
+                                    <p className="text-xs text-gray-500">No: {slot.patientNo}</p>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* Operation Status */}
+                              {isInProgress && (
+                                <div className="flex items-center gap-1.5 p-1.5 bg-red-50 rounded mb-1.5">
+                                  <Scissors className="size-3 text-red-600" />
+                                  <span className="text-xs font-medium text-red-900">In Progress</span>
+                                </div>
+                              )}
+                              {isScheduled && (
+                                <div className="flex items-center gap-1.5 p-1.5 bg-yellow-50 rounded mb-1.5">
+                                  <Clock className="size-3 text-yellow-600" />
+                                  <span className="text-xs font-medium text-yellow-900">Scheduled</span>
+                                </div>
+                              )}
+                              {isCompleted && (
+                                <div className="flex items-center gap-1.5 p-1.5 bg-blue-50 rounded mb-1.5">
+                                  <CheckCircle className="size-3 text-blue-600" />
+                                  <span className="text-xs font-medium text-blue-900">Completed</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                  })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Unoccupied Slots Section - Collapsible */}
+                  {allUnoccupiedSlots.length > 0 && (
+                    <div>
+                      <button
+                        onClick={() => setIsUnoccupiedSlotsExpanded(!isUnoccupiedSlotsExpanded)}
+                        className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3 hover:text-gray-900"
+                      >
+                        {isUnoccupiedSlotsExpanded ? (
+                          <>
+                            <ChevronUp className="size-4" />
+                            Hide Unoccupied ({allUnoccupiedSlots.length})
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="size-4" />
+                            Show Unoccupied ({allUnoccupiedSlots.length})
+                          </>
+                        )}
+                      </button>
+                      {isUnoccupiedSlotsExpanded && (
+                        <div className="grid grid-cols-4 gap-4 mb-4">
+                          {allUnoccupiedSlots.map(({ slot, room }) => {
+                            return (
+                              <div
+                                key={`${room.id}-${slot.id}`}
+                                className="p-3 border-2 rounded-lg border-green-300 bg-green-50"
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <div>
+                                    <h3 className="text-sm font-semibold text-gray-900">
+                                      {room.otName || room.otNo || room.otId}
+                                    </h3>
+                                    {room.otType && (
+                                      <p className="text-xs text-gray-500">
+                                        {room.otType}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span className="size-3 rounded-full bg-green-500" />
+                                </div>
+                                
+                                {/* Slot Time */}
+                                {slot.slotStartTime && slot.slotEndTime && (
+                                  <div>
+                                    <p className="text-xs text-gray-500 mb-0.5">
+                                      {slot.otSlotNo || `Slot ${slot.id}`}
+                                    </p>
+                                    <div className="flex items-center gap-1.5 text-xs">
+                                      <Clock className="size-3 text-gray-600" />
+                                      <span className="font-medium text-gray-700">
+                                        {slot.slotStartTime} - {slot.slotEndTime}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Surgeries List */}
+      <Tabs defaultValue="today" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="today">Today's Surgeries ({todayAllocations.length})</TabsTrigger>
+          <TabsTrigger value="progress">In Progress ({inProgress.length})</TabsTrigger>
+          <TabsTrigger value="scheduled">Scheduled ({scheduled.length})</TabsTrigger>
+          <TabsTrigger value="completed">Completed ({completed.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="today">
+          <AllocationList
+            allocations={todayAllocations}
+            otRooms={otRooms}
+            otSlotsByRoom={otSlotsByRoom}
+            onRefresh={async () => {
+              try {
+                await fetchAllocations();
+              } catch (err) {
+                console.error('Failed to refresh allocations:', err);
+              }
+            }}
+            availableDoctors={availableDoctors}
+            patients={patients}
+            availableNurses={availableNurses}
+            availablePatientAppointments={availablePatientAppointments}
+            availableRoomAdmissions={availableRoomAdmissions}
+            availableEmergencyBedSlots={availableEmergencyBedSlots}
+          />
+        </TabsContent>
+
+        <TabsContent value="progress">
+          <AllocationList
+            allocations={inProgress}
+            otRooms={otRooms}
+            otSlotsByRoom={otSlotsByRoom}
+            onRefresh={async () => {
+              try {
+                await fetchAllocations();
+              } catch (err) {
+                console.error('Failed to refresh allocations:', err);
+              }
+            }}
+            availableDoctors={availableDoctors}
+            patients={patients}
+            availableNurses={availableNurses}
+            availablePatientAppointments={availablePatientAppointments}
+            availableRoomAdmissions={availableRoomAdmissions}
+            availableEmergencyBedSlots={availableEmergencyBedSlots}
+          />
+        </TabsContent>
+
+        <TabsContent value="scheduled">
+          <AllocationList
+            allocations={scheduled}
+            otRooms={otRooms}
+            otSlotsByRoom={otSlotsByRoom}
+            onRefresh={async () => {
+              try {
+                await fetchAllocations();
+              } catch (err) {
+                console.error('Failed to refresh allocations:', err);
+              }
+            }}
+            availableDoctors={availableDoctors}
+            patients={patients}
+            availableNurses={availableNurses}
+            availablePatientAppointments={availablePatientAppointments}
+            availableRoomAdmissions={availableRoomAdmissions}
+            availableEmergencyBedSlots={availableEmergencyBedSlots}
+          />
+        </TabsContent>
+
+        <TabsContent value="completed">
+          <AllocationList
+            allocations={completed}
+            otRooms={otRooms}
+            otSlotsByRoom={otSlotsByRoom}
+            onRefresh={async () => {
+              try {
+                await fetchAllocations();
+              } catch (err) {
+                console.error('Failed to refresh allocations:', err);
+              }
+            }}
+            availableDoctors={availableDoctors}
+            patients={patients}
+            availableNurses={availableNurses}
+            availablePatientAppointments={availablePatientAppointments}
+            availableRoomAdmissions={availableRoomAdmissions}
+            availableEmergencyBedSlots={availableEmergencyBedSlots}
+          />
+        </TabsContent>
+      </Tabs>
+        </div>
+      </div>
+      <CustomResizableDialog 
+        open={isDialogOpen} 
+        onOpenChange={setIsDialogOpen}
+        className="p-0 gap-0"
+        initialWidth={550}
+        maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
+      >
+        <CustomResizableDialogClose onClick={() => setIsDialogOpen(false)} />
+        <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+          <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+            <CustomResizableDialogTitle className="dialog-title-standard">Add New Patient OT Allocation</CustomResizableDialogTitle>
+          </CustomResizableDialogHeader>
+          <div className="dialog-body-content-wrapper">
+            <div className="dialog-form-container space-y-4">
+              <div className="dialog-form-field">
+                <Label htmlFor="add-patientSourceType" className="dialog-label-standard">Patient Source *</Label>
+                <select
+                  id="add-patientSourceType"
+                  className="dialog-select-standard w-full"
+                  value={patientSourceType}
+                  onChange={(e) => {
+                    const sourceType = e.target.value as 'IPD' | 'OPD' | 'EmergencyBed' | '';
+                    // Save current selection before switching
+                    if (patientSourceType) {
+                      const currentId = patientSourceType === 'IPD' 
+                        ? formData.roomAdmissionId 
+                        : patientSourceType === 'OPD' 
+                        ? formData.patientAppointmentId 
+                        : formData.emergencyBedSlotId;
+                      
+                      if (currentId) {
+                        setSavedPatientSourceIds(prev => ({
+                          ...prev,
+                          [patientSourceType]: currentId
+                        }));
+                      }
+                    }
+                    
+                    setPatientSourceType(sourceType);
+                    
+                    // Restore saved selection if switching back to a previously selected source type
+                    if (sourceType && savedPatientSourceIds[sourceType as keyof typeof savedPatientSourceIds]) {
+                      const savedId = savedPatientSourceIds[sourceType as keyof typeof savedPatientSourceIds] || '';
+                      if (sourceType === 'IPD') {
+                        setFormData({ 
+                          ...formData, 
+                          roomAdmissionId: savedId, 
+                          patientAppointmentId: '', 
+                          emergencyBedSlotId: '' 
+                        });
+                        // Restore search term if we can find the admission
+                        const admission = availableRoomAdmissions.find(a => 
+                          (a.roomAdmissionId?.toString() || a.id?.toString()) === savedId
+                        );
+                        if (admission) {
+                          setRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
+                        }
+                        setPatientAppointmentSearchTerm('');
+                        setEmergencyBedSlotSearchTerm('');
+                      } else if (sourceType === 'OPD') {
+                        setFormData({ 
+                          ...formData, 
+                          patientAppointmentId: savedId, 
+                          roomAdmissionId: '', 
+                          emergencyBedSlotId: '' 
+                        });
+                        // Restore search term if we can find the appointment
+                        const appointment = availablePatientAppointments.find(a => a.id.toString() === savedId);
+                        if (appointment) {
+                          const patient = patients.find(p => 
+                            (p as any).patientId === appointment.patientId || 
+                            (p as any).PatientId === appointment.patientId
+                          );
+                          const patientName = patient 
+                            ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                            : appointment.patientId || 'Unknown';
+                          setPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
+                        }
+                        setRoomAdmissionSearchTerm('');
+                        setEmergencyBedSlotSearchTerm('');
+                      } else if (sourceType === 'EmergencyBed') {
+                        setFormData({ 
+                          ...formData, 
+                          emergencyBedSlotId: savedId, 
+                          roomAdmissionId: '', 
+                          patientAppointmentId: '' 
+                        });
+                        // Restore search term if we can find the slot
+                        const slot = availableEmergencyBedSlots.find(s => {
+                          const slotId = s.EmergencyBedSlotId?.toString() || s.emergencyBedSlotId?.toString() || s.id?.toString() || '';
+                          return slotId === savedId;
+                        });
+                        if (slot) {
+                          const patientName = slot.PatientName || slot.patientName || 'Unknown';
+                          const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
+                          setEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
+                        }
+                        setRoomAdmissionSearchTerm('');
+                        setPatientAppointmentSearchTerm('');
+                      }
+                    } else {
+                      // Clear all patient source selections when switching to a new source type
+                      setFormData({ 
+                        ...formData, 
+                        roomAdmissionId: '', 
+                        patientAppointmentId: '', 
+                        emergencyBedSlotId: '' 
+                      });
+                      setRoomAdmissionSearchTerm('');
+                      setPatientAppointmentSearchTerm('');
+                      setEmergencyBedSlotSearchTerm('');
+                    }
+                  }}
+                >
+                  <option value="">Select Patient Source</option>
+                  <option value="IPD">IPD (Room Admission Number)</option>
+                  <option value="OPD">OPD (Patient Appointment Number)</option>
+                  <option value="EmergencyBed">EmergencyBed (Emergency Bed Number)</option>
+                </select>
+              </div>
+
+              {patientSourceType === 'IPD' && (
+                  <div className="dialog-form-field">
+                    <Label htmlFor="add-roomAdmissionId" className="dialog-label-standard">Room Admission (IPD) *</Label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                       <Input
@@ -868,6 +1355,8 @@ export function OTManagement() {
                             const admission = filteredAdmissions[roomAdmissionHighlightIndex];
                             const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
                             setFormData({ ...formData, roomAdmissionId: admissionId, patientAppointmentId: '', emergencyBedSlotId: '' });
+                            // Save the selected ID for persistence
+                            setSavedPatientSourceIds(prev => ({ ...prev, IPD: admissionId }));
                             setRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
                             setRoomAdmissionHighlightIndex(-1);
                             setPatientAppointmentSearchTerm('');
@@ -916,6 +1405,8 @@ export function OTManagement() {
                                     onClick={() => {
                                       const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
                                       setFormData({ ...formData, roomAdmissionId: admissionId, patientAppointmentId: '', emergencyBedSlotId: '' });
+                                      // Save the selected ID for persistence
+                                      setSavedPatientSourceIds(prev => ({ ...prev, IPD: admissionId }));
                                       setRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
                                       setRoomAdmissionHighlightIndex(-1);
                                       setPatientAppointmentSearchTerm('');
@@ -949,9 +1440,11 @@ export function OTManagement() {
                       ) : null;
                     })()}
                   </div>
+                  )}
 
+                  {patientSourceType === 'OPD' && (
                   <div className="dialog-form-field">
-                    <Label htmlFor="add-patientAppointmentId" className="dialog-label-standard">Patient Appointment (OPD)</Label>
+                    <Label htmlFor="add-patientAppointmentId" className="dialog-label-standard">Patient Appointment (OPD) *</Label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                       <Input
@@ -1000,6 +1493,8 @@ export function OTManagement() {
                             e.preventDefault();
                             const appointment = filteredAppointments[patientAppointmentHighlightIndex];
                             setFormData({ ...formData, patientAppointmentId: appointment.id.toString(), roomAdmissionId: '', emergencyBedSlotId: '' });
+                            // Save the selected ID for persistence
+                            setSavedPatientSourceIds(prev => ({ ...prev, OPD: appointment.id.toString() }));
                             const patient = patients.find(p => 
                               (p as any).patientId === appointment.patientId || 
                               (p as any).PatientId === appointment.patientId
@@ -1065,6 +1560,8 @@ export function OTManagement() {
                                     key={appointment.id}
                                     onClick={() => {
                                       setFormData({ ...formData, patientAppointmentId: appointment.id.toString(), roomAdmissionId: '', emergencyBedSlotId: '' });
+                                      // Save the selected ID for persistence
+                                      setSavedPatientSourceIds(prev => ({ ...prev, OPD: appointment.id.toString() }));
                                       setPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
                                       setPatientAppointmentHighlightIndex(-1);
                                     }}
@@ -1099,9 +1596,11 @@ export function OTManagement() {
                       ) : null;
                     })()}
                   </div>
+                  )}
 
+                  {patientSourceType === 'EmergencyBed' && (
                   <div className="dialog-form-field">
-                    <Label htmlFor="add-emergencyBedSlotId" className="dialog-label-standard">Emergency Bed Slot</Label>
+                    <Label htmlFor="add-emergencyBedSlotId" className="dialog-label-standard">Emergency Bed Slot *</Label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                       <Input
@@ -1149,6 +1648,8 @@ export function OTManagement() {
                             const slot = filteredSlots[emergencyBedSlotHighlightIndex];
                             const slotId = slot.EmergencyBedSlotId?.toString() || slot.emergencyBedSlotId?.toString() || slot.id?.toString() || '';
                             setFormData({ ...formData, emergencyBedSlotId: slotId, roomAdmissionId: '', patientAppointmentId: '' });
+                            // Save the selected ID for persistence
+                            setSavedPatientSourceIds(prev => ({ ...prev, EmergencyBed: slotId }));
                             const patientName = slot.PatientName || slot.patientName || 'Unknown';
                             const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
                             setEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
@@ -1204,6 +1705,8 @@ export function OTManagement() {
                                     key={slotId}
                                     onClick={() => {
                                       setFormData({ ...formData, emergencyBedSlotId: slotId, roomAdmissionId: '', patientAppointmentId: '' });
+                                      // Save the selected ID for persistence
+                                      setSavedPatientSourceIds(prev => ({ ...prev, EmergencyBed: slotId }));
                                       setEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
                                       setEmergencyBedSlotHighlightIndex(-1);
                                       setPatientAppointmentSearchTerm('');
@@ -1237,6 +1740,7 @@ export function OTManagement() {
                       ) : null;
                     })()}
                   </div>
+                  )}
 
                   <div className="dialog-form-field">
                     <Label htmlFor="add-otAllocationDate" className="dialog-label-standard">OT Allocation Date *</Label>
@@ -1391,7 +1895,7 @@ export function OTManagement() {
                           className="dialog-input-standard pl-10"
                         />
                       </div>
-                      {leadSurgeonSearchTerm && !formData.leadSurgeonId && (() => {
+                      {leadSurgeonSearchTerm && (() => {
                         const filteredDoctors = availableDoctors.filter(doctor => {
                           if (!leadSurgeonSearchTerm) return false;
                           const searchLower = leadSurgeonSearchTerm.toLowerCase();
@@ -1490,7 +1994,7 @@ export function OTManagement() {
                           className="dialog-input-standard pl-10"
                         />
                       </div>
-                      {assistantDoctorSearchTerm && !formData.assistantDoctorId && (() => {
+                      {assistantDoctorSearchTerm && (() => {
                         const filteredDoctors = availableDoctors.filter(doctor => {
                           if (!assistantDoctorSearchTerm) return false;
                           const searchLower = assistantDoctorSearchTerm.toLowerCase();
@@ -1592,7 +2096,7 @@ export function OTManagement() {
                           className="dialog-input-standard pl-10"
                         />
                       </div>
-                      {anaesthetistSearchTerm && !formData.anaesthetistId && (() => {
+                      {anaesthetistSearchTerm && (() => {
                         const filteredDoctors = availableDoctors.filter(doctor => {
                           if (!anaesthetistSearchTerm) return false;
                           const searchLower = anaesthetistSearchTerm.toLowerCase();
@@ -1869,7 +2373,7 @@ export function OTManagement() {
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-200">
+              <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-200 px-6">
                 <Button variant="outline" onClick={() => {
                   setIsDialogOpen(false);
                   setLeadSurgeonSearchTerm('');
@@ -1886,376 +2390,7 @@ export function OTManagement() {
                 <Button onClick={handleAddOTAllocation} className="dialog-footer-button">Add OT Allocation</Button>
               </div>
             </div>
-          </ResizableDialogContent>
-        </Dialog>
-          </div>
-        </div>
-        <div className="px-6 pt-4 pb-4 flex-1">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-500">Today's Surgeries</p>
-              <Scissors className="size-5 text-blue-600" />
-            </div>
-            <h3 className="text-gray-900">{todayAllocations.length}</h3>
-            <p className="text-xs text-gray-500">Scheduled for today</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-500">In Progress</p>
-              <Badge variant="default">{inProgress.length}</Badge>
-            </div>
-            <h3 className="text-gray-900">{inProgress.length}</h3>
-            <p className="text-xs text-gray-500">Currently ongoing</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-500">Scheduled</p>
-              <Clock className="size-5 text-orange-600" />
-            </div>
-            <h3 className="text-gray-900">{scheduled.length}</h3>
-            <p className="text-xs text-gray-500">Upcoming surgeries</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-500">Completed</p>
-              <CheckCircle className="size-5 text-green-600" />
-            </div>
-            <h3 className="text-gray-900">{completed.length}</h3>
-            <p className="text-xs text-gray-500">This week</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* OT Room Slot Status */}
-      <Card className="mb-6">
-        <CardHeader>
-          <div className="flex items-center gap-4">
-            <CardTitle>OT Room Slot Status</CardTitle>
-            <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-40 justify-start text-left font-normal"
-                >
-                  <Calendar className="mr-2 size-4" />
-                  {selectedDate ? formatDateToDDMMYYYYDisplay(selectedDate) : 'Pick a date'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 bg-white" align="start" style={{ opacity: 1 }}>
-                <CalendarComponent
-                  mode="single"
-                  selected={getDateFromString(selectedDate)}
-                  onSelect={(date) => {
-                    if (date) {
-                      const dateStr = getStringFromDate(date);
-                      setSelectedDate(dateStr);
-                      setDatePickerOpen(false);
-                    }
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-center py-8 text-gray-500">Loading OT rooms...</div>
-          ) : loadingSlots ? (
-            <div className="text-center py-8 text-gray-500">Loading slots...</div>
-          ) : (
-            (() => {
-              // Collect all occupied and unoccupied slots from all rooms
-              const allOccupiedSlots: Array<{ slot: OTSlot; room: OTRoom }> = [];
-              const allUnoccupiedSlots: Array<{ slot: OTSlot; room: OTRoom }> = [];
-              
-              otRooms.forEach((ot) => {
-                const numericOtId = typeof ot.otId === 'string' 
-                  ? parseInt(ot.otId.replace('OT-', ''), 10)
-                  : ot.id;
-                const slots = otSlotsByRoom.get(numericOtId) || [];
-                // Only consider a slot as occupied if it's actually not available for the selected date
-                const occupiedSlots = slots.filter(s => s.isOccupied === true && s.isAvailable === false);
-                const unoccupiedSlots = slots.filter(s => s.isAvailable === true || (s.isOccupied !== true && s.isAvailable !== false));
-                
-                occupiedSlots.forEach(slot => {
-                  allOccupiedSlots.push({ slot, room: ot });
-                });
-                
-                unoccupiedSlots.forEach(slot => {
-                  allUnoccupiedSlots.push({ slot, room: ot });
-                });
-              });
-              
-              if (allOccupiedSlots.length === 0 && allUnoccupiedSlots.length === 0) {
-                return (
-                  <div className="text-center py-8 text-gray-500">
-                    No slots found for the selected date
-                  </div>
-                );
-              }
-              
-              return (
-                <>
-                  {/* Occupied Slots Section */}
-                  {allOccupiedSlots.length > 0 && (
-                    <div className="mb-4">
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Occupied ({allOccupiedSlots.length})</h3>
-                      <div className="grid grid-cols-4 gap-4">
-                        {allOccupiedSlots.map(({ slot, room }) => {
-                    const operationStatus = slot.operationStatus;
-                    const isCompleted = operationStatus === 'Completed';
-                    const isScheduled = operationStatus === 'Scheduled';
-                    const isInProgress = operationStatus === 'InProgress';
-                    
-                    return (
-                            <div
-                              key={`${room.id}-${slot.id}`}
-                              className="p-3 border-2 rounded-lg border-red-300 bg-red-50"
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <div>
-                                  <h3 className="text-sm font-semibold text-gray-900">
-                                    {room.otName || room.otNo || room.otId}
-                                  </h3>
-                                  {room.otType && (
-                                    <p className="text-xs text-gray-500">
-                                      {room.otType}
-                                    </p>
-                                  )}
-                                </div>
-                                <span className="size-3 rounded-full bg-red-500" />
-                              </div>
-                              
-                              {/* Slot Time */}
-                              {slot.slotStartTime && slot.slotEndTime && (
-                                <div className="mb-2">
-                                  <p className="text-xs text-gray-500 mb-0.5">
-                                    {slot.otSlotNo || `Slot ${slot.id}`}
-                                  </p>
-                                  <div className="flex items-center gap-1.5 text-xs">
-                                    <Clock className="size-3 text-gray-600" />
-                                    <span className="font-medium text-gray-700">
-                                      {slot.slotStartTime} - {slot.slotEndTime}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {/* Patient Information */}
-                              {slot.patientName && (
-                                <div className="mb-1.5">
-                                  <p className="text-xs text-gray-500 mb-0.5">Patient</p>
-                                  <p className="text-xs font-medium text-gray-900">{slot.patientName}</p>
-                                  {slot.patientNo && (
-                                    <p className="text-xs text-gray-500">No: {slot.patientNo}</p>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Operation Status */}
-                              {isInProgress && (
-                                <div className="flex items-center gap-1.5 p-1.5 bg-red-50 rounded mb-1.5">
-                                  <Scissors className="size-3 text-red-600" />
-                                  <span className="text-xs font-medium text-red-900">In Progress</span>
-                                </div>
-                              )}
-                              {isScheduled && (
-                                <div className="flex items-center gap-1.5 p-1.5 bg-yellow-50 rounded mb-1.5">
-                                  <Clock className="size-3 text-yellow-600" />
-                                  <span className="text-xs font-medium text-yellow-900">Scheduled</span>
-                                </div>
-                              )}
-                              {isCompleted && (
-                                <div className="flex items-center gap-1.5 p-1.5 bg-blue-50 rounded mb-1.5">
-                                  <CheckCircle className="size-3 text-blue-600" />
-                                  <span className="text-xs font-medium text-blue-900">Completed</span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                  })}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Unoccupied Slots Section - Collapsible */}
-                  {allUnoccupiedSlots.length > 0 && (
-                    <div>
-                      <button
-                        onClick={() => setIsUnoccupiedSlotsExpanded(!isUnoccupiedSlotsExpanded)}
-                        className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3 hover:text-gray-900"
-                      >
-                        {isUnoccupiedSlotsExpanded ? (
-                          <>
-                            <ChevronUp className="size-4" />
-                            Hide Unoccupied ({allUnoccupiedSlots.length})
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="size-4" />
-                            Show Unoccupied ({allUnoccupiedSlots.length})
-                          </>
-                        )}
-                      </button>
-                      {isUnoccupiedSlotsExpanded && (
-                        <div className="grid grid-cols-4 gap-4 mb-4">
-                          {allUnoccupiedSlots.map(({ slot, room }) => {
-                            return (
-                              <div
-                                key={`${room.id}-${slot.id}`}
-                                className="p-3 border-2 rounded-lg border-green-300 bg-green-50"
-                              >
-                                <div className="flex items-center justify-between mb-2">
-                                  <div>
-                                    <h3 className="text-sm font-semibold text-gray-900">
-                                      {room.otName || room.otNo || room.otId}
-                                    </h3>
-                                    {room.otType && (
-                                      <p className="text-xs text-gray-500">
-                                        {room.otType}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <span className="size-3 rounded-full bg-green-500" />
-                                </div>
-                                
-                                {/* Slot Time */}
-                                {slot.slotStartTime && slot.slotEndTime && (
-                                  <div>
-                                    <p className="text-xs text-gray-500 mb-0.5">
-                                      {slot.otSlotNo || `Slot ${slot.id}`}
-                                    </p>
-                                    <div className="flex items-center gap-1.5 text-xs">
-                                      <Clock className="size-3 text-gray-600" />
-                                      <span className="font-medium text-gray-700">
-                                        {slot.slotStartTime} - {slot.slotEndTime}
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              );
-            })()
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Surgeries List */}
-      <Tabs defaultValue="today" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="today">Today's Surgeries ({todayAllocations.length})</TabsTrigger>
-          <TabsTrigger value="progress">In Progress ({inProgress.length})</TabsTrigger>
-          <TabsTrigger value="scheduled">Scheduled ({scheduled.length})</TabsTrigger>
-          <TabsTrigger value="completed">Completed ({completed.length})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="today">
-          <AllocationList 
-            allocations={todayAllocations} 
-            otRooms={otRooms} 
-            otSlotsByRoom={otSlotsByRoom}
-            availableDoctors={availableDoctors}
-            patients={patients}
-            availableNurses={availableNurses}
-            availablePatientAppointments={availablePatientAppointments}
-            availableRoomAdmissions={availableRoomAdmissions}
-            availableEmergencyBedSlots={availableEmergencyBedSlots}
-            onRefresh={async () => {
-              try {
-                const allocations = await patientOTAllocationsApi.getAll();
-                setPatientOTAllocations(allocations);
-              } catch (err) {
-                console.error('Failed to refresh allocations:', err);
-              }
-            }}
-          />
-        </TabsContent>
-        <TabsContent value="progress">
-          <AllocationList 
-            allocations={inProgress} 
-            otRooms={otRooms} 
-            otSlotsByRoom={otSlotsByRoom}
-            availableDoctors={availableDoctors}
-            patients={patients}
-            availableNurses={availableNurses}
-            availablePatientAppointments={availablePatientAppointments}
-            availableRoomAdmissions={availableRoomAdmissions}
-            availableEmergencyBedSlots={availableEmergencyBedSlots}
-            onRefresh={async () => {
-              try {
-                const allocations = await patientOTAllocationsApi.getAll();
-                setPatientOTAllocations(allocations);
-              } catch (err) {
-                console.error('Failed to refresh allocations:', err);
-              }
-            }}
-          />
-        </TabsContent>
-        <TabsContent value="scheduled">
-          <AllocationList 
-            allocations={scheduled} 
-            otRooms={otRooms} 
-            otSlotsByRoom={otSlotsByRoom}
-            availableDoctors={availableDoctors}
-            patients={patients}
-            availableNurses={availableNurses}
-            availablePatientAppointments={availablePatientAppointments}
-            availableRoomAdmissions={availableRoomAdmissions}
-            availableEmergencyBedSlots={availableEmergencyBedSlots}
-            onRefresh={async () => {
-              try {
-                const allocations = await patientOTAllocationsApi.getAll();
-                setPatientOTAllocations(allocations);
-              } catch (err) {
-                console.error('Failed to refresh allocations:', err);
-              }
-            }}
-          />
-        </TabsContent>
-        <TabsContent value="completed">
-          <AllocationList 
-            allocations={completed} 
-            otRooms={otRooms} 
-            otSlotsByRoom={otSlotsByRoom}
-            availableDoctors={availableDoctors}
-            patients={patients}
-            availableNurses={availableNurses}
-            availablePatientAppointments={availablePatientAppointments}
-            availableRoomAdmissions={availableRoomAdmissions}
-            availableEmergencyBedSlots={availableEmergencyBedSlots}
-            onRefresh={async () => {
-              try {
-                const allocations = await patientOTAllocationsApi.getAll();
-                setPatientOTAllocations(allocations);
-              } catch (err) {
-                console.error('Failed to refresh allocations:', err);
-              }
-            }}
-          />
-        </TabsContent>
-      </Tabs>
-        </div>
-      </div>
+        </CustomResizableDialog>
     </div>
   );
 }
@@ -2313,9 +2448,18 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
   const [editPatientAppointmentHighlightIndex, setEditPatientAppointmentHighlightIndex] = useState(-1);
   const [editEmergencyBedSlotSearchTerm, setEditEmergencyBedSlotSearchTerm] = useState('');
   const [editEmergencyBedSlotHighlightIndex, setEditEmergencyBedSlotHighlightIndex] = useState(-1);
+  const [editPatientSourceType, setEditPatientSourceType] = useState<'IPD' | 'OPD' | 'EmergencyBed' | ''>('');
+  // Store selected IDs for each source type to persist when switching
+  const [editSavedPatientSourceIds, setEditSavedPatientSourceIds] = useState<{
+    IPD?: string;
+    OPD?: string;
+    EmergencyBed?: string;
+  }>({});
   const [editOtAllocationDate, setEditOtAllocationDate] = useState<Date | null>(null);
   const [editOtSlots, setEditOtSlots] = useState<OTSlot[]>([]);
   const [editSelectedOTId, setEditSelectedOTId] = useState<string>('');
+  const [fetchedAppointment, setFetchedAppointment] = useState<PatientAppointment | null>(null);
+  const [fetchedAllocation, setFetchedAllocation] = useState<PatientOTAllocation | null>(null);
 
   // Handler to start surgery
   const handleStartSurgery = async () => {
@@ -2445,22 +2589,29 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
   // Function to delete a file manually (optional - backend handles automatic deletion on update)
   const deleteFile = async (fileUrl: string): Promise<void> => {
     try {
-      // Extract folder, patientNo, and filename from URL
-      // Example: http://localhost:4000/uploads/ot-documents/P2025_12_0001/document_1234567890_987654321.pdf
+      // Extract folder, patientIdentifier (could be patientNo or PatientId), and filename from URL
+      // Example formats:
+      // - http://localhost:4000/uploads/ot-documents/P2025_12_0001/document_1234567890_987654321.pdf (patientNo format)
+      // - http://localhost:4000/uploads/ot-documents/PAT-2025-0018/document_1234567890_987654321.pdf (PatientId format)
       const url = new URL(fileUrl);
       const pathParts = url.pathname.split('/').filter(p => p);
-      // pathParts: ['uploads', 'ot-documents', 'P2025_12_0001', 'document_1234567890_987654321.pdf']
+      // pathParts: ['uploads', 'ot-documents', 'PAT-2025-0018' or 'P2025_12_0001', 'document_1234567890_987654321.pdf']
+      
+      console.log('Deleting file, URL:', fileUrl);
+      console.log('Path parts:', pathParts);
       
       if (pathParts.length < 4 || pathParts[0] !== 'uploads') {
         throw new Error('Invalid file URL format');
       }
       
       const folder = pathParts[1]; // 'ot-docs' or 'ot-documents'
-      const patientNo = pathParts[2]; // 'P2025_12_0001'
+      const patientIdentifier = pathParts[2]; // Could be 'P2025_12_0001' (patientNo) or 'PAT-2025-0018' (PatientId)
       const filename = pathParts.slice(3).join('/'); // 'document_1234567890_987654321.pdf'
       
+      console.log('Extracted from URL - folder:', folder, 'patientIdentifier:', patientIdentifier, 'filename:', filename);
+      
       const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
-      const response = await fetch(`${API_BASE_URL}/upload/${folder}/${patientNo}/${filename}`, {
+      const response = await fetch(`${API_BASE_URL}/upload/${folder}/${patientIdentifier}/${filename}`, {
         method: 'DELETE',
       });
       
@@ -2500,12 +2651,261 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
     fetchEditSlots();
   }, [editSelectedOTId, editFormData.otAllocationDate]);
 
+  // Fetch full allocation record from database when manage dialog opens
+  useEffect(() => {
+    const fetchAllocationFromDB = async () => {
+      if (!isManageDialogOpen || !selectedAllocation?.id) {
+        setFetchedAllocation(null);
+        return;
+      }
+      
+      try {
+        console.log('=== Fetching Allocation from Database ===');
+        console.log('Allocation ID:', selectedAllocation.id);
+        const allocation = await patientOTAllocationsApi.getById(selectedAllocation.id);
+        setFetchedAllocation(allocation);
+        console.log('Fetched Allocation Record:', JSON.stringify(allocation, null, 2));
+        console.log('Allocation patientAppointmentId:', allocation.patientAppointmentId);
+        console.log('Allocation patientId:', allocation.patientId);
+        console.log('Allocation roomAdmissionId:', allocation.roomAdmissionId);
+        console.log('Allocation emergencyBedSlotId:', allocation.emergencyBedSlotId);
+        
+        // Update form data with fetched allocation (this ensures we have the latest data)
+        // Convert patientAppointmentId to string since form fields use strings
+        setEditFormData(prev => ({
+          ...prev,
+          patientAppointmentId: allocation.patientAppointmentId?.toString() || prev.patientAppointmentId,
+          roomAdmissionId: allocation.roomAdmissionId?.toString() || prev.roomAdmissionId,
+          emergencyBedSlotId: allocation.emergencyBedSlotId?.toString() || prev.emergencyBedSlotId,
+        }));
+        
+        // Set patient source type based on fetched allocation
+        if (allocation.roomAdmissionId) {
+          setEditPatientSourceType('IPD');
+        } else if (allocation.patientAppointmentId) {
+          setEditPatientSourceType('OPD');
+        } else if (allocation.emergencyBedSlotId) {
+          setEditPatientSourceType('EmergencyBed');
+        }
+      } catch (err) {
+        console.error('Failed to fetch allocation from database:', err);
+        setFetchedAllocation(null);
+      }
+    };
+    
+    fetchAllocationFromDB();
+  }, [isManageDialogOpen, selectedAllocation?.id]);
+
+  // Fetch appointment details when manage dialog opens with OPD patient source
+  useEffect(() => {
+    const fetchAppointmentAndPatient = async () => {
+      if (!isManageDialogOpen) {
+        setFetchedAppointment(null);
+        return;
+      }
+      
+      // If user has explicitly cleared the patientAppointmentId (empty string), don't repopulate from fetchedAllocation
+      // Only use fetchedAllocation if editFormData.patientAppointmentId is not explicitly set to empty string
+      const appointmentIdToFetch = editFormData.patientAppointmentId || (editFormData.patientAppointmentId !== '' ? fetchedAllocation?.patientAppointmentId : null);
+      
+      // Check if this is an OPD source (either from editPatientSourceType or from fetchedAllocation)
+      const isOPDSource = editPatientSourceType === 'OPD' || (fetchedAllocation?.patientAppointmentId && !fetchedAllocation?.roomAdmissionId && !fetchedAllocation?.emergencyBedSlotId);
+      
+      if (!appointmentIdToFetch || !isOPDSource) {
+        setFetchedAppointment(null);
+        // If user cleared the field, also clear the search term
+        if (editFormData.patientAppointmentId === '' && editPatientAppointmentSearchTerm) {
+          setEditPatientAppointmentSearchTerm('');
+        }
+        return;
+      }
+      
+      // Check if appointment is already in available list
+      const existingAppointment = availablePatientAppointments?.find(a => a.id.toString() === appointmentIdToFetch);
+      if (existingAppointment) {
+        console.log('=== Appointment Found in Available List ===');
+        console.log('Appointment ID:', existingAppointment.id);
+        console.log('Appointment TokenNo (OPD Number):', existingAppointment.tokenNo);
+        console.log('Appointment Record:', JSON.stringify(existingAppointment, null, 2));
+        setFetchedAppointment(existingAppointment);
+        // Fetch patient if not already in fetchedPatients
+        const patientId = existingAppointment.patientId;
+        if (patientId && !fetchedPatients.has(patientId) && !fetchingRef.current.has(patientId)) {
+          fetchingRef.current.add(patientId);
+          try {
+            console.log('=== Fetching Patient from Database (from available appointment) ===');
+            console.log('Patient ID:', patientId);
+            const patient = await patientsApi.getById(patientId);
+            setFetchedPatients(prev => {
+              const newMap = new Map(prev);
+              newMap.set(patientId, patient);
+              return newMap;
+            });
+            console.log('Fetched Patient Record:', JSON.stringify(patient, null, 2));
+            console.log('Patient Name:', (patient as any).PatientName || (patient as any).patientName);
+            console.log('Patient No:', (patient as any).PatientNo || (patient as any).patientNo);
+            // Update search term with patient name only if patientAppointmentId is set (not cleared by user)
+            if (editFormData.patientAppointmentId) {
+              const patientName = `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() || patientId;
+              if (!editPatientAppointmentSearchTerm) {
+                setEditPatientAppointmentSearchTerm(`${existingAppointment.tokenNo} - ${patientName}`);
+              }
+            }
+          } catch (err) {
+            console.error(`Error fetching patient ${patientId}:`, err);
+          } finally {
+            fetchingRef.current.delete(patientId);
+          }
+        } else if (patientId && fetchedPatients.has(patientId)) {
+          // Patient already fetched, update search term if needed
+          const patient = fetchedPatients.get(patientId);
+          console.log('=== Patient Already Fetched (from cache, available appointment) ===');
+          console.log('Using patientId:', patientId, '(from allocation:', fetchedAllocation?.patientId, ', from appointment:', existingAppointment.patientId, ')');
+          console.log('Patient Record:', JSON.stringify(patient, null, 2));
+          console.log('=== Summary of All Fetched Records ===');
+          console.log('1. Allocation:', {
+            id: fetchedAllocation?.id,
+            patientAppointmentId: fetchedAllocation?.patientAppointmentId,
+            patientId: fetchedAllocation?.patientId,
+          });
+          console.log('2. Appointment (from available list):', {
+            id: existingAppointment.id,
+            tokenNo: existingAppointment.tokenNo,
+            patientId: existingAppointment.patientId,
+          });
+          console.log('3. Patient (from cache):', {
+            patientId: patient?.patientId || (patient as any)?.PatientId,
+            patientNo: (patient as any)?.PatientNo || (patient as any)?.patientNo,
+            patientName: (patient as any)?.PatientName || (patient as any)?.patientName,
+          });
+          console.log('=== OPD Number (TokenNo) from Available List ===', existingAppointment.tokenNo);
+          // Only update search term if patientAppointmentId is set (not cleared by user)
+          if (patient && editFormData.patientAppointmentId && !editPatientAppointmentSearchTerm) {
+            const patientName = `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() || patientId;
+            setEditPatientAppointmentSearchTerm(`${existingAppointment.tokenNo} - ${patientName}`);
+          }
+        }
+        return;
+      }
+      
+      // Fetch from database if not in available list
+      try {
+        const appointmentId = parseInt(appointmentIdToFetch, 10);
+        if (!isNaN(appointmentId)) {
+          console.log('=== Fetching Appointment from Database ===');
+          console.log('Appointment ID:', appointmentId);
+          const appointment = await patientAppointmentsApi.getById(appointmentId);
+          setFetchedAppointment(appointment);
+          console.log('Fetched Appointment Record:', JSON.stringify(appointment, null, 2));
+          console.log('Appointment TokenNo (OPD Number):', appointment.tokenNo);
+          console.log('Appointment patientId:', appointment.patientId);
+          
+          // Fetch patient - prioritize allocation's patientId over appointment's patientId
+          const patientId = fetchedAllocation?.patientId || appointment.patientId;
+          console.log('Using patientId for fetch:', patientId, '(from allocation:', fetchedAllocation?.patientId, ', from appointment:', appointment.patientId, ')');
+          if (patientId) {
+            // Check if patient is already fetched
+            if (!fetchedPatients.has(patientId) && !fetchingRef.current.has(patientId)) {
+              fetchingRef.current.add(patientId);
+              try {
+                console.log('=== Fetching Patient from Database ===');
+                console.log('Patient ID:', patientId);
+                const patient = await patientsApi.getById(patientId);
+                setFetchedPatients(prev => {
+                  const newMap = new Map(prev);
+                  newMap.set(patientId, patient);
+                  return newMap;
+                });
+                console.log('Fetched Patient Record:', JSON.stringify(patient, null, 2));
+                console.log('Patient Name:', (patient as any).PatientName || (patient as any).patientName);
+                console.log('Patient No:', (patient as any).PatientNo || (patient as any).patientNo);
+                console.log('=== Summary of All Fetched Records ===');
+                console.log('1. Allocation:', {
+                  id: allocation.id,
+                  patientAppointmentId: allocation.patientAppointmentId,
+                  patientId: allocation.patientId,
+                });
+                console.log('2. Appointment:', {
+                  id: appointment.id,
+                  tokenNo: appointment.tokenNo,
+                  patientId: appointment.patientId,
+                });
+                console.log('3. Patient:', {
+                  patientId: patient.patientId || (patient as any).PatientId,
+                  patientNo: (patient as any).PatientNo || (patient as any).patientNo,
+                  patientName: (patient as any).PatientName || (patient as any).patientName,
+                });
+                console.log('=== OPD Number (TokenNo) from Database ===', appointment.tokenNo);
+                // Update search term with fetched patient details only if patientAppointmentId is set (not cleared by user)
+                if (appointment.tokenNo && editFormData.patientAppointmentId && !editPatientAppointmentSearchTerm) {
+                  const patientName = `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() || patientId;
+                  setEditPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
+                }
+              } catch (err) {
+                console.error(`Error fetching patient ${patientId}:`, err);
+                // Fallback: use patientId if patient fetch fails, only if patientAppointmentId is set (not cleared by user)
+                if (appointment.tokenNo && editFormData.patientAppointmentId && !editPatientAppointmentSearchTerm) {
+                  setEditPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientId}`);
+                }
+              } finally {
+                fetchingRef.current.delete(patientId);
+              }
+            } else if (fetchedPatients.has(patientId)) {
+              // Patient already fetched, update search term if needed
+              const patient = fetchedPatients.get(patientId);
+              console.log('=== Patient Already Fetched (from cache) ===');
+              console.log('Using patientId:', patientId, '(from allocation:', fetchedAllocation?.patientId, ', from appointment:', appointment.patientId, ')');
+              console.log('Patient Record:', JSON.stringify(patient, null, 2));
+              console.log('=== Summary of All Fetched Records ===');
+              console.log('1. Allocation:', {
+                id: fetchedAllocation?.id,
+                patientAppointmentId: fetchedAllocation?.patientAppointmentId,
+                patientId: fetchedAllocation?.patientId,
+              });
+              console.log('2. Appointment:', {
+                id: appointment.id,
+                tokenNo: appointment.tokenNo,
+                patientId: appointment.patientId,
+              });
+              console.log('3. Patient (from cache):', {
+                patientId: patient?.patientId || (patient as any)?.PatientId,
+                patientNo: (patient as any)?.PatientNo || (patient as any)?.patientNo,
+                patientName: (patient as any)?.PatientName || (patient as any)?.patientName,
+              });
+              console.log('=== OPD Number (TokenNo) from Database ===', appointment.tokenNo);
+              // Only update search term if patientAppointmentId is set (not cleared by user)
+              if (patient && appointment.tokenNo && editFormData.patientAppointmentId && !editPatientAppointmentSearchTerm) {
+                const patientName = `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() || patientId;
+                setEditPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch appointment:', err);
+        setFetchedAppointment(null);
+      }
+    };
+    
+    fetchAppointmentAndPatient();
+  }, [isManageDialogOpen, editFormData.patientAppointmentId, editPatientSourceType, availablePatientAppointments, fetchedAllocation]);
+
   // Handler to save edited allocation
   const handleSaveAllocation = async () => {
     if (!selectedAllocation) return;
 
     if (!editFormData.otId || !editFormData.leadSurgeonId || !editFormData.otAllocationDate) {
       alert('Please fill in all required fields (OT, Lead Surgeon, Date).');
+      return;
+    }
+
+    // Patient source is required - must come from one of the sources
+    if (!editPatientSourceType) {
+      alert('Please select a Patient Source.');
+      return;
+    }
+    if (!editFormData.roomAdmissionId && !editFormData.patientAppointmentId && !editFormData.emergencyBedSlotId) {
+      alert(`Please select a ${editPatientSourceType === 'IPD' ? 'Room Admission' : editPatientSourceType === 'OPD' ? 'Patient Appointment' : 'Emergency Bed Slot'}.`);
       return;
     }
 
@@ -2556,7 +2956,8 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
         updateData.roomAdmissionId = parseInt(editFormData.roomAdmissionId);
       }
       if (editFormData.patientAppointmentId) {
-        updateData.patientAppointmentId = editFormData.patientAppointmentId;
+        // Convert to integer since PatientAppointmentId is an integer in the database
+        updateData.patientAppointmentId = parseInt(editFormData.patientAppointmentId, 10);
       }
       if (editFormData.emergencyBedSlotId) {
         updateData.emergencyBedSlotId = parseInt(editFormData.emergencyBedSlotId);
@@ -2647,7 +3048,7 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
       if (allUrls.length > 0) {
         updateData.otDocuments = JSON.stringify(allUrls);
       } else {
-        updateData.otDocuments = null;
+        updateData.otDocuments = undefined;
       }
       if (editFormData.billId) {
         updateData.billId = parseInt(editFormData.billId);
@@ -3054,8 +3455,13 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
 
   return (
     <div className="space-y-4">
-      {allocations.map((allocation) => {
+      {allocations.map((allocation, index) => {
         if (!allocation) return null;
+        
+        // Log first allocation ID for debugging
+        if (index === 0) {
+          console.log('First allocation ID:', allocation.id, 'Full allocation:', allocation);
+        }
         
         const otRoom = otRooms?.find(ot => ot && ot.id === allocation.otId);
         // Look up patient by patientId from fetched patients
@@ -3238,16 +3644,32 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                         setEditAnaesthetistSearchTerm('');
                       }
                       
-                      // Set patient source search terms based on which source is used
+                      // Set nurse search term
+                      if (allocation.nurseId) {
+                        const nurse = availableNurses?.find(n => n.id.toString() === allocation.nurseId?.toString());
+                        if (nurse) {
+                          setEditNurseSearchTerm(nurse.name);
+                        } else {
+                          setEditNurseSearchTerm('');
+                        }
+                      } else {
+                        setEditNurseSearchTerm('');
+                      }
+                      
+                      // Set patient source type and search terms based on which source is used
                       if (allocation.roomAdmissionId) {
+                        setEditPatientSourceType('IPD');
                         const admission = availableRoomAdmissions?.find(a => 
                           (a.roomAdmissionId?.toString() || a.id?.toString()) === allocation.roomAdmissionId?.toString()
                         );
                         if (admission) {
                           setEditRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
+                          setEditSavedPatientSourceIds({ IPD: allocation.roomAdmissionId?.toString() || '' });
                         }
                       } else if (allocation.patientAppointmentId) {
-                        const appointment = availablePatientAppointments?.find(a => a.id.toString() === allocation.patientAppointmentId);
+                        setEditPatientSourceType('OPD');
+                        // Convert to string for comparison since allocation.patientAppointmentId is an integer
+                        const appointment = availablePatientAppointments?.find(a => a.id.toString() === allocation.patientAppointmentId?.toString());
                         if (appointment) {
                           const patient = patients?.find(p => 
                             (p as any).patientId === appointment.patientId || 
@@ -3257,8 +3679,10 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                             ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
                             : appointment.patientId || 'Unknown';
                           setEditPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
+                          setEditSavedPatientSourceIds({ OPD: allocation.patientAppointmentId?.toString() || '' });
                         }
                       } else if (allocation.emergencyBedSlotId) {
+                        setEditPatientSourceType('EmergencyBed');
                         const slot = availableEmergencyBedSlots?.find(s => {
                           const slotId = s.EmergencyBedSlotId?.toString() || s.emergencyBedSlotId?.toString() || s.id?.toString() || '';
                           return slotId === allocation.emergencyBedSlotId?.toString();
@@ -3267,7 +3691,11 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                           const patientName = slot.PatientName || slot.patientName || 'Unknown';
                           const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
                           setEditEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
+                          setEditSavedPatientSourceIds({ EmergencyBed: allocation.emergencyBedSlotId?.toString() || '' });
                         }
+                      } else {
+                        setEditPatientSourceType('');
+                        setEditSavedPatientSourceIds({});
                       }
                       
                       // Set date picker value
@@ -3373,21 +3801,130 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
       )}
 
       {/* Manage Dialog */}
-      <Dialog open={isManageDialogOpen} onOpenChange={setIsManageDialogOpen}>
-        <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
-          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
-            <DialogHeader className="dialog-header-standard">
-              <DialogTitle className="dialog-title-standard">Manage OT Allocation</DialogTitle>
-            </DialogHeader>
+      <CustomResizableDialog 
+        open={isManageDialogOpen} 
+        onOpenChange={setIsManageDialogOpen}
+        className="p-0 gap-0"
+        initialWidth={550}
+        maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
+      >
+        <CustomResizableDialogClose onClick={() => setIsManageDialogOpen(false)} />
+        <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+          <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+            <CustomResizableDialogTitle className="dialog-title-standard">Manage OT Allocation</CustomResizableDialogTitle>
+          </CustomResizableDialogHeader>
             <div className="dialog-body-content-wrapper">
               <div className="dialog-form-container space-y-4">
-                  <div className="pb-1 px-3 bg-gray-50 rounded-md border border-gray-200">
-                    <Label className="dialog-label-standard">Patient Source (Select one) *</Label>
-                    <p className="text-xs text-gray-500 mt-1">Choose either Room Admission (IPD), Patient Appointment (OPD), or Emergency Bed</p>
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-patientSourceType" className="dialog-label-standard">Patient Source *</Label>
+                    <select
+                      id="edit-patientSourceType"
+                      className="dialog-select-standard w-full"
+                      value={editPatientSourceType}
+                      onChange={(e) => {
+                        const sourceType = e.target.value as 'IPD' | 'OPD' | 'EmergencyBed' | '';
+                        // Save current selection before switching
+                        if (editPatientSourceType) {
+                          const currentId = editPatientSourceType === 'IPD' 
+                            ? editFormData.roomAdmissionId 
+                            : editPatientSourceType === 'OPD' 
+                            ? editFormData.patientAppointmentId 
+                            : editFormData.emergencyBedSlotId;
+                          
+                          if (currentId) {
+                            setEditSavedPatientSourceIds(prev => ({
+                              ...prev,
+                              [editPatientSourceType]: currentId
+                            }));
+                          }
+                        }
+                        
+                        setEditPatientSourceType(sourceType);
+                        
+                        // Restore saved selection if switching back to a previously selected source type
+                        if (sourceType && editSavedPatientSourceIds[sourceType as keyof typeof editSavedPatientSourceIds]) {
+                          const savedId = editSavedPatientSourceIds[sourceType as keyof typeof editSavedPatientSourceIds] || '';
+                          if (sourceType === 'IPD') {
+                            setEditFormData({ 
+                              ...editFormData, 
+                              roomAdmissionId: savedId, 
+                              patientAppointmentId: '', 
+                              emergencyBedSlotId: '' 
+                            });
+                            // Restore search term if we can find the admission
+                            const admission = availableRoomAdmissions?.find(a => 
+                              (a.roomAdmissionId?.toString() || a.id?.toString()) === savedId
+                            );
+                            if (admission) {
+                              setEditRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
+                            }
+                            setEditPatientAppointmentSearchTerm('');
+                            setEditEmergencyBedSlotSearchTerm('');
+                          } else if (sourceType === 'OPD') {
+                            setEditFormData({ 
+                              ...editFormData, 
+                              patientAppointmentId: savedId, 
+                              roomAdmissionId: '', 
+                              emergencyBedSlotId: '' 
+                            });
+                            // Restore search term if we can find the appointment
+                            const appointment = availablePatientAppointments?.find(a => a.id.toString() === savedId);
+                            if (appointment) {
+                              const patient = patients?.find(p => 
+                                (p as any).patientId === appointment.patientId || 
+                                (p as any).PatientId === appointment.patientId
+                              );
+                              const patientName = patient 
+                                ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
+                                : appointment.patientId || 'Unknown';
+                              setEditPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
+                            }
+                            setEditRoomAdmissionSearchTerm('');
+                            setEditEmergencyBedSlotSearchTerm('');
+                          } else if (sourceType === 'EmergencyBed') {
+                            setEditFormData({ 
+                              ...editFormData, 
+                              emergencyBedSlotId: savedId, 
+                              roomAdmissionId: '', 
+                              patientAppointmentId: '' 
+                            });
+                            // Restore search term if we can find the slot
+                            const slot = availableEmergencyBedSlots?.find(s => {
+                              const slotId = s.EmergencyBedSlotId?.toString() || s.emergencyBedSlotId?.toString() || s.id?.toString() || '';
+                              return slotId === savedId;
+                            });
+                            if (slot) {
+                              const patientName = slot.PatientName || slot.patientName || 'Unknown';
+                              const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
+                              setEditEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
+                            }
+                            setEditRoomAdmissionSearchTerm('');
+                            setEditPatientAppointmentSearchTerm('');
+                          }
+                        } else {
+                          // Clear all patient source selections when switching to a new source type
+                          setEditFormData({ 
+                            ...editFormData, 
+                            roomAdmissionId: '', 
+                            patientAppointmentId: '', 
+                            emergencyBedSlotId: '' 
+                          });
+                          setEditRoomAdmissionSearchTerm('');
+                          setEditPatientAppointmentSearchTerm('');
+                          setEditEmergencyBedSlotSearchTerm('');
+                        }
+                      }}
+                    >
+                      <option value="">Select Patient Source</option>
+                      <option value="IPD">IPD (Room Admission Number)</option>
+                      <option value="OPD">OPD (Patient Appointment Number)</option>
+                      <option value="EmergencyBed">EmergencyBed (Emergency Bed Number)</option>
+                    </select>
                   </div>
 
-                  <div className="dialog-form-field -mt-4">
-                    <Label htmlFor="edit-roomAdmissionId" className="dialog-label-standard">Room Admission (IPD)</Label>
+                  {editPatientSourceType === 'IPD' && (
+                  <div className="dialog-form-field">
+                    <Label htmlFor="edit-roomAdmissionId" className="dialog-label-standard">Room Admission (IPD) *</Label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                       <Input
@@ -3434,6 +3971,8 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                             const admission = filteredAdmissions[editRoomAdmissionHighlightIndex];
                             const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
                             setEditFormData({ ...editFormData, roomAdmissionId: admissionId, patientAppointmentId: '', emergencyBedSlotId: '' });
+                            // Save the selected ID for persistence
+                            setEditSavedPatientSourceIds(prev => ({ ...prev, IPD: admissionId }));
                             setEditRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
                             setEditRoomAdmissionHighlightIndex(-1);
                             setEditPatientAppointmentSearchTerm('');
@@ -3482,6 +4021,8 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                                     onClick={() => {
                                       const admissionId = admission.roomAdmissionId?.toString() || admission.id?.toString() || '';
                                       setEditFormData({ ...editFormData, roomAdmissionId: admissionId, patientAppointmentId: '', emergencyBedSlotId: '' });
+                                      // Save the selected ID for persistence
+                                      setEditSavedPatientSourceIds(prev => ({ ...prev, IPD: admissionId }));
                                       setEditRoomAdmissionSearchTerm(`${admission.patientName} - ${admission.bedNumber}`);
                                       setEditRoomAdmissionHighlightIndex(-1);
                                       setEditPatientAppointmentSearchTerm('');
@@ -3512,9 +4053,11 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                       ) : null;
                     })()}
                   </div>
+                  )}
 
+                  {editPatientSourceType === 'OPD' && (
                   <div className="dialog-form-field">
-                    <Label htmlFor="edit-patientAppointmentId" className="dialog-label-standard">Patient Appointment (OPD)</Label>
+                    <Label htmlFor="edit-patientAppointmentId" className="dialog-label-standard">Patient Appointment (OPD) *</Label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                       <Input
@@ -3526,6 +4069,7 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                           const newValue = e.target.value;
                           setEditPatientAppointmentSearchTerm(newValue);
                           setEditPatientAppointmentHighlightIndex(-1);
+                          // Clear appointment selection if user edits the search term
                           if (editFormData.patientAppointmentId) {
                             setEditFormData({ ...editFormData, patientAppointmentId: '', roomAdmissionId: '', emergencyBedSlotId: '' });
                           }
@@ -3535,14 +4079,14 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                             if (!editPatientAppointmentSearchTerm) return false;
                             const searchLower = editPatientAppointmentSearchTerm.toLowerCase();
                             const tokenNo = appointment.tokenNo || '';
-                            const patient = patients?.find(p => 
+                            const patient = (patients || []).find(p => 
                               (p as any).patientId === appointment.patientId || 
                               (p as any).PatientId === appointment.patientId
                             );
                             const patientName = patient 
                               ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
                               : '';
-                            const doctorName = availableDoctors?.find(d => d.id.toString() === appointment.doctorId)?.name || '';
+                            const doctorName = (availableDoctors || []).find(d => d.id.toString() === appointment.doctorId)?.name || '';
                             return (
                               tokenNo.toLowerCase().includes(searchLower) ||
                               patientName.toLowerCase().includes(searchLower) ||
@@ -3562,7 +4106,9 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                             e.preventDefault();
                             const appointment = filteredAppointments[editPatientAppointmentHighlightIndex];
                             setEditFormData({ ...editFormData, patientAppointmentId: appointment.id.toString(), roomAdmissionId: '', emergencyBedSlotId: '' });
-                            const patient = patients?.find(p => 
+                            // Save the selected ID for persistence
+                            setEditSavedPatientSourceIds(prev => ({ ...prev, OPD: appointment.id.toString() }));
+                            const patient = (patients || []).find(p => 
                               (p as any).patientId === appointment.patientId || 
                               (p as any).PatientId === appointment.patientId
                             );
@@ -3573,7 +4119,7 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                             setEditPatientAppointmentHighlightIndex(-1);
                           }
                         }}
-                        className="pl-10 dialog-input-standard"
+                        className="pl-10"
                       />
                     </div>
                     {editPatientAppointmentSearchTerm && (() => {
@@ -3581,14 +4127,14 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                         if (!editPatientAppointmentSearchTerm) return false;
                         const searchLower = editPatientAppointmentSearchTerm.toLowerCase();
                         const tokenNo = appointment.tokenNo || '';
-                        const patient = patients?.find(p => 
+                        const patient = (patients || []).find(p => 
                           (p as any).patientId === appointment.patientId || 
                           (p as any).PatientId === appointment.patientId
                         );
                         const patientName = patient 
                           ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
                           : '';
-                        const doctorName = availableDoctors?.find(d => d.id.toString() === appointment.doctorId)?.name || '';
+                        const doctorName = (availableDoctors || []).find(d => d.id.toString() === appointment.doctorId)?.name || '';
                         return (
                           tokenNo.toLowerCase().includes(searchLower) ||
                           patientName.toLowerCase().includes(searchLower) ||
@@ -3613,20 +4159,22 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                               {filteredAppointments.map((appointment, index) => {
                                 const isSelected = editFormData.patientAppointmentId === appointment.id.toString();
                                 const isHighlighted = editPatientAppointmentHighlightIndex === index;
-                                const patient = patients?.find(p => 
+                                const patient = (patients || []).find(p => 
                                   (p as any).patientId === appointment.patientId || 
                                   (p as any).PatientId === appointment.patientId
                                 );
                                 const patientName = patient 
                                   ? `${(patient as any).PatientName || (patient as any).patientName || ''} ${(patient as any).LastName || (patient as any).lastName || ''}`.trim() 
                                   : appointment.patientId || 'Unknown';
-                                const doctorName = availableDoctors?.find(d => d.id.toString() === appointment.doctorId)?.name || 'Unknown';
+                                const doctorName = (availableDoctors || []).find(d => d.id.toString() === appointment.doctorId)?.name || 'Unknown';
                                 const formattedDate = appointment.appointmentDate ? formatDateDisplayIST(appointment.appointmentDate) : 'N/A';
                                 return (
                                   <tr
                                     key={appointment.id}
                                     onClick={() => {
                                       setEditFormData({ ...editFormData, patientAppointmentId: appointment.id.toString(), roomAdmissionId: '', emergencyBedSlotId: '' });
+                                      // Save the selected ID for persistence
+                                      setEditSavedPatientSourceIds(prev => ({ ...prev, OPD: appointment.id.toString() }));
                                       setEditPatientAppointmentSearchTerm(`${appointment.tokenNo} - ${patientName}`);
                                       setEditPatientAppointmentHighlightIndex(-1);
                                     }}
@@ -3658,9 +4206,11 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                       ) : null;
                     })()}
                   </div>
+                  )}
 
+                  {editPatientSourceType === 'EmergencyBed' && (
                   <div className="dialog-form-field">
-                    <Label htmlFor="edit-emergencyBedSlotId" className="dialog-label-standard">Emergency Bed Slot</Label>
+                    <Label htmlFor="edit-emergencyBedSlotId" className="dialog-label-standard">Emergency Bed Slot *</Label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                       <Input
@@ -3707,6 +4257,8 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                             const slot = filteredSlots[editEmergencyBedSlotHighlightIndex];
                             const slotId = slot.EmergencyBedSlotId?.toString() || slot.emergencyBedSlotId?.toString() || slot.id?.toString() || '';
                             setEditFormData({ ...editFormData, emergencyBedSlotId: slotId, roomAdmissionId: '', patientAppointmentId: '' });
+                            // Save the selected ID for persistence
+                            setEditSavedPatientSourceIds(prev => ({ ...prev, EmergencyBed: slotId }));
                             const patientName = slot.PatientName || slot.patientName || 'Unknown';
                             const bedSlotNo = slot.EmergencyBedSlotNo || slot.emergencyBedSlotNo || slot.eBedSlotNo || '';
                             setEditEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
@@ -3762,6 +4314,8 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                                     key={slotId}
                                     onClick={() => {
                                       setEditFormData({ ...editFormData, emergencyBedSlotId: slotId, roomAdmissionId: '', patientAppointmentId: '' });
+                                      // Save the selected ID for persistence
+                                      setEditSavedPatientSourceIds(prev => ({ ...prev, EmergencyBed: slotId }));
                                       setEditEmergencyBedSlotSearchTerm(`${patientName} - ${bedSlotNo}`);
                                       setEditEmergencyBedSlotHighlightIndex(-1);
                                       setEditPatientAppointmentSearchTerm('');
@@ -3792,6 +4346,7 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                       ) : null;
                     })()}
                   </div>
+                  )}
 
                   <div className="dialog-form-field">
                     <Label htmlFor="edit-otAllocationDate" className="dialog-label-standard">OT Allocation Date *</Label>
@@ -3963,7 +4518,7 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                           className="dialog-input-standard pl-10"
                         />
                       </div>
-                      {editLeadSurgeonSearchTerm && !editFormData.leadSurgeonId && availableDoctors && (() => {
+                      {editLeadSurgeonSearchTerm && (() => {
                         const filteredDoctors = (availableDoctors || []).filter(doctor => {
                           if (!editLeadSurgeonSearchTerm) return false;
                           const searchLower = editLeadSurgeonSearchTerm.toLowerCase();
@@ -4058,7 +4613,7 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                           className="dialog-input-standard pl-10"
                         />
                       </div>
-                      {editAssistantDoctorSearchTerm && !editFormData.assistantDoctorId && availableDoctors && (() => {
+                      {editAssistantDoctorSearchTerm && (() => {
                         const filteredDoctors = (availableDoctors || []).filter(doctor => {
                           if (!editAssistantDoctorSearchTerm) return false;
                           const searchLower = editAssistantDoctorSearchTerm.toLowerCase();
@@ -4156,7 +4711,7 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                           className="dialog-input-standard pl-10"
                         />
                       </div>
-                      {editAnaesthetistSearchTerm && !editFormData.anaesthetistId && availableDoctors && (() => {
+                      {editAnaesthetistSearchTerm && (() => {
                         const filteredDoctors = (availableDoctors || []).filter(doctor => {
                           if (!editAnaesthetistSearchTerm) return false;
                           const searchLower = editAnaesthetistSearchTerm.toLowerCase();
@@ -4247,7 +4802,7 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                           className="dialog-input-standard pl-10"
                         />
                       </div>
-                      {editNurseSearchTerm && !editFormData.nurseId && availableNurses && (() => {
+                      {editNurseSearchTerm && !editFormData.nurseId && (() => {
                         const filteredNurses = (availableNurses || []).filter(nurse => {
                           if (!editNurseSearchTerm) return false;
                           const searchLower = editNurseSearchTerm.toLowerCase();
@@ -4541,7 +5096,7 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
 
               </div>
             </div>
-            <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-200">
+            <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-200 px-6">
               <Button variant="outline" onClick={() => {
                 setIsManageDialogOpen(false);
                 setEditFormData({
@@ -4588,22 +5143,28 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                 setEditSelectedFiles([]);
                 setEditUploadedDocumentUrls([]);
                 setSelectedAllocation(null);
+                setFetchedAppointment(null);
               }} className="dialog-footer-button" disabled={isSaving}>Cancel</Button>
               <Button onClick={handleSaveAllocation} className="dialog-footer-button" disabled={isSaving}>
                 {isSaving ? 'Updating...' : 'Update'}
               </Button>
             </div>
-          </div>
-        </ResizableDialogContent>
-      </Dialog>
+            </div>
+        </CustomResizableDialog>
 
       {/* Start Surgery Dialog */}
-      <Dialog open={isStartSurgeryDialogOpen} onOpenChange={setIsStartSurgeryDialogOpen}>
-        <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
-          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
-            <DialogHeader className="dialog-header-standard">
-              <DialogTitle className="dialog-title-standard">Start Surgery</DialogTitle>
-            </DialogHeader>
+      <CustomResizableDialog 
+        open={isStartSurgeryDialogOpen} 
+        onOpenChange={setIsStartSurgeryDialogOpen}
+        className="p-0 gap-0"
+        initialWidth={550}
+        maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
+      >
+        <CustomResizableDialogClose onClick={() => setIsStartSurgeryDialogOpen(false)} />
+        <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+          <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+            <CustomResizableDialogTitle className="dialog-title-standard">Start Surgery</CustomResizableDialogTitle>
+          </CustomResizableDialogHeader>
             <div className="dialog-body-content-wrapper">
               {selectedAllocation && (
                 <div className="dialog-form-container space-y-4">
@@ -4666,16 +5227,21 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
               )}
             </div>
           </div>
-        </ResizableDialogContent>
-      </Dialog>
+        </CustomResizableDialog>
 
       {/* Complete Surgery Dialog */}
-      <Dialog open={isCompleteSurgeryDialogOpen} onOpenChange={setIsCompleteSurgeryDialogOpen}>
-        <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
-          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
-            <DialogHeader className="dialog-header-standard">
-              <DialogTitle className="dialog-title-standard">Complete Surgery</DialogTitle>
-            </DialogHeader>
+      <CustomResizableDialog 
+        open={isCompleteSurgeryDialogOpen} 
+        onOpenChange={setIsCompleteSurgeryDialogOpen}
+        className="p-0 gap-0"
+        initialWidth={550}
+        maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
+      >
+        <CustomResizableDialogClose onClick={() => setIsCompleteSurgeryDialogOpen(false)} />
+        <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+          <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+            <CustomResizableDialogTitle className="dialog-title-standard">Complete Surgery</CustomResizableDialogTitle>
+          </CustomResizableDialogHeader>
             <div className="dialog-body-content-wrapper">
               {selectedAllocation && (
                 <div className="dialog-form-container space-y-4">
@@ -4748,8 +5314,7 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
               )}
             </div>
           </div>
-        </ResizableDialogContent>
-      </Dialog>
+        </CustomResizableDialog>
     </div>
   );
 }

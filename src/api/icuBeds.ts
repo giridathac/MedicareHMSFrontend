@@ -1,14 +1,6 @@
 // ICU Beds API service
-import { apiRequest, ApiError, ENABLE_STUB_DATA } from './base';
+import { apiRequest, ApiError } from './base';
 import { ICUBed } from '../types';
-
-// Stub data for ICU Bed Management
-const stubICUBeds: ICUBed[] = [
-  // Medical ICU Beds - Floor 1
-  { id: 50, icuBedId: 50, icuId: 50, icuBedNo: 'B50', icuType: 'Surgical', icuRoomNameNo: 'R205', icuDescription: 'DummyData', isVentilatorAttached: false, status: 'inactive', createdAt: '2025-01-01T10:00:00Z', createdDate: '2025-01-01' },
-];
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper function to normalize status to 'Active' or 'Inactive' for backend
 function normalizeStatusForBackend(status: any): 'Active' | 'Inactive' {
@@ -78,34 +70,9 @@ export const icuBedsApi = {
       }
     } catch (error) {
       console.error('Error fetching ICU beds:', error);
-      // If stub data is disabled and API fails, throw the error
-      if (!ENABLE_STUB_DATA) {
-        throw error;
-      }
+      throw error;
     }
     
-    // Append stub data if enabled
-    if (ENABLE_STUB_DATA) {
-      // Filter out stub data that might conflict with API data (by ID)
-      const apiIds = new Set(apiData.map(bed => bed.id));
-      const uniqueStubData = stubICUBeds.filter(bed => !apiIds.has(bed.id));
-      
-      if (uniqueStubData.length > 0) {
-        console.log(`Appending ${uniqueStubData.length} stub ICU beds to ${apiData.length} API records`);
-      }
-      
-      // If API returned no data, use stub data as fallback
-      if (apiData.length === 0) {
-        console.warn('No ICU beds data received from API, using stub data');
-        await delay(300);
-        return [...stubICUBeds];
-      }
-      
-      // Combine API data with stub data
-      return [...apiData, ...uniqueStubData];
-    }
-    
-    // Return only API data if stub data is disabled
     return apiData;
   },
 

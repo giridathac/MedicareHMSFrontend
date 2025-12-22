@@ -1,29 +1,6 @@
 // Emergency Beds API service
-import { apiRequest, ApiError, ENABLE_STUB_DATA } from './base';
+import { apiRequest, ApiError } from './base';
 import { EmergencyBed } from '../types';
-
-// Stub data
-const stubEmergencyBeds: EmergencyBed[] = [
-  { id: 1, emergencyBedId: 'ERBED-01', emergencyBedNo: 'ER-001', emergencyRoomDescription: 'Emergency bed with standard monitoring equipment', chargesPerDay: 2500, createdBy: '1', createdAt: '2025-01-01T10:00:00Z', status: 'active' },
-  { id: 2, emergencyBedId: 'ERBED-02', emergencyBedNo: 'ER-002', emergencyRoomDescription: 'Emergency bed with advanced life support', chargesPerDay: 3500, createdBy: '1', createdAt: '2025-01-01T10:00:00Z', status: 'active' },
-  { id: 3, emergencyBedId: 'ERBED-03', emergencyBedNo: 'ER-003', emergencyRoomDescription: 'Standard emergency bed', chargesPerDay: 2000, createdBy: '1', createdAt: '2025-01-01T10:00:00Z', status: 'active' },
-  { id: 4, emergencyBedId: 'ERBED-04', emergencyBedNo: 'ER-004', emergencyRoomDescription: 'Emergency bed with isolation facility', chargesPerDay: 3000, createdBy: '1', createdAt: '2025-01-01T10:00:00Z', status: 'active' },
-  { id: 5, emergencyBedId: 'ERBED-05', emergencyBedNo: 'ER-005', emergencyRoomDescription: 'Pediatric emergency bed', chargesPerDay: 2200, createdBy: '1', createdAt: '2025-01-01T10:00:00Z', status: 'active' },
-];
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Generate Emergency Bed ID in format ERBED-XX
-function generateEmergencyBedId(): string {
-  const count = stubEmergencyBeds.length + 1;
-  return `ERBED-${count.toString().padStart(2, '0')}`;
-}
-
-// Generate Emergency Bed No in format ER-XXX
-function generateEmergencyBedNo(): string {
-  const count = stubEmergencyBeds.length + 1;
-  return `ER-${count.toString().padStart(3, '0')}`;
-}
 
 export interface CreateEmergencyBedDto {
   emergencyBedNo?: string;
@@ -117,19 +94,6 @@ export const emergencyBedsApi = {
         stack: error.stack
       });
 
-      // If stub data is enabled and API fails, fall back to stub data
-      if (ENABLE_STUB_DATA) {
-        console.warn('API call failed, using stub data for emergency beds');
-        await delay(300);
-        // Filter by status if provided
-        let filteredBeds = [...stubEmergencyBeds];
-        if (status) {
-          const statusLower = status.toLowerCase();
-          filteredBeds = filteredBeds.filter(bed => bed.status.toLowerCase() === statusLower);
-        }
-        return filteredBeds;
-      }
-
       // Re-throw API errors with detailed message
       if (error instanceof ApiError) {
         const errorData = error.data as any;
@@ -195,16 +159,6 @@ export const emergencyBedsApi = {
       throw new Error(`EmergencyBed with id ${id} not found`);
     } catch (error) {
       console.error('Error fetching emergency bed by id:', error);
-      
-      // Only use stub data if enabled and API fails
-      if (ENABLE_STUB_DATA) {
-        await delay(200);
-        const emergencyBed = stubEmergencyBeds.find(b => b.id === id);
-        if (emergencyBed) {
-          return Promise.resolve(emergencyBed);
-        }
-      }
-      
       throw error;
     }
   },
@@ -276,25 +230,6 @@ export const emergencyBedsApi = {
         data: error.data,
         stack: error.stack
       });
-      
-      // If stub data is enabled and API fails, fall back to stub data
-      if (ENABLE_STUB_DATA) {
-        console.warn('API call failed, using stub data for emergency bed creation');
-        await delay(400);
-        const newEmergencyBed: EmergencyBed = {
-          id: stubEmergencyBeds.length + 1,
-          emergencyBedId: generateEmergencyBedId(),
-          emergencyBedNo: data.emergencyBedNo || generateEmergencyBedNo(),
-          emergencyRoomNameNo: data.emergencyRoomNameNo,
-          emergencyRoomDescription: data.emergencyRoomDescription,
-          chargesPerDay: data.chargesPerDay !== undefined && data.chargesPerDay !== null ? data.chargesPerDay : 0,
-          createdBy: data.createdBy !== undefined && data.createdBy !== null ? String(data.createdBy) : '1',
-          status: data.status || 'active',
-          createdAt: new Date().toISOString(),
-        };
-        stubEmergencyBeds.push(newEmergencyBed);
-        return newEmergencyBed;
-      }
       
       // Re-throw API errors with detailed message
       if (error instanceof ApiError) {
@@ -405,28 +340,6 @@ export const emergencyBedsApi = {
         stack: error.stack
       });
       
-      // If stub data is enabled and API fails, fall back to stub data
-      if (ENABLE_STUB_DATA) {
-        console.warn('API call failed, using stub data for emergency bed update');
-        await delay(400);
-        const index = stubEmergencyBeds.findIndex(b => b.id === data.id);
-        if (index === -1) {
-          throw new Error(`EmergencyBed with id ${data.id} not found`);
-        }
-        // Convert createdBy to string if it's a number, and ensure all fields match EmergencyBed type
-        const updateData: Partial<EmergencyBed> = {};
-        if (data.emergencyBedNo !== undefined) updateData.emergencyBedNo = data.emergencyBedNo;
-        if (data.emergencyRoomNameNo !== undefined) updateData.emergencyRoomNameNo = data.emergencyRoomNameNo;
-        if (data.emergencyRoomDescription !== undefined) updateData.emergencyRoomDescription = data.emergencyRoomDescription;
-        if (data.chargesPerDay !== undefined) updateData.chargesPerDay = data.chargesPerDay;
-        if (data.status !== undefined) updateData.status = data.status;
-        if (data.createdBy !== undefined) {
-          updateData.createdBy = String(data.createdBy);
-        }
-        stubEmergencyBeds[index] = { ...stubEmergencyBeds[index], ...updateData };
-        return stubEmergencyBeds[index];
-      }
-      
       // Re-throw API errors with detailed message
       if (error instanceof ApiError) {
         const errorData = error.data as any;
@@ -491,18 +404,6 @@ export const emergencyBedsApi = {
         data: error.data,
         stack: error.stack
       });
-      
-      // If stub data is enabled and API fails, fall back to stub data
-      if (ENABLE_STUB_DATA) {
-        console.warn('API call failed, using stub data for emergency bed deletion');
-        await delay(300);
-        const index = stubEmergencyBeds.findIndex(b => b.id === emergencyBedId);
-        if (index === -1) {
-          throw new Error(`EmergencyBed with id ${emergencyBedId} not found`);
-        }
-        stubEmergencyBeds.splice(index, 1);
-        return;
-      }
       
       // Re-throw API errors with detailed message
       if (error instanceof ApiError) {

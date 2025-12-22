@@ -1,5 +1,5 @@
 // Emergency Bed Slots API service
-import { apiRequest, ENABLE_STUB_DATA } from './base';
+import { apiRequest } from './base';
 import { EmergencyBedSlot } from '../types';
 
 // API Response types
@@ -29,22 +29,6 @@ interface EmergencyBedSlotGetByIdResponse {
   data: EmergencyBedSlotResponseItem;
 }
 
-// Stub data for Emergency Bed Slots
-const stubEmergencyBedSlots: EmergencyBedSlotResponseItem[] = [
-  // ER-001 slots
-  { EmergencyBedSlotId: 1, EmergencyBedId: 1, EBedSlotNo: 'ES01', ESlotStartTime: '9:00 AM', ESlotEndTime: '10:00 AM', Status: 'Active' },
-  { EmergencyBedSlotId: 2, EmergencyBedId: 1, EBedSlotNo: 'ES02', ESlotStartTime: '10:00 AM', ESlotEndTime: '11:00 AM', Status: 'Active' },
-  { EmergencyBedSlotId: 3, EmergencyBedId: 1, EBedSlotNo: 'ES03', ESlotStartTime: '11:00 AM', ESlotEndTime: '12:00 PM', Status: 'Active' },
-  { EmergencyBedSlotId: 4, EmergencyBedId: 1, EBedSlotNo: 'ES04', ESlotStartTime: '12:00 PM', ESlotEndTime: '1:00 PM', Status: 'Active' },
-  { EmergencyBedSlotId: 5, EmergencyBedId: 1, EBedSlotNo: 'ES05', ESlotStartTime: '1:00 PM', ESlotEndTime: '2:00 PM', Status: 'Active' },
-  // ER-002 slots
-  { EmergencyBedSlotId: 6, EmergencyBedId: 2, EBedSlotNo: 'ES01', ESlotStartTime: '9:00 AM', ESlotEndTime: '10:00 AM', Status: 'Active' },
-  { EmergencyBedSlotId: 7, EmergencyBedId: 2, EBedSlotNo: 'ES02', ESlotStartTime: '10:00 AM', ESlotEndTime: '11:00 AM', Status: 'Active' },
-  { EmergencyBedSlotId: 8, EmergencyBedId: 2, EBedSlotNo: 'ES03', ESlotStartTime: '11:00 AM', ESlotEndTime: '12:00 PM', Status: 'Active' },
-  // ER-003 slots
-  { EmergencyBedSlotId: 9, EmergencyBedId: 3, EBedSlotNo: 'ES01', ESlotStartTime: '9:00 AM', ESlotEndTime: '10:00 AM', Status: 'Active' },
-  { EmergencyBedSlotId: 10, EmergencyBedId: 3, EBedSlotNo: 'ES02', ESlotStartTime: '10:00 AM', ESlotEndTime: '11:00 AM', Status: 'Active' },
-];
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -102,26 +86,7 @@ export const emergencyBedSlotsApi = {
       return [];
     } catch (error) {
       console.error('Error fetching emergency bed slots:', error);
-      // If stub data is disabled and API fails, throw the error
-      if (!ENABLE_STUB_DATA) {
-        throw error;
-      }
-      
-      // Only use stub data if enabled and API fails
-      let filteredStubData = [...stubEmergencyBedSlots];
-      
-      // Filter by emergencyBedId if provided
-      if (emergencyBedId !== undefined) {
-        filteredStubData = filteredStubData.filter(slot => slot.EmergencyBedId === emergencyBedId);
-      }
-      
-      // Filter by status if provided
-      if (status) {
-        filteredStubData = filteredStubData.filter(slot => slot.Status.toLowerCase() === status.toLowerCase());
-      }
-      
-      const stubData = filteredStubData.map(mapEmergencyBedSlotResponseToEmergencyBedSlot);
-      return stubData;
+      throw error;
     }
   },
 
@@ -140,15 +105,6 @@ export const emergencyBedSlotsApi = {
       throw new Error('Invalid response format from API');
     } catch (error) {
       console.error('Error fetching emergency bed slot by ID:', error);
-      
-      if (ENABLE_STUB_DATA) {
-        await delay(200);
-        const stubSlot = stubEmergencyBedSlots.find(s => s.EmergencyBedSlotId === id);
-        if (stubSlot) {
-          return mapEmergencyBedSlotResponseToEmergencyBedSlot(stubSlot);
-        }
-      }
-      
       throw error;
     }
   },
@@ -175,21 +131,6 @@ export const emergencyBedSlotsApi = {
       throw new Error('Invalid response format from API');
     } catch (error) {
       console.error('Error creating emergency bed slot:', error);
-      
-      if (ENABLE_STUB_DATA) {
-        await delay(400);
-        const newSlot: EmergencyBedSlotResponseItem = {
-          EmergencyBedSlotId: stubEmergencyBedSlots.length + 1,
-          EmergencyBedId: data.emergencyBedId,
-          EBedSlotNo: `ES${String(stubEmergencyBedSlots.length + 1).padStart(2, '0')}`, // Auto-generated
-          ESlotStartTime: data.eSlotStartTime,
-          ESlotEndTime: data.eSlotEndTime,
-          Status: data.status || 'Active',
-        };
-        stubEmergencyBedSlots.push(newSlot);
-        return mapEmergencyBedSlotResponseToEmergencyBedSlot(newSlot);
-      }
-      
       throw error;
     }
   },
@@ -220,18 +161,6 @@ export const emergencyBedSlotsApi = {
       throw new Error('Invalid response format from API');
     } catch (error) {
       console.error('Error updating emergency bed slot:', error);
-      
-      if (ENABLE_STUB_DATA) {
-        await delay(400);
-        const index = stubEmergencyBedSlots.findIndex(s => s.EmergencyBedSlotId === data.id);
-        if (index !== -1) {
-          if (data.eSlotStartTime !== undefined) stubEmergencyBedSlots[index].ESlotStartTime = data.eSlotStartTime;
-          if (data.eSlotEndTime !== undefined) stubEmergencyBedSlots[index].ESlotEndTime = data.eSlotEndTime;
-          if (data.status !== undefined) stubEmergencyBedSlots[index].Status = data.status;
-          return mapEmergencyBedSlotResponseToEmergencyBedSlot(stubEmergencyBedSlots[index]);
-        }
-      }
-      
       throw error;
     }
   },
@@ -243,16 +172,6 @@ export const emergencyBedSlotsApi = {
       });
     } catch (error) {
       console.error('Error deleting emergency bed slot:', error);
-      
-      if (ENABLE_STUB_DATA) {
-        await delay(300);
-        const index = stubEmergencyBedSlots.findIndex(s => s.EmergencyBedSlotId === id);
-        if (index !== -1) {
-          stubEmergencyBedSlots.splice(index, 1);
-        }
-        return;
-      }
-      
       throw error;
     }
   },

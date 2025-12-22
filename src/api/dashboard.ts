@@ -2,41 +2,6 @@
 import { apiRequest } from './base';
 import { DashboardStats, ChartData, DoctorQueue } from '../types';
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const stubStats: DashboardStats = {
-  opdPatientsToday: 0, // Fallback value, will be replaced by API
-  activeTokens: 0, // Fallback value, will be replaced by API
-  ipdAdmissions: 0, // Fallback value, will be replaced by API
-  otScheduled: 0, // Fallback value, will be replaced by API
-  icuOccupied: '0/0', // Fallback value, will be replaced by API
-  totalPatients: 0, // Fallback value, will be replaced by API
-};
-
-const stubOpdData: ChartData[] = [
-  { day: 'Mon', patients: 98 },
-  { day: 'Tue', patients: 112 },
-  { day: 'Wed', patients: 95 },
-  { day: 'Thu', patients: 124 },
-  { day: 'Fri', patients: 108 },
-  { day: 'Sat', patients: 87 },
-  { day: 'Sun', patients: 45 },
-];
-
-const stubAdmissionData: ChartData[] = [
-  { name: 'Regular Ward', value: 45, color: '#3b82f6' },
-  { name: 'Special Room', value: 28, color: '#8b5cf6' },
-  { name: 'Shared Room', value: 16, color: '#06b6d4' },
-];
-
-const stubDoctorQueue: DoctorQueue[] = [
-  { doctor: 'Dr. Sarah Johnson', specialty: 'Cardiology', type: 'inhouse', waiting: 8, consulting: 1, completed: 15 },
-  { doctor: 'Dr. Michael Chen', specialty: 'Orthopedics', type: 'inhouse', waiting: 12, consulting: 1, completed: 11 },
-  { doctor: 'Dr. James Miller', specialty: 'Neurology', type: 'consulting', waiting: 6, consulting: 1, completed: 9 },
-  { doctor: 'Dr. Emily Davis', specialty: 'General Medicine', type: 'inhouse', waiting: 15, consulting: 1, completed: 18 },
-  { doctor: 'Dr. Robert Lee', specialty: 'Pediatrics', type: 'consulting', waiting: 6, consulting: 1, completed: 12 },
-];
-
 // Helper function to get default colors for pie chart
 function getDefaultColor(index: number): string {
   const colors = ['#3b82f6', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1'];
@@ -194,9 +159,7 @@ export const dashboardApi = {
       return mappedStats;
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
-      // Fallback to stub data on error
-      await delay(300);
-      return Promise.resolve(stubStats);
+      throw error;
     }
   },
 
@@ -306,14 +269,14 @@ export const dashboardApi = {
             console.error('Unexpected OPD patient flow weekly response structure:', response);
             console.error('Response keys:', Object.keys(response || {}));
             console.error('Response values:', Object.values(response || {}).map(v => typeof v));
-            console.error('Could not find array data in response, returning stub data');
-            return [...stubOpdData];
+            console.error('Could not find array data in response');
+            return [];
           }
         }
       } else {
         console.warn('Unexpected OPD patient flow weekly response type:', typeof response);
         console.warn('Response:', response);
-        return [...stubOpdData];
+        throw new Error('Unexpected response type from OPD patient flow weekly API');
       }
       
       console.log(`OPD flow data length: ${opdFlowData.length}`);
@@ -323,8 +286,8 @@ export const dashboardApi = {
       }
       
       if (opdFlowData.length === 0) {
-        console.warn('OPD patient flow weekly API returned empty array, returning stub data');
-        return [...stubOpdData];
+        console.warn('OPD patient flow weekly API returned empty array');
+        return [];
       }
       
       // Map backend response to ChartData interface for bar chart
@@ -375,20 +338,18 @@ export const dashboardApi = {
         console.warn('All OPD patient flow values are 0, chart may not display properly');
       }
       
-      // Only return stub data if we truly have no valid data
+      // Return empty array if no valid data after mapping
       if (mappedData.length === 0) {
-        console.warn('No valid OPD patient flow weekly data after mapping, using stub data');
-        return [...stubOpdData];
+        console.warn('No valid OPD patient flow weekly data after mapping');
+        return [];
       }
       
       // Return the mapped data from API
-      console.log('Returning mapped API data (not stub data)');
+      console.log('Returning mapped API data');
       return mappedData;
     } catch (error) {
       console.error('Error fetching OPD patient flow weekly:', error);
-      // Fallback to stub data on error
-      await delay(200);
-      return Promise.resolve([...stubOpdData]);
+      return [];
     }
   },
 
@@ -552,14 +513,14 @@ export const dashboardApi = {
             console.error('Unexpected IPD room distribution response structure:', response);
             console.error('Response keys:', Object.keys(response || {}));
             console.error('Response values:', Object.values(response || {}).map(v => typeof v));
-            console.error('Could not find array data in response, returning stub data');
-            return [...stubAdmissionData];
+            console.error('Could not find array data in response');
+            throw new Error('Invalid response structure from IPD room distribution API');
           }
         }
       } else {
         console.warn('Unexpected IPD room distribution response type:', typeof response);
         console.warn('Response:', response);
-        return [...stubAdmissionData];
+        return [];
       }
       
       console.log(`Distribution data length: ${distributionData.length}`);
@@ -569,8 +530,8 @@ export const dashboardApi = {
       }
       
       if (distributionData.length === 0) {
-        console.warn('IPD room distribution API returned empty array, returning stub data');
-        return [...stubAdmissionData];
+        console.warn('IPD room distribution API returned empty array');
+        return [];
       }
       
       // Map backend response to ChartData interface for pie chart
@@ -633,20 +594,17 @@ export const dashboardApi = {
         console.warn('All IPD room distribution values are 0, chart may not display properly');
       }
       
-      // Only return stub data if we truly have no valid data
       if (mappedData.length === 0) {
-        console.warn('No valid IPD room distribution data after mapping, using stub data');
-        return [...stubAdmissionData];
+        console.warn('No valid IPD room distribution data after mapping');
+        return [];
       }
       
       // Return the mapped data from API
-      console.log('Returning mapped API data (not stub data)');
+      console.log('Returning mapped API data');
       return mappedData;
     } catch (error) {
       console.error('Error fetching IPD room distribution:', error);
-      // Fallback to stub data on error
-      await delay(200);
-      return Promise.resolve([...stubAdmissionData]);
+      throw error;
     }
   },
 
@@ -668,12 +626,12 @@ export const dashboardApi = {
         queueData = response;
       } else {
         console.warn('Unexpected doctor queue response structure:', response);
-        return [...stubDoctorQueue];
+        return [];
       }
       
       if (queueData.length === 0) {
         console.log('Doctor queue API returned empty array');
-        return [...stubDoctorQueue];
+        return [];
       }
       
       // Map backend response to DoctorQueue interface
@@ -701,9 +659,7 @@ export const dashboardApi = {
       return mappedQueue;
     } catch (error) {
       console.error('Error fetching doctor queue:', error);
-      // Fallback to stub data on error
-      await delay(200);
-      return Promise.resolve([...stubDoctorQueue]);
+      throw error;
     }
   },
 };

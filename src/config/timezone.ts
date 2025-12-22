@@ -3,14 +3,20 @@
  * 
  * This file defines the default timezone for the application.
  * All date/time operations should use this timezone configuration.
+ * 
+ * Application is configured for India - using Indian Standard Time (IST)
+ * This can be overridden via VITE_TIMEZONE environment variable, but defaults to IST
  */
 
 /**
  * Default timezone: Indian Standard Time (IST)
  * IST is UTC+5:30
  * IANA timezone identifier: Asia/Kolkata
+ * 
+ * Can be overridden via VITE_TIMEZONE environment variable
+ * Default: 'Asia/Kolkata' (IST - India)
  */
-export const DEFAULT_TIMEZONE = 'Asia/Kolkata';
+export const DEFAULT_TIMEZONE = import.meta.env.VITE_TIMEZONE || 'Asia/Kolkata';
 
 /**
  * IST offset in milliseconds
@@ -50,6 +56,23 @@ export function getCurrentDateIST(): string {
   const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
   const day = String(istDate.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get today's date as a Date object for date pickers (minDate)
+ * This ensures the date is based on IST, not local timezone
+ * @returns Date object representing today in IST (midnight IST)
+ */
+export function getTodayISTDate(): Date {
+  const istDate = getCurrentIST();
+  const year = istDate.getUTCFullYear();
+  const month = istDate.getUTCMonth();
+  const day = istDate.getUTCDate();
+  
+  // Create a date object at midnight in local timezone
+  // The date picker will use this for comparison, and since we're using IST values,
+  // it will correctly prevent selection of past dates based on IST
+  return new Date(year, month, day);
 }
 
 /**

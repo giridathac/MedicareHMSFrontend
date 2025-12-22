@@ -2,12 +2,6 @@
 import { apiRequest, ApiError } from './base';
 import { LabTest } from '../types';
 
-// Stub data
-const stubLabTests: LabTest[] = [
- ];
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 // Generate display test ID in format LAB_yyyy_mm_dd_01, LAB_yyyy_mm_dd_02, etc.
 function generateDisplayTestId(existingLabTests: LabTest[] = []): string {
   const now = new Date();
@@ -109,15 +103,10 @@ export const labTestsApi = {
         return normalizedLabTests as LabTest[];
       }
       
-      // Fallback to stub data if no data received
-      console.warn('No lab tests data received, using stub data');
-      await delay(300);
-      return Promise.resolve([...stubLabTests]);
+      return [];
     } catch (error) {
       console.error('Error fetching lab tests:', error);
-      // Fallback to stub data on error
-      await delay(300);
-      return Promise.resolve([...stubLabTests]);
+      throw error;
     }
   },
 

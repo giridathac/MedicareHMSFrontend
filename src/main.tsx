@@ -14,6 +14,55 @@ import "./index.css";
 import "./styles/dialog.css";
 import "./styles/dashboard.css";
 
+// Flush all caches before application starts
+if (typeof window !== 'undefined') {
+  try {
+    // Clear localStorage
+    localStorage.clear();
+    console.log('✓ localStorage cleared');
+    
+    // Clear sessionStorage
+    sessionStorage.clear();
+    console.log('✓ sessionStorage cleared');
+    
+    // Clear IndexedDB (if any)
+    if ('indexedDB' in window) {
+      indexedDB.databases().then(databases => {
+        databases.forEach(db => {
+          if (db.name) {
+            indexedDB.deleteDatabase(db.name);
+            console.log(`✓ IndexedDB database "${db.name}" deleted`);
+          }
+        });
+      }).catch(err => {
+        console.warn('Error clearing IndexedDB:', err);
+      });
+    }
+    
+    // Clear service worker cache (if any)
+    if ('serviceWorker' in navigator && 'caches' in window) {
+      caches.keys().then(cacheNames => {
+        return Promise.all(
+          cacheNames.map(cacheName => {
+            console.log(`✓ Cache "${cacheName}" deleted`);
+            return caches.delete(cacheName);
+          })
+        );
+      }).catch(err => {
+        console.warn('Error clearing service worker cache:', err);
+      });
+    }
+    
+    // Clear HTTP cache headers (browser will handle this on reload)
+    // Force a hard reload if needed
+    if (import.meta.env.DEV) {
+      console.log('✓ All caches flushed - Application starting fresh');
+    }
+  } catch (err) {
+    console.error('Error flushing cache:', err);
+  }
+}
+
 // Log timezone configuration in development
 if (import.meta.env.DEV) {
   import('./config/timezone').then(({ DEFAULT_TIMEZONE, IST_OFFSET_STRING }) => {
