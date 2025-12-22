@@ -187,3 +187,77 @@
 html {
   font-size: var(--font-size);
 }
+
+/* Global scrollbar styling for Chrome and other browsers - Matching Figma design */
+html, body, * {
+  scrollbar-width: thin !important;
+  scrollbar-color: #9B9B9B #1F1F1F !important;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 12px !important;
+  height: 12px !important;
+  -webkit-appearance: none !important;
+  display: block !important;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: #1F1F1F !important;
+  border-radius: 0 !important;
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background: #9B9B9B !important;
+  border-radius: 6px !important;
+  border: none !important;
+  min-height: 30px !important;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background: #A6A6A6 !important;
+}
+
+html::-webkit-scrollbar-thumb:active,
+body::-webkit-scrollbar-thumb:active,
+*::-webkit-scrollbar-thumb:active {
+  background: #B8B8B8 !important;
+}
+
+html::-webkit-scrollbar-button,
+body::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button {
+  display: block !important;
+  height: 12px !important;
+  width: 12px !important;
+  background: #1F1F1F !important;
+}
+
+html::-webkit-scrollbar-button:single-button:vertical:decrement,
+body::-webkit-scrollbar-button:single-button:vertical:decrement,
+*::-webkit-scrollbar-button:single-button:vertical:decrement {
+  border-style: solid;
+  border-width: 0 4px 4px 4px;
+  border-color: transparent transparent #9B9B9B transparent;
+}
+
+html::-webkit-scrollbar-button:single-button:vertical:increment,
+body::-webkit-scrollbar-button:single-button:vertical:increment,
+*::-webkit-scrollbar-button:single-button:vertical:increment {
+  border-style: solid;
+  border-width: 4px 4px 0 4px;
+  border-color: #9B9B9B transparent transparent transparent;
+}
+
+html::-webkit-scrollbar-corner,
+body::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-corner {
+  background: #1F1F1F !important;
+}

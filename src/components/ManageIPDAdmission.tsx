@@ -8,7 +8,8 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { FileText, FlaskConical, Stethoscope, Heart, ArrowLeft, Plus, Search, Eye, Edit, Settings } from 'lucide-react';
+import { FileText, FlaskConical, Stethoscope, Heart, ArrowLeft, Plus, Search, Eye, Edit, Settings, Sliders } from 'lucide-react';
+import { CustomResizableDialog, CustomResizableDialogHeader, CustomResizableDialogTitle, CustomResizableDialogClose } from './CustomResizableDialog';
 import { admissionsApi } from '../api/admissions';
 import { Admission, PatientLabTest, PatientDoctorVisit, PatientNurseVisit } from '../api/admissions';
 import { labTestsApi } from '../api/labTests';
@@ -39,8 +40,10 @@ export function ManageIPDAdmission() {
   const [isAddIPDLabTestDialogOpen, setIsAddIPDLabTestDialogOpen] = useState(false);
   const [isViewIPDLabTestDialogOpen, setIsViewIPDLabTestDialogOpen] = useState(false);
   const [isEditIPDLabTestDialogOpen, setIsEditIPDLabTestDialogOpen] = useState(false);
+  const [isCustomizeIPDLabTestDialogOpen, setIsCustomizeIPDLabTestDialogOpen] = useState(false);
   const [viewingLabTest, setViewingLabTest] = useState<PatientLabTest | null>(null);
   const [editingLabTestId, setEditingLabTestId] = useState<string | number | null>(null);
+  const [customizingLabTest, setCustomizingLabTest] = useState<PatientLabTest | null>(null);
   const [ipdLabTestFormData, setIpdLabTestFormData] = useState({
     roomAdmissionId: '',
     patientId: '',
@@ -69,6 +72,31 @@ export function ManageIPDAdmission() {
   // File upload state for ReportsUrl (similar to OT Documents)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [editUploadedDocumentUrls, setEditUploadedDocumentUrls] = useState<string[]>([]);
+  // Customize dialog form data
+  const [customizeLabTestFormData, setCustomizeLabTestFormData] = useState({
+    roomAdmissionId: '',
+    patientId: '',
+    labTestId: '',
+    priority: 'Normal',
+    orderedDate: '',
+    orderedBy: '',
+    orderedByDoctorId: '',
+    description: '',
+    charges: '',
+    patientType: 'IPD',
+    appointmentId: '',
+    emergencyBedSlotId: '',
+    labTestDone: 'No',
+    reportsUrl: '',
+    testStatus: 'Pending',
+    testDoneDateTime: ''
+  });
+  const [customizeLabTestSearchTerm, setCustomizeLabTestSearchTerm] = useState('');
+  const [showCustomizeLabTestList, setShowCustomizeLabTestList] = useState(false);
+  const [customizeDoctorSearchTerm, setCustomizeDoctorSearchTerm] = useState('');
+  const [showCustomizeDoctorList, setShowCustomizeDoctorList] = useState(false);
+  const [customizeSelectedFiles, setCustomizeSelectedFiles] = useState<File[]>([]);
+  const [customizeUploadedDocumentUrls, setCustomizeUploadedDocumentUrls] = useState<string[]>([]);
 
   // Doctor Visit Dialog State
   const [isAddDoctorVisitDialogOpen, setIsAddDoctorVisitDialogOpen] = useState(false);
@@ -621,6 +649,96 @@ export function ManageIPDAdmission() {
     setShowIpdLabTestDoctorList(false);
     setIpdLabTestSubmitError(null);
     setIsEditIPDLabTestDialogOpen(true);
+  };
+
+  // Handle opening Manage IPD Lab Test dialog
+  const handleOpenCustomizeIPDLabTestDialog = async (labTest: PatientLabTest) => {
+    // Fetch available lab tests
+    let labTestsList: LabTest[] = [];
+    try {
+      labTestsList = await labTestsApi.getAll();
+      setAvailableLabTests(labTestsList);
+    } catch (err) {
+      console.error('Error fetching lab tests:', err);
+    }
+
+    // Fetch available doctors
+    let doctorsList: Doctor[] = [];
+    try {
+      doctorsList = await doctorsApi.getAll();
+      setAvailableDoctors(doctorsList);
+    } catch (err) {
+      console.error('Error fetching doctors:', err);
+    }
+
+    setCustomizingLabTest(labTest);
+
+    // Find the selected lab test to populate the search term (use labTestsList from the fetch, not availableLabTests state)
+    const selectedLabTest = labTestsList.find((lt: LabTest) => {
+      const lid = (lt as any).labTestId || (lt as any).id || '';
+      return String(lid) === String(labTest.labTestId);
+    });
+
+    // Extract orderedByDoctorId with various field name variations
+    const orderedByDoctorId = (labTest as any).orderedByDoctorId || 
+                              (labTest as any).OrderedByDoctorId || 
+                              (labTest as any).ordered_by_doctor_id ||
+                              (labTest as any).Ordered_By_Doctor_Id ||
+                              '';
+
+    // Find the selected doctor to populate the search term (use doctorsList from the fetch, not availableDoctors state)
+    const selectedDoctor = doctorsList.find((doc: Doctor) => {
+      const docId = doc.id || (doc as any).Id || '';
+      return String(docId) === String(orderedByDoctorId);
+    });
+
+    setCustomizeLabTestFormData({
+      roomAdmissionId: String(labTest.roomAdmissionId || admission?.roomAdmissionId || admission?.admissionId || ''),
+      patientId: String(labTest.patientId || admission?.patientId || ''),
+      labTestId: String(labTest.labTestId || ''),
+      priority: labTest.priority || 'Normal',
+      orderedDate: labTest.orderedDate || new Date().toISOString().split('T')[0],
+      orderedBy: labTest.orderedBy || '',
+      orderedByDoctorId: String(orderedByDoctorId || ''),
+      description: labTest.description || '',
+      charges: labTest.charges ? String(labTest.charges) : '',
+      patientType: (labTest.patientType as string) || 'IPD',
+      appointmentId: (labTest as any).appointmentId || '',
+      emergencyBedSlotId: String(labTest.emergencyBedSlotId || ''),
+      labTestDone: labTest.labTestDone === true || String(labTest.labTestDone).toLowerCase() === 'true' || String(labTest.labTestDone).toLowerCase() === 'yes' ? 'Yes' : 'No',
+      reportsUrl: labTest.reportsUrl || '',
+      testStatus: labTest.testStatus || 'Pending',
+      testDoneDateTime: labTest.testDoneDateTime ? new Date(labTest.testDoneDateTime).toISOString().slice(0, 16) : ''
+    });
+
+    // Parse existing documents from reportsUrl field
+    let existingDocUrls: string[] = [];
+    if (labTest.reportsUrl) {
+      try {
+        // Try parsing as JSON array first
+        const parsed = JSON.parse(labTest.reportsUrl);
+        if (Array.isArray(parsed)) {
+          existingDocUrls = parsed;
+        } else if (typeof parsed === 'string') {
+          existingDocUrls = [parsed];
+        }
+      } catch {
+        // If not JSON, treat as comma-separated string or single URL
+        if (labTest.reportsUrl.includes(',')) {
+          existingDocUrls = labTest.reportsUrl.split(',').map((url: string) => url.trim()).filter((url: string) => url);
+        } else {
+          existingDocUrls = [labTest.reportsUrl];
+        }
+      }
+    }
+    setCustomizeUploadedDocumentUrls(existingDocUrls);
+    setCustomizeSelectedFiles([]);
+
+    setCustomizeLabTestSearchTerm(selectedLabTest ? `${selectedLabTest.testName || 'Unknown'} (${selectedLabTest.testCategory || 'N/A'})` : '');
+    setShowCustomizeLabTestList(false);
+    setCustomizeDoctorSearchTerm(selectedDoctor ? (selectedDoctor.name || selectedDoctor.doctorName || '') : '');
+    setShowCustomizeDoctorList(false);
+    setIsCustomizeIPDLabTestDialogOpen(true);
   };
 
   // Update documents when editing lab test dialog opens or when form data changes
@@ -1812,11 +1930,11 @@ export function ManageIPDAdmission() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleOpenEditIPDLabTestDialog(labTest)}
+                                  onClick={() => handleOpenCustomizeIPDLabTestDialog(labTest)}
                                   className="gap-1"
                                 >
-                                  <Edit className="size-3" />
-                                  View & Edit
+                                  <Sliders className="size-3" />
+                                  Manage
                                 </Button>
                               </td>
                           </tr>
@@ -2629,16 +2747,384 @@ export function ManageIPDAdmission() {
               <Button
                 onClick={() => {
                   setIsViewIPDLabTestDialogOpen(false);
-                  handleOpenEditIPDLabTestDialog(viewingLabTest);
+                  handleOpenCustomizeIPDLabTestDialog(viewingLabTest);
                 }}
               >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
+                <Sliders className="h-4 w-4 mr-2" />
+                Manage
               </Button>
             )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Manage IPD Lab Test Dialog */}
+      <CustomResizableDialog 
+        open={isCustomizeIPDLabTestDialogOpen} 
+        onOpenChange={setIsCustomizeIPDLabTestDialogOpen}
+        className="p-0 gap-0"
+        initialWidth={550}
+        maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
+      >
+        <CustomResizableDialogClose onClick={() => setIsCustomizeIPDLabTestDialogOpen(false)} />
+        <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+          <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+            <CustomResizableDialogTitle className="dialog-title-standard">Manage IPD Lab Test</CustomResizableDialogTitle>
+          </CustomResizableDialogHeader>
+          <div className="dialog-body-content-wrapper">
+            <div className="dialog-form-container space-y-4">
+              <div className="dialog-form-field-grid">
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeRoomAdmissionId" className="dialog-label-standard">Room Admission ID</Label>
+                  <Input
+                    id="customizeRoomAdmissionId"
+                    value={customizeLabTestFormData.roomAdmissionId}
+                    disabled
+                    className="dialog-input-disabled"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizePatientId" className="dialog-label-standard">Patient ID</Label>
+                  <Input
+                    id="customizePatientId"
+                    value={admission?.patientId || customizeLabTestFormData.patientId || ''}
+                    disabled
+                    className="dialog-input-disabled"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizePatientNo" className="dialog-label-standard">Patient No</Label>
+                  <Input
+                    id="customizePatientNo"
+                    value={admission?.patientNo || 'N/A'}
+                    disabled
+                    className="dialog-input-disabled"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeLabTestId" className="dialog-label-standard">Lab Test *</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                    <Input
+                      id="customizeLabTestId"
+                      value={customizeLabTestSearchTerm}
+                      onChange={(e) => {
+                        setCustomizeLabTestSearchTerm(e.target.value);
+                        setShowCustomizeLabTestList(true);
+                      }}
+                      onFocus={() => setShowCustomizeLabTestList(true)}
+                      placeholder="Search by Display Test ID, name, or category..."
+                      className="pl-10 dialog-input-standard"
+                    />
+                    {showCustomizeLabTestList && (
+                      <div className="mt-1 border border-gray-200 rounded-md max-h-48 overflow-y-auto bg-white z-50 relative">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Display Test ID</th>
+                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Test Name</th>
+                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Category</th>
+                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Charges</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {availableLabTests
+                              .filter((test) => {
+                                if (!customizeLabTestSearchTerm) return true;
+                                const searchLower = customizeLabTestSearchTerm.toLowerCase();
+                                const displayTestId = (test.displayTestId || test.DisplayTestId || test.displayTestID || test.DisplayTestID || '').toLowerCase();
+                                const name = (test.testName || test.TestName || '').toLowerCase();
+                                const category = (test.testCategory || test.TestCategory || '').toLowerCase();
+                                return displayTestId.includes(searchLower) || name.includes(searchLower) || category.includes(searchLower);
+                              })
+                              .map((test) => {
+                                const testId = String(test.labTestId || test.LabTestId || test.id || '');
+                                const displayTestId = test.displayTestId || test.DisplayTestId || test.displayTestID || test.DisplayTestID || '';
+                                const testName = test.testName || test.TestName || 'Unknown';
+                                const category = test.testCategory || test.TestCategory || 'N/A';
+                                const displayText = `${displayTestId}, ${testName} (${category})`;
+                                const isSelected = customizeLabTestFormData.labTestId === testId;
+                                return (
+                                  <tr
+                                    key={test.labTestId || test.id}
+                                    onClick={() => {
+                                      setCustomizeLabTestFormData({ ...customizeLabTestFormData, labTestId: testId });
+                                      setCustomizeLabTestSearchTerm(displayText);
+                                      setShowCustomizeLabTestList(false);
+                                    }}
+                                    className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
+                                  >
+                                    <td className="py-2 px-3 text-sm text-gray-900 font-mono">{displayTestId || '-'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{testName}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{category}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">₹{test.charges || 0}</td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                        {availableLabTests.filter((test) => {
+                          if (!customizeLabTestSearchTerm) return true;
+                          const searchLower = customizeLabTestSearchTerm.toLowerCase();
+                          const name = (test.testName || '').toLowerCase();
+                          const id = String(test.labTestId || test.id || '').toLowerCase();
+                          const category = (test.testCategory || '').toLowerCase();
+                          return name.includes(searchLower) || id.includes(searchLower) || category.includes(searchLower);
+                        }).length === 0 && (
+                          <div className="text-center py-4 text-gray-500 text-sm">No lab tests found</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizePriority" className="dialog-label-standard">Priority *</Label>
+                  <select
+                    id="customizePriority"
+                    className="dialog-select-standard"
+                    value={customizeLabTestFormData.priority}
+                    onChange={(e) => setCustomizeLabTestFormData({ ...customizeLabTestFormData, priority: e.target.value })}
+                    required
+                  >
+                    <option value="Normal">Normal</option>
+                    <option value="Urgent">Urgent</option>
+                  </select>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeOrderedDate" className="dialog-label-standard">Ordered Date *</Label>
+                  <Input
+                    id="customizeOrderedDate"
+                    type="date"
+                    value={customizeLabTestFormData.orderedDate}
+                    onChange={(e) => setCustomizeLabTestFormData({ ...customizeLabTestFormData, orderedDate: e.target.value })}
+                    className="dialog-input-standard"
+                    required
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeOrderedByDoctorId" className="dialog-label-standard">Ordered By Doctor *</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                    <Input
+                      id="customizeOrderedByDoctorId"
+                      placeholder="Search doctor by name..."
+                      value={customizeDoctorSearchTerm}
+                      onChange={(e) => {
+                        setCustomizeDoctorSearchTerm(e.target.value);
+                        setShowCustomizeDoctorList(true);
+                      }}
+                      onFocus={() => setShowCustomizeDoctorList(true)}
+                      className="pl-10 dialog-input-standard"
+                    />
+                    {showCustomizeDoctorList && availableDoctors.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="py-2 px-3 text-left text-xs font-medium text-gray-700">Doctor Name</th>
+                              <th className="py-2 px-3 text-left text-xs font-medium text-gray-700">Specialization</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {availableDoctors.filter((doctor: any) => {
+                              if (!customizeDoctorSearchTerm) return true;
+                              const searchLower = customizeDoctorSearchTerm.toLowerCase();
+                              const doctorName = doctor.name || doctor.Name || doctor.doctorName || doctor.DoctorName || '';
+                              const specialization = doctor.specialization || doctor.Specialization || doctor.speciality || doctor.Speciality || '';
+                              return (
+                                doctorName.toLowerCase().includes(searchLower) ||
+                                specialization.toLowerCase().includes(searchLower)
+                              );
+                            }).map((doctor: any) => {
+                              const doctorId = doctor.id || doctor.Id || doctor.doctorId || doctor.DoctorId || '';
+                              const doctorName = doctor.name || doctor.Name || doctor.doctorName || doctor.DoctorName || '';
+                              const specialization = doctor.specialization || doctor.Specialization || doctor.speciality || doctor.Speciality || '';
+                              const isSelected = customizeLabTestFormData.orderedByDoctorId === String(doctorId);
+                              return (
+                                <tr
+                                  key={doctorId}
+                                  onClick={() => {
+                                    setCustomizeLabTestFormData({ ...customizeLabTestFormData, orderedByDoctorId: String(doctorId) });
+                                    setCustomizeDoctorSearchTerm(doctorName);
+                                    setShowCustomizeDoctorList(false);
+                                  }}
+                                  className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
+                                >
+                                  <td className="py-2 px-3 text-sm text-gray-900">{doctorName}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-600">{specialization || '-'}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {customizeLabTestFormData.patientType === 'OPD' && (
+                  <div className="dialog-form-field">
+                    <Label htmlFor="customizeAppointmentId" className="dialog-label-standard">Appointment ID</Label>
+                    <Input
+                      id="customizeAppointmentId"
+                      value={customizeLabTestFormData.appointmentId}
+                      onChange={(e) => setCustomizeLabTestFormData({ ...customizeLabTestFormData, appointmentId: e.target.value })}
+                      placeholder="Enter Appointment ID (optional)"
+                      className="dialog-input-standard"
+                    />
+                  </div>
+                )}
+                {customizeLabTestFormData.patientType === 'Emergency' && (
+                  <div className="dialog-form-field">
+                    <Label htmlFor="customizeEmergencyBedSlotId" className="dialog-label-standard">Emergency Bed Slot ID</Label>
+                    <Input
+                      id="customizeEmergencyBedSlotId"
+                      value={customizeLabTestFormData.emergencyBedSlotId}
+                      onChange={(e) => setCustomizeLabTestFormData({ ...customizeLabTestFormData, emergencyBedSlotId: e.target.value })}
+                      placeholder="Enter Emergency Bed Slot ID (optional)"
+                      className="dialog-input-standard"
+                    />
+                  </div>
+                )}
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeLabTestDone" className="dialog-label-standard">Lab Test Done *</Label>
+                  <select
+                    id="customizeLabTestDone"
+                    className="dialog-select-standard"
+                    value={customizeLabTestFormData.labTestDone}
+                    onChange={(e) => setCustomizeLabTestFormData({ ...customizeLabTestFormData, labTestDone: e.target.value })}
+                    required
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeTestStatus" className="dialog-label-standard">Test Status *</Label>
+                  <select
+                    id="customizeTestStatus"
+                    className="dialog-select-standard"
+                    value={customizeLabTestFormData.testStatus}
+                    onChange={(e) => setCustomizeLabTestFormData({ ...customizeLabTestFormData, testStatus: e.target.value })}
+                    required
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="InProgress">InProgress</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeReportsUrl" className="dialog-label-standard">Reports URL</Label>
+                  
+                  {/* Display existing uploaded documents */}
+                  {customizeUploadedDocumentUrls.length > 0 && (
+                    <div className="mb-3 space-y-2">
+                      <p className="text-sm text-gray-600 font-medium">Uploaded Documents:</p>
+                      <div className="space-y-1">
+                        {customizeUploadedDocumentUrls.map((url, index) => {
+                          const fileName = url.split('/').pop() || `Document ${index + 1}`;
+                          return (
+                            <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-2"
+                              >
+                                <span>{fileName}</span>
+                                <span className="text-xs text-gray-500">(opens in new tab)</span>
+                              </a>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setCustomizeUploadedDocumentUrls(prev => prev.filter((_, i) => i !== index));
+                                }}
+                                className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                                title="Remove file"
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* File input for adding more documents */}
+                  <Input
+                    id="customizeReportsUrl"
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      setCustomizeSelectedFiles(prev => [...prev, ...files]);
+                      e.target.value = '';
+                    }}
+                    className="dialog-input-standard"
+                  />
+                  {customizeSelectedFiles.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-sm text-gray-600 font-medium">New Files to Upload:</p>
+                      {customizeSelectedFiles.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-blue-50 p-2 rounded">
+                          <span>{file.name}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setCustomizeSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                            }}
+                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Save"</p>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeTestDoneDateTime" className="dialog-label-standard">Test Done Date & Time</Label>
+                  <Input
+                    id="customizeTestDoneDateTime"
+                    type="datetime-local"
+                    value={customizeLabTestFormData.testDoneDateTime}
+                    onChange={(e) => setCustomizeLabTestFormData({ ...customizeLabTestFormData, testDoneDateTime: e.target.value })}
+                    placeholder="Enter test done date and time"
+                    className="dialog-input-standard"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="dialog-footer-buttons px-6 pb-4 flex-shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCustomizeIPDLabTestDialogOpen(false);
+                setCustomizingLabTest(null);
+                setCustomizeSelectedFiles([]);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                // TODO: Add save functionality for manage dialog
+                console.log('Manage lab test data:', customizeLabTestFormData);
+                setIsCustomizeIPDLabTestDialogOpen(false);
+              }}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </CustomResizableDialog>
 
       {/* Add/Edit Doctor Visit Dialog */}
       <Dialog open={isAddDoctorVisitDialogOpen || isEditDoctorVisitDialogOpen} onOpenChange={(open) => {
