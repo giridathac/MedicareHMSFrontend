@@ -447,7 +447,7 @@ export const emergencyAdmissionVitalsApi = {
       if (data.vitalsStatus !== undefined) requestBody.VitalsStatus = data.vitalsStatus;
       if (data.vitalsRemarks !== undefined) requestBody.VitalsRemarks = data.vitalsRemarks;
       if (data.vitalsCreatedBy !== undefined) requestBody.VitalsCreatedBy = data.vitalsCreatedBy;
-      if (data.status !== undefined) requestBody.Status = data.status;
+      requestBody.Status = data.status ?? 'Active';
 
       const response = await apiRequest<EmergencyAdmissionVitalsCreateResponse>(
         `/emergency-admission-vitals`,

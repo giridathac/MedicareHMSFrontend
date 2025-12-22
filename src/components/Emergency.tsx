@@ -11,17 +11,19 @@ import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar as CalendarComponent } from './ui/calendar';
-import { Siren, Plus, Ambulance, AlertTriangle, BedDouble, ArrowRight, Clock, Search, Calendar, ChevronUp } from 'lucide-react';
+import { Siren, Plus, Ambulance, AlertTriangle, BedDouble, ArrowRight, Clock, Search, Calendar, ChevronUp, Edit, Trash2, Eye } from 'lucide-react';
 import { Switch } from './ui/switch';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { patientsApi } from '../api/patients';
-import { Patient, EmergencyAdmission } from '../types';
+import { Patient, EmergencyAdmission, EmergencyAdmissionVitals } from '../types';
 import { useEmergencyBedSlots } from '../hooks/useEmergencyBedSlots';
 import { useEmergencyBeds } from '../hooks/useEmergencyBeds';
 import { useStaff } from '../hooks/useStaff';
 import { useRoles } from '../hooks/useRoles';
-import { emergencyAdmissionsApi, CreateEmergencyAdmissionDto, UpdateEmergencyAdmissionDto } from '../api/emergencyAdmissions';
+import { emergencyAdmissionsApi, CreateEmergencyAdmissionDto, UpdateEmergencyAdmissionDto, emergencyAdmissionVitalsApi, CreateEmergencyAdmissionVitalsDto, UpdateEmergencyAdmissionVitalsDto } from '../api/emergencyAdmissions';
+import { formatDateTimeIST, convertToIST } from '../utils/timeUtils';
+import { getCurrentIST } from '../config/timezone';
 
 interface EmergencyPatient {
   id: number;
@@ -166,6 +168,32 @@ const emergencyBeds = Array.from({ length: 10 }, (_, i) => {
 });
 
 export function Emergency() {
+  // Helper function to get current IST datetime in format for datetime-local input (YYYY-MM-DDTHH:mm)
+  const getCurrentISTDateTimeLocal = (): string => {
+    const istDate = getCurrentIST();
+    const year = istDate.getUTCFullYear();
+    const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(istDate.getUTCDate()).padStart(2, '0');
+    const hours = String(istDate.getUTCHours()).padStart(2, '0');
+    const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+  
+  // Helper function to convert a datetime string to IST format for datetime-local input
+  const convertToISTDateTimeLocal = (dateTime: string | Date): string => {
+    try {
+      const istDate = convertToIST(dateTime);
+      const year = istDate.getUTCFullYear();
+      const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(istDate.getUTCDate()).padStart(2, '0');
+      const hours = String(istDate.getUTCHours()).padStart(2, '0');
+      const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch {
+      return getCurrentISTDateTimeLocal();
+    }
+  };
+  
   const [patients, setPatients] = useState<EmergencyPatient[]>(mockEmergencyPatients);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -180,7 +208,29 @@ export function Emergency() {
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [addEmergencyAdmissionDate, setAddEmergencyAdmissionDate] = useState<Date | null>(null);
   const [editEmergencyAdmissionDate, setEditEmergencyAdmissionDate] = useState<Date | null>(null);
+  const [editEmergencyAdmissionDateTime, setEditEmergencyAdmissionDateTime] = useState<Date | null>(null);
   const [isUnoccupiedBedsExpanded, setIsUnoccupiedBedsExpanded] = useState(false);
+  
+  // Vitals management state
+  const [vitals, setVitals] = useState<EmergencyAdmissionVitals[]>([]);
+  const [vitalsLoading, setVitalsLoading] = useState(false);
+  const [isAddVitalsDialogOpen, setIsAddVitalsDialogOpen] = useState(false);
+  const [isManageVitalsDialogOpen, setIsManageVitalsDialogOpen] = useState(false);
+  const [selectedVitals, setSelectedVitals] = useState<EmergencyAdmissionVitals | null>(null);
+  const [vitalsFormData, setVitalsFormData] = useState<CreateEmergencyAdmissionVitalsDto>({
+    emergencyAdmissionId: 0,
+    nurseId: 0,
+    recordedDateTime: getCurrentISTDateTimeLocal(),
+    heartRate: undefined,
+    bloodPressure: '',
+    temperature: undefined,
+    o2Saturation: undefined,
+    respiratoryRate: undefined,
+    pulseRate: undefined,
+    vitalsStatus: 'Stable',
+    vitalsRemarks: '',
+    status: 'Active',
+  });
   
   // Hooks for emergency admission data
   const { emergencyBedSlots, fetchEmergencyBedSlots } = useEmergencyBedSlots();
@@ -737,13 +787,54 @@ export function Emergency() {
       setUpdateError(null);
       setUpdateSuccess(false);
       
-      // Set DatePicker state for edit
+      // Set DatePicker state for edit (for backward compatibility)
       if (formattedDate) {
         const dateObj = getDateFromDDMMYYYY(formattedDate);
         setEditEmergencyAdmissionDate(dateObj || null);
       } else {
         setEditEmergencyAdmissionDate(null);
       }
+      
+      // Set datetime value for edit dialog DatePicker
+      // Try to get datetime from API response, or use date with default time
+      let dateTimeValue: Date | null = null;
+      if (fullAdmission.emergencyAdmissionDate) {
+        try {
+          // Check if the date string includes time
+          const originalDate = typeof fullAdmission.emergencyAdmissionDate === 'string' 
+            ? fullAdmission.emergencyAdmissionDate 
+            : new Date(fullAdmission.emergencyAdmissionDate).toISOString();
+          
+          // If it's a full datetime string, use it; otherwise append default time
+          if (originalDate.includes('T') || originalDate.includes(' ')) {
+            // Has time component
+            const dateObj = new Date(originalDate);
+            if (!isNaN(dateObj.getTime())) {
+              // Convert to IST for DatePicker
+              dateTimeValue = convertToIST(dateObj);
+            }
+          } else {
+            // Only date, append default time (00:00)
+            const dateObj = new Date(originalDate);
+            if (!isNaN(dateObj.getTime())) {
+              const istDate = convertToIST(dateObj);
+              // Set time to 00:00:00
+              istDate.setUTCHours(0, 0, 0, 0);
+              dateTimeValue = istDate;
+            }
+          }
+        } catch {
+          // Fallback to current date/time
+          dateTimeValue = getCurrentIST();
+        }
+      } else {
+        // No date, use current date/time
+        dateTimeValue = getCurrentIST();
+      }
+      setEditEmergencyAdmissionDateTime(dateTimeValue);
+      
+      // Fetch vitals for this admission
+      fetchVitals(fullAdmission.emergencyAdmissionId);
     } catch (error) {
       console.error('Error fetching admission details:', error);
       setUpdateError(error instanceof Error ? error.message : 'Failed to fetch admission details. Please try again.');
@@ -754,6 +845,20 @@ export function Emergency() {
       setIsFetchingAdmission(false);
     }
   }, [availablePatients, doctors, emergencyBedSlots, getPatientName, getDoctorName]);
+  
+  // Fetch vitals for an emergency admission
+  const fetchVitals = async (emergencyAdmissionId: number) => {
+    setVitalsLoading(true);
+    try {
+      const vitalsData = await emergencyAdmissionVitalsApi.getAll(emergencyAdmissionId);
+      setVitals(vitalsData);
+    } catch (err) {
+      console.error('Error fetching vitals:', err);
+      setVitals([]);
+    } finally {
+      setVitalsLoading(false);
+    }
+  };
   
   const redPatients = patients.filter(p => p.triageLevel === 'Red');
   const yellowPatients = patients.filter(p => p.triageLevel === 'Yellow');
@@ -1740,6 +1845,13 @@ export function Emergency() {
                   </div>
                 </div>
               ) : (
+              <Tabs defaultValue="admission" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                  <TabsTrigger value="admission">Admission Details</TabsTrigger>
+                  <TabsTrigger value="vitals">Vitals</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="admission" className="space-y-4">
               <div className="dialog-form-container space-y-4">
                 <div className="dialog-form-field">
                   <Label htmlFor="edit-doctor-search" className="dialog-label-standard">Doctor *</Label>
@@ -1958,12 +2070,12 @@ export function Emergency() {
                 </div>
 
                 <div className="dialog-form-field">
-                  <Label htmlFor="edit-emergencyAdmissionDate" className="dialog-label-standard">Emergency Admission Date *</Label>
+                  <Label htmlFor="edit-emergencyAdmissionDate" className="dialog-label-standard">Emergency Admission Date & Time *</Label>
                   <DatePicker
                     id="edit-emergencyAdmissionDate"
-                    selected={editEmergencyAdmissionDate}
+                    selected={editEmergencyAdmissionDateTime}
                     onChange={(date: Date | null) => {
-                      setEditEmergencyAdmissionDate(date);
+                      setEditEmergencyAdmissionDateTime(date);
                       if (date) {
                         const formattedDate = getDDMMYYYYFromDate(date);
                         setEditFormData({ ...editFormData, emergencyAdmissionDate: formattedDate });
@@ -1971,8 +2083,12 @@ export function Emergency() {
                         setEditFormData({ ...editFormData, emergencyAdmissionDate: '' });
                       }
                     }}
-                    dateFormat="dd-MM-yyyy"
-                    placeholderText="dd-mm-yyyy"
+                    showTimeSelect
+                    timeIntervals={1}
+                    timeCaption="Time"
+                    timeFormat="hh:mm aa"
+                    dateFormat="dd-MM-yyyy hh:mm aa"
+                    placeholderText="dd-mm-yyyy HH:MM AM/PM"
                     className="dialog-input-standard w-full"
                     wrapperClassName="w-full"
                     showYearDropdown
@@ -2110,6 +2226,73 @@ export function Emergency() {
                   </>
                 )}
 
+                {/* Latest Vitals Record Display */}
+                {(() => {
+                  const latestVital = vitals.length > 0 
+                    ? [...vitals].sort((a, b) => new Date(b.recordedDateTime).getTime() - new Date(a.recordedDateTime).getTime())[0]
+                    : null;
+                  
+                  if (!latestVital) return null;
+                  
+                  return (
+                    <div className="dialog-form-field">
+                      <Label className="dialog-label-standard">Latest Vitals Record</Label>
+                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={latestVital.vitalsStatus === 'Critical' ? 'destructive' : 'default'}>
+                              {latestVital.vitalsStatus}
+                            </Badge>
+                            <span className="text-sm text-gray-600">
+                              {formatDateTimeIST(latestVital.recordedDateTime)}
+                            </span>
+                            {latestVital.nurseName && (
+                              <span className="text-sm text-gray-500">by {latestVital.nurseName}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 text-sm">
+                          {latestVital.heartRate !== undefined && (
+                            <div className="p-2 bg-white rounded">
+                              <span className="text-gray-600 font-medium">HR:</span> <span className="text-gray-900">{latestVital.heartRate} bpm</span>
+                            </div>
+                          )}
+                          {latestVital.bloodPressure && (
+                            <div className="p-2 bg-white rounded">
+                              <span className="text-gray-600 font-medium">BP:</span> <span className="text-gray-900">{latestVital.bloodPressure}</span>
+                            </div>
+                          )}
+                          {latestVital.temperature !== undefined && (
+                            <div className="p-2 bg-white rounded">
+                              <span className="text-gray-600 font-medium">Temp:</span> <span className="text-gray-900">{latestVital.temperature}°C</span>
+                            </div>
+                          )}
+                          {latestVital.o2Saturation !== undefined && (
+                            <div className="p-2 bg-white rounded">
+                              <span className="text-gray-600 font-medium">O2 Sat:</span> <span className="text-gray-900">{latestVital.o2Saturation}%</span>
+                            </div>
+                          )}
+                          {latestVital.respiratoryRate !== undefined && (
+                            <div className="p-2 bg-white rounded">
+                              <span className="text-gray-600 font-medium">RR:</span> <span className="text-gray-900">{latestVital.respiratoryRate}</span>
+                            </div>
+                          )}
+                          {latestVital.pulseRate !== undefined && (
+                            <div className="p-2 bg-white rounded">
+                              <span className="text-gray-600 font-medium">Pulse:</span> <span className="text-gray-900">{latestVital.pulseRate} bpm</span>
+                            </div>
+                          )}
+                        </div>
+                        {latestVital.vitalsRemarks && (
+                          <div className="text-sm text-gray-600 pt-2 border-t border-gray-200">
+                            <span className="font-medium">Remarks:</span> {latestVital.vitalsRemarks}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="dialog-form-field">
                   <div className="flex items-center gap-3">
                     <Label htmlFor="edit-status" className="dialog-label-standard">Status</Label>
@@ -2157,6 +2340,7 @@ export function Emergency() {
                       setEditSelectedPatientId('');
                       setEditPatientError('');
                       setEditPatientHighlightIndex(-1);
+                      setEditEmergencyAdmissionDateTime(null);
                       setShowEditPatientDropdown(false);
                       setSelectedAdmissionForEdit(null);
                     }} 
@@ -2177,20 +2361,13 @@ export function Emergency() {
                         setUpdateError('Please select an emergency bed');
                         return;
                       }
-                      // Validate date format DD-MM-YYYY
-                      const dateRegex = /^(\d{2})-(\d{2})-(\d{4})$/;
-                      if (!editFormData.emergencyAdmissionDate || !dateRegex.test(editFormData.emergencyAdmissionDate)) {
-                        setUpdateError('Please enter a valid emergency admission date in DD-MM-YYYY format');
+                      // Validate datetime
+                      if (!editEmergencyAdmissionDateTime) {
+                        setUpdateError('Please enter a valid emergency admission date and time');
                         return;
                       }
-                      // Validate the date is actually valid
-                      const [, day, month, year] = editFormData.emergencyAdmissionDate.match(dateRegex)!;
-                      const dayNum = parseInt(day, 10);
-                      const monthNum = parseInt(month, 10);
-                      const yearNum = parseInt(year, 10);
-                      const date = new Date(yearNum, monthNum - 1, dayNum);
-                      if (date.getDate() !== dayNum || date.getMonth() !== monthNum - 1 || date.getFullYear() !== yearNum) {
-                        setUpdateError('Please enter a valid emergency admission date');
+                      if (isNaN(editEmergencyAdmissionDateTime.getTime())) {
+                        setUpdateError('Please enter a valid emergency admission date and time');
                         return;
                       }
 
@@ -2204,12 +2381,29 @@ export function Emergency() {
                         const transferToOT = editFormData.transferToIPDOTICU && editFormData.transferTo === 'OT' ? 'Yes' : 'No';
                         const transferToICU = editFormData.transferToIPDOTICU && editFormData.transferTo === 'ICU' ? 'Yes' : 'No';
 
-                        // Convert date from DD-MM-YYYY to YYYY-MM-DD for API
-                        let apiDate = editFormData.emergencyAdmissionDate;
-                        const dateRegex = /^(\d{2})-(\d{2})-(\d{4})$/;
-                        if (dateRegex.test(apiDate)) {
-                          const [, day, month, year] = apiDate.match(dateRegex)!;
-                          apiDate = `${year}-${month}-${day}`;
+                        // Convert datetime-local format to API format (YYYY-MM-DD HH:MM:SS)
+                        let apiDate = '';
+                        if (editEmergencyAdmissionDateTime) {
+                          const dateTimeObj = new Date(editEmergencyAdmissionDateTime);
+                          if (!isNaN(dateTimeObj.getTime())) {
+                            // Convert to IST and format as YYYY-MM-DD HH:MM:SS
+                            const istDate = convertToIST(dateTimeObj);
+                            const year = istDate.getUTCFullYear();
+                            const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+                            const day = String(istDate.getUTCDate()).padStart(2, '0');
+                            const hours = String(istDate.getUTCHours()).padStart(2, '0');
+                            const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+                            const seconds = String(istDate.getUTCSeconds()).padStart(2, '0');
+                            apiDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                          }
+                        }
+                        // Fallback to date-only format if datetime conversion failed
+                        if (!apiDate) {
+                          const dateRegex = /^(\d{2})-(\d{2})-(\d{4})$/;
+                          if (editFormData.emergencyAdmissionDate && dateRegex.test(editFormData.emergencyAdmissionDate)) {
+                            const [, day, month, year] = editFormData.emergencyAdmissionDate.match(dateRegex)!;
+                            apiDate = `${year}-${month}-${day}`;
+                          }
                         }
 
                         // Prepare the DTO
@@ -2262,6 +2456,7 @@ export function Emergency() {
                           setEditSelectedPatientId('');
                           setEditPatientError('');
                           setEditPatientHighlightIndex(-1);
+                          setEditEmergencyAdmissionDateTime(null);
                           setShowEditPatientDropdown(false);
                           setSelectedAdmissionForEdit(null);
                           setUpdateError(null);
@@ -2279,10 +2474,531 @@ export function Emergency() {
                   </Button>
                 </div>
               </div>
+                </TabsContent>
+                
+                <TabsContent value="vitals" className="space-y-4 py-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold">Vitals Records</h3>
+                    <Button 
+                      onClick={() => {
+                        if (selectedAdmissionForEdit) {
+                          setVitalsFormData({
+                            emergencyAdmissionId: selectedAdmissionForEdit.emergencyAdmissionId,
+                            nurseId: 0,
+                            recordedDateTime: getCurrentISTDateTimeLocal(),
+                            heartRate: undefined,
+                            bloodPressure: '',
+                            temperature: undefined,
+                            o2Saturation: undefined,
+                            respiratoryRate: undefined,
+                            pulseRate: undefined,
+                            vitalsStatus: 'Stable',
+                            vitalsRemarks: '',
+                            status: 'Active',
+                          });
+                          setIsAddVitalsDialogOpen(true);
+                        }
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <Plus className="size-4" />
+                      Add Vitals
+                    </Button>
+                  </div>
+                  
+                  {vitalsLoading ? (
+                    <div className="text-center py-8 text-gray-500">Loading vitals...</div>
+                  ) : vitals.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">No vitals records found. Click "Add Vitals" to create one.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {vitals.map((vital) => (
+                        <Card key={vital.emergencyAdmissionVitalsId} className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge variant={vital.vitalsStatus === 'Critical' ? 'destructive' : 'default'}>
+                                  {vital.vitalsStatus}
+                                </Badge>
+                                <span className="text-sm text-gray-600">
+                                  {new Date(vital.recordedDateTime).toLocaleString()}
+                                </span>
+                                {vital.nurseName && (
+                                  <span className="text-sm text-gray-500">by {vital.nurseName}</span>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 text-sm">
+                                {vital.heartRate !== undefined && (
+                                  <div><span className="text-gray-600">HR:</span> {vital.heartRate} bpm</div>
+                                )}
+                                {vital.bloodPressure && (
+                                  <div><span className="text-gray-600">BP:</span> {vital.bloodPressure}</div>
+                                )}
+                                {vital.temperature !== undefined && (
+                                  <div><span className="text-gray-600">Temp:</span> {vital.temperature}°C</div>
+                                )}
+                                {vital.o2Saturation !== undefined && (
+                                  <div><span className="text-gray-600">O2 Sat:</span> {vital.o2Saturation}%</div>
+                                )}
+                                {vital.respiratoryRate !== undefined && (
+                                  <div><span className="text-gray-600">RR:</span> {vital.respiratoryRate}</div>
+                                )}
+                                {vital.pulseRate !== undefined && (
+                                  <div><span className="text-gray-600">Pulse:</span> {vital.pulseRate} bpm</div>
+                                )}
+                              </div>
+                              {vital.vitalsRemarks && (
+                                <div className="mt-2 text-sm text-gray-600">
+                                  <span className="font-medium">Remarks:</span> {vital.vitalsRemarks}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedVitals(vital);
+                                  setVitalsFormData({
+                                    emergencyAdmissionId: vital.emergencyAdmissionId,
+                                    nurseId: vital.nurseId,
+                                    recordedDateTime: convertToISTDateTimeLocal(vital.recordedDateTime),
+                                    heartRate: vital.heartRate,
+                                    bloodPressure: vital.bloodPressure || '',
+                                    temperature: vital.temperature,
+                                    o2Saturation: vital.o2Saturation,
+                                    respiratoryRate: vital.respiratoryRate,
+                                    pulseRate: vital.pulseRate,
+                                    vitalsStatus: vital.vitalsStatus,
+                                    vitalsRemarks: vital.vitalsRemarks || '',
+                                    status: vital.status || 'Active',
+                                  });
+                                  setIsManageVitalsDialogOpen(true);
+                                }}
+                              >
+                                Manage
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
               )}
             </div>
           </div>
         </ResizableDialogContent>
+      </Dialog>
+
+      {/* Add Vitals Dialog */}
+      <Dialog open={isAddVitalsDialogOpen} onOpenChange={setIsAddVitalsDialogOpen}>
+        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
+          <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
+            <DialogTitle>Add Vitals Record</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
+            <div className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="add-nurseId">Nurse *</Label>
+                <select
+                  id="add-nurseId"
+                  aria-label="Nurse"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                  value={vitalsFormData.nurseId}
+                  onChange={(e) => setVitalsFormData({ ...vitalsFormData, nurseId: Number(e.target.value) })}
+                >
+                  <option value="0">Select Nurse</option>
+                  {staff
+                    .filter(s => {
+                      if (!s || !s.RoleId) return false;
+                      const role = roles.find(r => r && r.id === s.RoleId);
+                      if (!role || !role.name) return false;
+                      const roleNameLower = role.name.toLowerCase();
+                      return roleNameLower.includes('nurse');
+                    })
+                    .map(nurse => {
+                      const role = roles.find(r => r && r.id === nurse.RoleId);
+                      return (
+                        <option key={nurse.UserId} value={nurse.UserId}>
+                          {nurse.UserName} - {role?.name || ''}
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+              
+              <div>
+                <Label htmlFor="add-recordedDateTime">Recorded Date & Time *</Label>
+                <Input
+                  id="add-recordedDateTime"
+                  type="datetime-local"
+                  value={vitalsFormData.recordedDateTime}
+                  onChange={(e) => setVitalsFormData({ ...vitalsFormData, recordedDateTime: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="add-heartRate">Heart Rate (bpm)</Label>
+                  <Input
+                    id="add-heartRate"
+                    type="number"
+                    placeholder="e.g., 72"
+                    value={vitalsFormData.heartRate || ''}
+                    onChange={(e) => setVitalsFormData({ ...vitalsFormData, heartRate: e.target.value ? Number(e.target.value) : undefined })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="add-bloodPressure">Blood Pressure</Label>
+                  <Input
+                    id="add-bloodPressure"
+                    placeholder="e.g., 120/80"
+                    value={vitalsFormData.bloodPressure}
+                    onChange={(e) => setVitalsFormData({ ...vitalsFormData, bloodPressure: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="add-temperature">Temperature (°C)</Label>
+                  <Input
+                    id="add-temperature"
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g., 36.5"
+                    value={vitalsFormData.temperature || ''}
+                    onChange={(e) => setVitalsFormData({ ...vitalsFormData, temperature: e.target.value ? Number(e.target.value) : undefined })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="add-o2Saturation">O2 Saturation (%)</Label>
+                  <Input
+                    id="add-o2Saturation"
+                    type="number"
+                    placeholder="e.g., 98"
+                    value={vitalsFormData.o2Saturation || ''}
+                    onChange={(e) => setVitalsFormData({ ...vitalsFormData, o2Saturation: e.target.value ? Number(e.target.value) : undefined })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="add-respiratoryRate">Respiratory Rate</Label>
+                  <Input
+                    id="add-respiratoryRate"
+                    type="number"
+                    placeholder="e.g., 16"
+                    value={vitalsFormData.respiratoryRate || ''}
+                    onChange={(e) => setVitalsFormData({ ...vitalsFormData, respiratoryRate: e.target.value ? Number(e.target.value) : undefined })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="add-pulseRate">Pulse Rate (bpm)</Label>
+                  <Input
+                    id="add-pulseRate"
+                    type="number"
+                    placeholder="e.g., 72"
+                    value={vitalsFormData.pulseRate || ''}
+                    onChange={(e) => setVitalsFormData({ ...vitalsFormData, pulseRate: e.target.value ? Number(e.target.value) : undefined })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="add-vitalsStatus">Vitals Status *</Label>
+                <select
+                  id="add-vitalsStatus"
+                  aria-label="Vitals Status"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                  value={vitalsFormData.vitalsStatus}
+                  onChange={(e) => setVitalsFormData({ ...vitalsFormData, vitalsStatus: e.target.value as 'Critical' | 'Stable' })}
+                >
+                  <option value="Stable">Stable</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="add-vitalsRemarks">Remarks</Label>
+                <Textarea
+                  id="add-vitalsRemarks"
+                  placeholder="Enter any remarks or notes..."
+                  value={vitalsFormData.vitalsRemarks}
+                  onChange={(e) => setVitalsFormData({ ...vitalsFormData, vitalsRemarks: e.target.value })}
+                  rows={3}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 px-6 py-2 border-t bg-gray-50 flex-shrink-0">
+            <Button variant="outline" onClick={() => setIsAddVitalsDialogOpen(false)}>Cancel</Button>
+            <Button onClick={async () => {
+              if (!vitalsFormData.nurseId || !vitalsFormData.recordedDateTime) {
+                alert('Please fill in all required fields (Nurse, Recorded Date & Time).');
+                return;
+              }
+              try {
+                if (selectedAdmissionForEdit) {
+                  await emergencyAdmissionVitalsApi.create(selectedAdmissionForEdit.emergencyAdmissionId, vitalsFormData);
+                  await fetchVitals(selectedAdmissionForEdit.emergencyAdmissionId);
+                  setIsAddVitalsDialogOpen(false);
+                  setVitalsFormData({
+                    emergencyAdmissionId: 0,
+                    nurseId: 0,
+                    recordedDateTime: getCurrentISTDateTimeLocal(),
+                    heartRate: undefined,
+                    bloodPressure: '',
+                    temperature: undefined,
+                    o2Saturation: undefined,
+                    respiratoryRate: undefined,
+                    pulseRate: undefined,
+                    vitalsStatus: 'Stable',
+                    vitalsRemarks: '',
+                    status: 'Active',
+                  });
+                }
+              } catch (err) {
+                console.error('Error creating vitals:', err);
+                alert('Failed to create vitals record. Please try again.');
+              }
+            }}>Create Vitals Record</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Vitals Dialog */}
+      <Dialog open={isManageVitalsDialogOpen} onOpenChange={setIsManageVitalsDialogOpen}>
+        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
+          <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
+            <DialogTitle>Manage Vitals Record</DialogTitle>
+          </DialogHeader>
+          {selectedVitals && (
+            <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
+              <div className="space-y-4 py-4">
+                <div>
+                  <Label>Vitals ID</Label>
+                  <Input value={selectedVitals.emergencyAdmissionVitalsId} disabled className="bg-gray-50 text-gray-700" />
+                </div>
+                
+                <div>
+                  <Label htmlFor="manage-vitals-nurseId">Nurse *</Label>
+                  <select
+                    id="manage-vitals-nurseId"
+                    aria-label="Nurse"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                    value={vitalsFormData.nurseId}
+                    onChange={(e) => setVitalsFormData({ ...vitalsFormData, nurseId: Number(e.target.value) })}
+                  >
+                    <option value="0">Select Nurse</option>
+                    {staff
+                      .filter(s => {
+                        if (!s || !s.RoleId) return false;
+                        const role = roles.find(r => r && r.id === s.RoleId);
+                        if (!role || !role.name) return false;
+                        const roleNameLower = role.name.toLowerCase();
+                        return roleNameLower.includes('nurse');
+                      })
+                      .map(nurse => {
+                        const role = roles.find(r => r && r.id === nurse.RoleId);
+                        return (
+                          <option key={nurse.UserId} value={nurse.UserId}>
+                            {nurse.UserName} - {role?.name || ''}
+                          </option>
+                        );
+                      })}
+                  </select>
+                </div>
+              
+                <div>
+                  <Label htmlFor="manage-vitals-recordedDateTime">Recorded Date & Time *</Label>
+                  <Input
+                    id="manage-vitals-recordedDateTime"
+                    type="datetime-local"
+                    value={vitalsFormData.recordedDateTime}
+                    onChange={(e) => setVitalsFormData({ ...vitalsFormData, recordedDateTime: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="manage-vitals-heartRate">Heart Rate (bpm)</Label>
+                    <Input
+                      id="manage-vitals-heartRate"
+                      type="number"
+                      placeholder="e.g., 72"
+                      value={vitalsFormData.heartRate || ''}
+                      onChange={(e) => setVitalsFormData({ ...vitalsFormData, heartRate: e.target.value ? Number(e.target.value) : undefined })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="manage-vitals-bloodPressure">Blood Pressure</Label>
+                    <Input
+                      id="manage-vitals-bloodPressure"
+                      placeholder="e.g., 120/80"
+                      value={vitalsFormData.bloodPressure}
+                      onChange={(e) => setVitalsFormData({ ...vitalsFormData, bloodPressure: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="manage-vitals-temperature">Temperature (°C)</Label>
+                    <Input
+                      id="manage-vitals-temperature"
+                      type="number"
+                      step="0.1"
+                      placeholder="e.g., 36.5"
+                      value={vitalsFormData.temperature || ''}
+                      onChange={(e) => setVitalsFormData({ ...vitalsFormData, temperature: e.target.value ? Number(e.target.value) : undefined })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="manage-vitals-o2Saturation">O2 Saturation (%)</Label>
+                    <Input
+                      id="manage-vitals-o2Saturation"
+                      type="number"
+                      placeholder="e.g., 98"
+                      value={vitalsFormData.o2Saturation || ''}
+                      onChange={(e) => setVitalsFormData({ ...vitalsFormData, o2Saturation: e.target.value ? Number(e.target.value) : undefined })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="manage-vitals-respiratoryRate">Respiratory Rate</Label>
+                    <Input
+                      id="manage-vitals-respiratoryRate"
+                      type="number"
+                      placeholder="e.g., 16"
+                      value={vitalsFormData.respiratoryRate || ''}
+                      onChange={(e) => setVitalsFormData({ ...vitalsFormData, respiratoryRate: e.target.value ? Number(e.target.value) : undefined })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="manage-vitals-pulseRate">Pulse Rate (bpm)</Label>
+                    <Input
+                      id="manage-vitals-pulseRate"
+                      type="number"
+                      placeholder="e.g., 72"
+                      value={vitalsFormData.pulseRate || ''}
+                      onChange={(e) => setVitalsFormData({ ...vitalsFormData, pulseRate: e.target.value ? Number(e.target.value) : undefined })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="manage-vitals-status">Vitals Status *</Label>
+                  <select
+                    id="manage-vitals-status"
+                    aria-label="Vitals Status"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                    value={vitalsFormData.vitalsStatus}
+                    onChange={(e) => setVitalsFormData({ ...vitalsFormData, vitalsStatus: e.target.value as 'Critical' | 'Stable' })}
+                  >
+                    <option value="Stable">Stable</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </div>
+
+                <div>
+                  <Label htmlFor="manage-vitals-remarks">Remarks</Label>
+                  <Textarea
+                    id="manage-vitals-remarks"
+                    placeholder="Enter any remarks or notes..."
+                    value={vitalsFormData.vitalsRemarks}
+                    onChange={(e) => setVitalsFormData({ ...vitalsFormData, vitalsRemarks: e.target.value })}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="dialog-form-field">
+                  <div className="flex items-center gap-3">
+                    <Label htmlFor="manage-vitals-status-field" className="dialog-label-standard">Status</Label>
+                    <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
+                      <Switch
+                        id="manage-vitals-status-field"
+                        checked={vitalsFormData.status === 'Active'}
+                        onCheckedChange={(checked) => {
+                          setVitalsFormData({ ...vitalsFormData, status: checked ? 'Active' : 'Inactive' });
+                        }}
+                        className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
+                        style={{
+                          width: '2.5rem',
+                          height: '1.5rem',
+                          minWidth: '2.5rem',
+                          minHeight: '1.5rem',
+                          display: 'inline-flex',
+                          position: 'relative',
+                          backgroundColor: vitalsFormData.status === 'Active' ? '#16a34a' : '#d1d5db',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {selectedVitals.vitalsCreatedAt && (
+                  <div>
+                    <Label>Created At</Label>
+                    <Input
+                      value={formatDateTimeIST(selectedVitals.vitalsCreatedAt)}
+                      disabled
+                      className="bg-gray-50 text-gray-700"
+                    />
+                  </div>
+                )}
+
+                {selectedVitals.createdByName && (
+                  <div>
+                    <Label>Created By</Label>
+                    <Input value={selectedVitals.createdByName} disabled className="bg-gray-50 text-gray-700" />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 px-6 py-2 border-t bg-gray-50 flex-shrink-0">
+            <Button variant="outline" onClick={() => {
+              setIsManageVitalsDialogOpen(false);
+              setSelectedVitals(null);
+            }}>Cancel</Button>
+            <Button onClick={async () => {
+              if (!vitalsFormData.nurseId || !vitalsFormData.recordedDateTime) {
+                alert('Please fill in all required fields (Nurse, Recorded Date & Time).');
+                return;
+              }
+              try {
+                if (selectedAdmissionForEdit && selectedVitals) {
+                  const updateData: UpdateEmergencyAdmissionVitalsDto = {
+                    nurseId: vitalsFormData.nurseId,
+                    recordedDateTime: vitalsFormData.recordedDateTime,
+                    heartRate: vitalsFormData.heartRate,
+                    bloodPressure: vitalsFormData.bloodPressure || undefined,
+                    temperature: vitalsFormData.temperature,
+                    o2Saturation: vitalsFormData.o2Saturation,
+                    respiratoryRate: vitalsFormData.respiratoryRate,
+                    pulseRate: vitalsFormData.pulseRate,
+                    vitalsStatus: vitalsFormData.vitalsStatus,
+                    vitalsRemarks: vitalsFormData.vitalsRemarks || undefined,
+                    status: vitalsFormData.status,
+                  };
+                  await emergencyAdmissionVitalsApi.update(selectedAdmissionForEdit.emergencyAdmissionId, selectedVitals.emergencyAdmissionVitalsId, updateData);
+                  await fetchVitals(selectedAdmissionForEdit.emergencyAdmissionId);
+                  setIsManageVitalsDialogOpen(false);
+                  setSelectedVitals(null);
+                }
+              } catch (err) {
+                console.error('Error updating vitals:', err);
+                alert('Failed to update vitals record. Please try again.');
+              }
+            }}>Update Vitals Record</Button>
+          </div>
+        </DialogContent>
       </Dialog>
 
       {/* Emergency Admissions List */}

@@ -2696,6 +2696,33 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
     fetchAllocationFromDB();
   }, [isManageDialogOpen, selectedAllocation?.id]);
 
+  // Update documents when fetchedAllocation is updated (after save, fresh data from DB)
+  useEffect(() => {
+    if (fetchedAllocation && isManageDialogOpen) {
+      // Parse existing documents from otDocuments field
+      let existingDocUrls: string[] = [];
+      if (fetchedAllocation.otDocuments) {
+        try {
+          // Try parsing as JSON array first
+          const parsed = JSON.parse(fetchedAllocation.otDocuments);
+          if (Array.isArray(parsed)) {
+            existingDocUrls = parsed;
+          } else if (typeof parsed === 'string') {
+            existingDocUrls = [parsed];
+          }
+        } catch {
+          // If not JSON, treat as comma-separated string or single URL
+          if (fetchedAllocation.otDocuments.includes(',')) {
+            existingDocUrls = fetchedAllocation.otDocuments.split(',').map(url => url.trim()).filter(url => url);
+          } else {
+            existingDocUrls = [fetchedAllocation.otDocuments];
+          }
+        }
+      }
+      setEditUploadedDocumentUrls(existingDocUrls);
+    }
+  }, [fetchedAllocation, isManageDialogOpen]);
+
   // Fetch appointment details when manage dialog opens with OPD patient source
   useEffect(() => {
     const fetchAppointmentAndPatient = async () => {

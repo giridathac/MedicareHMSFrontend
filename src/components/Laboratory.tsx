@@ -1272,6 +1272,33 @@ export function Laboratory() {
     setIsEditPatientLabTestDialogOpen(true);
   };
 
+  // Update documents when editingPatientLabTest is updated (after save, fresh data from API)
+  useEffect(() => {
+    if (editingPatientLabTest && isEditPatientLabTestDialogOpen) {
+      // Parse existing documents from reportsUrl field
+      let existingDocUrls: string[] = [];
+      if (editingPatientLabTest.reportsUrl) {
+        try {
+          // Try parsing as JSON array first
+          const parsed = JSON.parse(editingPatientLabTest.reportsUrl);
+          if (Array.isArray(parsed)) {
+            existingDocUrls = parsed;
+          } else if (typeof parsed === 'string') {
+            existingDocUrls = [parsed];
+          }
+        } catch {
+          // If not JSON, treat as comma-separated string or single URL
+          if (editingPatientLabTest.reportsUrl.includes(',')) {
+            existingDocUrls = editingPatientLabTest.reportsUrl.split(',').map((url: string) => url.trim()).filter((url: string) => url);
+          } else {
+            existingDocUrls = [editingPatientLabTest.reportsUrl];
+          }
+        }
+      }
+      setEditUploadedDocumentUrls(existingDocUrls);
+    }
+  }, [editingPatientLabTest, isEditPatientLabTestDialogOpen]);
+
   // Handle saving edited PatientLabTest
   const handleSaveEditPatientLabTest = async () => {
     if (!editPatientLabTestFormData || !editingPatientLabTest) {
@@ -1333,7 +1360,7 @@ export function Laboratory() {
       }
 
       console.log('Updating PatientLabTest with payload:', payload);
-      await apiRequest<any>(`/patient-lab-tests/${patientLabTestsId}`, {
+      const updateResponse = await apiRequest<any>(`/patient-lab-tests/${patientLabTestsId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1343,6 +1370,15 @@ export function Laboratory() {
 
       // Refresh the tests list by calling the main fetch function
       await fetchPatientLabTests();
+      
+      // Update editingPatientLabTest with fresh data from API response
+      // This ensures the useEffect will update editUploadedDocumentUrls with fresh reportsUrl
+      if (updateResponse) {
+        const updatedTest = updateResponse.data || updateResponse;
+        if (updatedTest) {
+          setEditingPatientLabTest(updatedTest);
+        }
+      }
 
       // Close dialog
       setIsEditPatientLabTestDialogOpen(false);
