@@ -11,7 +11,7 @@ import { Scissors, Plus, Clock, CheckCircle, AlertCircle, Calendar as CalendarIc
 import { otRoomsApi } from '../api/otRooms';
 import { otSlotsApi } from '../api/otSlots';
 import { patientOTAllocationsApi, CreatePatientOTAllocationDto } from '../api/patientOTAllocations';
-import { formatDateToDDMMYYYY, formatDateIST, getTodayIST, formatDateDisplayIST } from '../utils/timeUtils';
+import { formatDateToDDMMYYYY, formatDateIST, getTodayIST, formatDateDisplayIST, convertToIST } from '../utils/timeUtils';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar as CalendarComponent } from './ui/calendar';
 import { Textarea } from './ui/textarea';
@@ -511,6 +511,29 @@ export function OTManagement() {
     }
   };
 
+  // Helper function to format date as dd_mm_yyyy for file suffix
+  const formatDateForFileSuffix = (): string => {
+    const now = new Date();
+    const istDate = convertToIST(now);
+    const day = String(istDate.getUTCDate()).padStart(2, '0');
+    const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+    const year = istDate.getUTCFullYear();
+    return `${day}_${month}_${year}`;
+  };
+
+  // Helper function to add date suffix to filename
+  const addDateSuffixToFileName = (fileName: string): string => {
+    const dateSuffix = formatDateForFileSuffix();
+    const lastDotIndex = fileName.lastIndexOf('.');
+    if (lastDotIndex === -1) {
+      // No extension
+      return `${fileName}_${dateSuffix}`;
+    }
+    const nameWithoutExt = fileName.substring(0, lastDotIndex);
+    const extension = fileName.substring(lastDotIndex);
+    return `${nameWithoutExt}_${dateSuffix}${extension}`;
+  };
+
   // Function to upload files (for main OTManagement component)
   const uploadFiles = async (files: File[], patientId: string): Promise<string[]> => {
     if (files.length === 0) return [];
@@ -524,8 +547,10 @@ export function OTManagement() {
     for (const file of files) {
       try {
         const formData = new FormData();
+        // Add date suffix to filename before uploading
+        const fileNameWithSuffix = addDateSuffixToFileName(file.name);
         // Append file with the exact field name 'file' that multer expects
-        formData.append('file', file, file.name);
+        formData.append('file', file, fileNameWithSuffix);
         // Append folder parameter (required by backend) - must be in FormData
         formData.append('folder', 'ot-documents');
         // Append PatientId parameter (required by backend, must be UUID) - also in query as fallback
@@ -2324,6 +2349,29 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
     }
   };
 
+  // Helper function to format date as dd_mm_yyyy for file suffix
+  const formatDateForFileSuffix = (): string => {
+    const now = new Date();
+    const istDate = convertToIST(now);
+    const day = String(istDate.getUTCDate()).padStart(2, '0');
+    const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+    const year = istDate.getUTCFullYear();
+    return `${day}_${month}_${year}`;
+  };
+
+  // Helper function to add date suffix to filename
+  const addDateSuffixToFileName = (fileName: string): string => {
+    const dateSuffix = formatDateForFileSuffix();
+    const lastDotIndex = fileName.lastIndexOf('.');
+    if (lastDotIndex === -1) {
+      // No extension
+      return `${fileName}_${dateSuffix}`;
+    }
+    const nameWithoutExt = fileName.substring(0, lastDotIndex);
+    const extension = fileName.substring(lastDotIndex);
+    return `${nameWithoutExt}_${dateSuffix}${extension}`;
+  };
+
   // Function to upload files (for AllocationList component)
   const uploadFiles = async (files: File[], patientId: string): Promise<string[]> => {
     if (files.length === 0) return [];
@@ -2337,8 +2385,10 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
     for (const file of files) {
       try {
         const formData = new FormData();
+        // Add date suffix to filename before uploading
+        const fileNameWithSuffix = addDateSuffixToFileName(file.name);
         // Append file with the exact field name 'file' that multer expects
-        formData.append('file', file, file.name);
+        formData.append('file', file, fileNameWithSuffix);
         // Append folder parameter (required by backend) - must be in FormData
         formData.append('folder', 'ot-documents');
         // Append PatientId parameter (required by backend, must be UUID) - also in query as fallback
@@ -4309,83 +4359,6 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
                       rows={2}
                       className="dialog-textarea-standard"
                     />
-                  </div>
-
-                  <div className="dialog-form-field">
-                    <Label htmlFor="edit-otDocuments" className="dialog-label-standard">OT Documents</Label>
-                    
-                    {/* Display existing uploaded documents */}
-                    {editUploadedDocumentUrls.length > 0 && (
-                      <div className="mb-3 space-y-2">
-                        <p className="text-sm text-gray-600 font-medium">Uploaded Documents:</p>
-                        <div className="space-y-1">
-                          {editUploadedDocumentUrls.map((url, index) => {
-                            const fileName = url.split('/').pop() || `Document ${index + 1}`;
-                            return (
-                              <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-2"
-                                >
-                                  <span>{fileName}</span>
-                                  <span className="text-xs text-gray-500">(opens in new tab)</span>
-                                </a>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    setEditUploadedDocumentUrls(prev => prev.filter((_, i) => i !== index));
-                                  }}
-                                  className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                                >
-                                  ×
-                                </Button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* File input for adding more documents */}
-                    <Input
-                      id="edit-otDocuments"
-                      type="file"
-                      multiple
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        setEditSelectedFiles(prev => [...prev, ...files]);
-                        // Reset the input so the same file can be selected again
-                        e.target.value = '';
-                      }}
-                      className="dialog-input-standard"
-                    />
-                    {editSelectedFiles.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        <p className="text-sm text-gray-600 font-medium">New Files to Upload:</p>
-                        {editSelectedFiles.map((file, index) => (
-                          <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-blue-50 p-2 rounded">
-                            <span>{file.name}</span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditSelectedFiles(prev => prev.filter((_, i) => i !== index));
-                              }}
-                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                            >
-                              ×
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Update"</p>
                   </div>
 
                   <div className="dialog-form-field">
