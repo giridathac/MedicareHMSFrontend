@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -11,11 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { HeartPulse, Activity, Thermometer, Wind, Droplet, Brain, Plus, Edit, CheckCircle2, XCircle, Wrench, Clock, Search } from 'lucide-react';
 import { admissionsApi } from '../api/admissions';
 import { apiRequest } from '../api/base';
+import { doctorsApi } from '../api/doctors';
 
 interface ICUPatient {
   id: number | string;
   patientICUAdmissionId?: string | number; // UUID for API calls
   patientId?: string | number | null; // Patient ID
+  patientNo?: string | null; // Patient Number
+  patientType?: string | null; // Patient Type
   doctorId?: string | number | null; // Doctor ID
   icuBedId?: string | number; // ICU Bed ID (primary key)
   bedNumber: string;
@@ -27,6 +31,7 @@ interface ICUPatient {
   condition: string;
   patientCondition?: string | null; // Patient Condition
   icuPatientStatus?: string | null; // ICU Patient Status
+  icuAdmissionStatus?: string | null; // ICU Admission Status
   severity: 'Critical' | 'Serious' | 'Stable';
   attendingDoctor: string;
   vitals: {
@@ -45,6 +50,7 @@ const mockICUPatients: ICUPatient[] = [
   ];
 
 export function ICUManagement() {
+  const navigate = useNavigate();
   const [patients, setPatients] = useState<ICUPatient[]>(mockICUPatients);
   const [selectedICUBedId, setSelectedICUBedId] = useState<string | number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,12 +70,21 @@ export function ICUManagement() {
   const [addICUAdmissionError, setAddICUAdmissionError] = useState<string | null>(null);
   const [patientOptions, setPatientOptions] = useState<any[]>([]);
   const [icuBedOptions, setIcuBedOptions] = useState<any[]>([]);
+  const [doctorOptions, setDoctorOptions] = useState<any[]>([]);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [icuBedSearchTerm, setIcuBedSearchTerm] = useState('');
+  const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
+  const [availableAppointments, setAvailableAppointments] = useState<any[]>([]);
+  const [availableEmergencyBedSlots, setAvailableEmergencyBedSlots] = useState<any[]>([]);
+  const [availableIPDAdmissions, setAvailableIPDAdmissions] = useState<any[]>([]);
   const [vitalsData, setVitalsData] = useState<any | null>(null);
   const [loadingVitals, setLoadingVitals] = useState(false);
   const [addICUAdmissionForm, setAddICUAdmissionForm] = useState<{
     patientId: string;
+    patientType: string;
+    patientAppointmentId: string;
+    emergencyAdmissionId: string;
+    roomAdmissionId: string;
     icuId: string;
     icuBedId: string;
     icuBedNo: string;
@@ -81,8 +96,15 @@ export function ICUManagement() {
     patientCondition: string;
     onVentilator: string;
     icuAdmissionStatus: string;
+    doctorId: string;
+    admittedBy: string;
+    admittedByDoctorId: string;
   }>({
     patientId: '',
+    patientType: '',
+    patientAppointmentId: '',
+    emergencyAdmissionId: '',
+    roomAdmissionId: '',
     icuId: '',
     icuBedId: '',
     icuBedNo: '',
@@ -94,6 +116,9 @@ export function ICUManagement() {
     patientCondition: '',
     onVentilator: 'No',
     icuAdmissionStatus: 'Occupied',
+    doctorId: '',
+    admittedBy: '',
+    admittedByDoctorId: '',
   });
 
   // Load ICU patient admissions from API
@@ -117,12 +142,66 @@ export function ICUManagement() {
         
         // Map API data to ICUPatient interface
         const mappedPatients: ICUPatient[] = icuAdmissions.map((admission: any, index: number) => {
-          // Helper function to extract value with multiple field name variations
+          // Helper function to extract value with multiple field name variations (including nested objects)
           const extractField = (data: any, fieldVariations: string[], defaultValue: any = '') => {
+            if (!data) return defaultValue;
+            
             for (const field of fieldVariations) {
-              const value = data?.[field];
+              // Check direct field
+              let value = data?.[field];
               if (value !== undefined && value !== null && value !== '') {
                 return value;
+              }
+              
+              // Check nested paths (e.g., Doctor.DoctorName, Doctor.name)
+              if (field.includes('.')) {
+                const parts = field.split('.');
+                let nestedValue = data;
+                for (const part of parts) {
+                  nestedValue = nestedValue?.[part];
+                  if (nestedValue === undefined || nestedValue === null) break;
+                }
+                if (nestedValue !== undefined && nestedValue !== null && nestedValue !== '') {
+                  return nestedValue;
+                }
+              }
+              
+              // Check nested objects (Doctor, Patient, PatientICUAdmission, etc.)
+              if (data?.Doctor?.[field]) {
+                value = data.Doctor[field];
+                if (value !== undefined && value !== null && value !== '') {
+                  return value;
+                }
+              }
+              if (data?.doctor?.[field]) {
+                value = data.doctor[field];
+                if (value !== undefined && value !== null && value !== '') {
+                  return value;
+                }
+              }
+              if (data?.AttendingDoctor?.[field]) {
+                value = data.AttendingDoctor[field];
+                if (value !== undefined && value !== null && value !== '') {
+                  return value;
+                }
+              }
+              if (data?.attendingDoctor?.[field]) {
+                value = data.attendingDoctor[field];
+                if (value !== undefined && value !== null && value !== '') {
+                  return value;
+                }
+              }
+              if (data?.PatientICUAdmission?.[field]) {
+                value = data.PatientICUAdmission[field];
+                if (value !== undefined && value !== null && value !== '') {
+                  return value;
+                }
+              }
+              if (data?.patientICUAdmission?.[field]) {
+                value = data.patientICUAdmission[field];
+                if (value !== undefined && value !== null && value !== '') {
+                  return value;
+                }
               }
             }
             return defaultValue;
@@ -169,6 +248,40 @@ export function ICUManagement() {
             'diagnosis', 'Diagnosis', 'diagnosisDescription', 'DiagnosisDescription'
           ], 'Not Specified');
 
+          // Extract ICU Patient Status
+          let icuPatientStatus = extractField(admission, [
+            'icuPatientStatus', 'ICUPatientStatus', 'icu_patient_status', 'ICU_Patient_Status',
+            'patientStatus', 'PatientStatus', 'patient_status', 'Patient_Status'
+          ], null);
+          
+          // If not found, try to extract from nested structures
+          if (!icuPatientStatus) {
+            icuPatientStatus = extractField(admission, [
+              'PatientICUAdmission.icuPatientStatus', 'PatientICUAdmission.ICUPatientStatus',
+              'admission.icuPatientStatus', 'admission.ICUPatientStatus'
+            ], null);
+          }
+          
+          icuPatientStatus = icuPatientStatus || 'Stable';
+          console.log(`Patient ${patientName} - ICU Patient Status extracted:`, icuPatientStatus);
+
+          // Extract ICU Admission Status
+          let icuAdmissionStatus = extractField(admission, [
+            'icuAdmissionStatus', 'ICUAdmissionStatus', 'icu_admission_status', 'ICU_Admission_Status',
+            'admissionStatus', 'AdmissionStatus', 'admission_status', 'Admission_Status'
+          ], null);
+          
+          // If not found, try to extract from nested structures
+          if (!icuAdmissionStatus) {
+            icuAdmissionStatus = extractField(admission, [
+              'PatientICUAdmission.icuAdmissionStatus', 'PatientICUAdmission.ICUAdmissionStatus',
+              'admission.icuAdmissionStatus', 'admission.ICUAdmissionStatus'
+            ], null);
+          }
+          
+          icuAdmissionStatus = icuAdmissionStatus || 'Occupied';
+          console.log(`Patient ${patientName} - ICU Admission Status extracted:`, icuAdmissionStatus);
+
           // Extract severity (normalize to Critical, Serious, or Stable)
           const severityRaw = extractField(admission, [
             'severity', 'Severity', 'patientSeverity', 'PatientSeverity',
@@ -177,11 +290,42 @@ export function ICUManagement() {
           const severity = (severityRaw === 'Critical' || severityRaw === 'critical' || severityRaw === 'CRITICAL') ? 'Critical' :
                           (severityRaw === 'Serious' || severityRaw === 'serious' || severityRaw === 'SERIOUS') ? 'Serious' : 'Stable';
 
-          // Extract attending doctor
-          const attendingDoctor = extractField(admission, [
+          // Extract attending doctor with enhanced nested object support
+          let attendingDoctor = extractField(admission, [
             'attendingDoctor', 'AttendingDoctor', 'attending_doctor', 'Attending_Doctor',
-            'doctor', 'Doctor', 'doctorName', 'DoctorName', 'admittedBy', 'AdmittedBy'
-          ], 'Not Assigned');
+            'doctor', 'Doctor', 'doctorName', 'DoctorName', 'admittedBy', 'AdmittedBy',
+            'Doctor.DoctorName', 'Doctor.name', 'Doctor.Name', 'Doctor.UserName',
+            'doctor.doctorName', 'doctor.name', 'doctor.Name', 'doctor.userName',
+            'AttendingDoctor.DoctorName', 'AttendingDoctor.name', 'AttendingDoctor.Name',
+            'attendingDoctor.doctorName', 'attendingDoctor.name', 'attendingDoctor.Name',
+            'PatientICUAdmission.AttendingDoctor', 'PatientICUAdmission.attendingDoctor',
+            'PatientICUAdmission.Doctor', 'PatientICUAdmission.doctor',
+            'PatientICUAdmission.AttendingDoctor.DoctorName', 'PatientICUAdmission.AttendingDoctor.name',
+            'PatientICUAdmission.Doctor.DoctorName', 'PatientICUAdmission.Doctor.name'
+          ], null);
+          
+          // If we have doctorId but no name, try to look it up from doctorOptions
+          if (!attendingDoctor) {
+            const doctorId = extractField(admission, [
+              'doctorId', 'DoctorId', 'doctor_id', 'Doctor_ID',
+              'attendingDoctorId', 'AttendingDoctorId', 'attending_doctor_id', 'Attending_Doctor_ID',
+              'PatientICUAdmission.doctorId', 'PatientICUAdmission.DoctorId',
+              'PatientICUAdmission.attendingDoctorId', 'PatientICUAdmission.AttendingDoctorId'
+            ], null);
+            
+            if (doctorId && doctorOptions.length > 0) {
+              const doctor = doctorOptions.find((d: any) => {
+                const dId = String((d as any).id || (d as any).Id || (d as any).UserId || '');
+                return dId === String(doctorId);
+              });
+              if (doctor) {
+                attendingDoctor = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || null;
+              }
+            }
+          }
+          
+          attendingDoctor = attendingDoctor || 'Not Assigned';
+          console.log(`Patient ${patientName} - Attending Doctor extracted:`, attendingDoctor);
 
           // Extract vitals
           const vitals = {
@@ -223,7 +367,10 @@ export function ICUManagement() {
           const ventilatorSupportRaw = extractField(admission, [
             'ventilatorSupport', 'VentilatorSupport', 'ventilator_support', 'Ventilator_Support',
             'onVentilator', 'OnVentilator', 'isVentilatorAttached', 'IsVentilatorAttached',
-            'ventilator', 'Ventilator'
+            'ventilator', 'Ventilator',
+            'PatientICUAdmission.ventilatorSupport', 'PatientICUAdmission.VentilatorSupport',
+            'PatientICUAdmission.onVentilator', 'PatientICUAdmission.OnVentilator',
+            'PatientICUAdmission.ventilator', 'PatientICUAdmission.Ventilator'
           ], false);
           const ventilatorSupport = typeof ventilatorSupportRaw === 'boolean' 
             ? ventilatorSupportRaw 
@@ -249,9 +396,24 @@ export function ICUManagement() {
           
           console.log('Mapped patient ICU Admission ID:', patientICUAdmissionId, 'Type:', typeof patientICUAdmissionId, 'for patient:', extractField(admission, ['patientName', 'PatientName', 'name', 'Name'], 'Unknown'));
 
+          // Extract PatientNo
+          const patientNo = extractField(admission, [
+            'patientNo', 'PatientNo', 'patient_no', 'Patient_No',
+            'patientNumber', 'PatientNumber', 'patient_number', 'Patient_Number'
+          ], null);
+
+          // Extract PatientType
+          const patientType = extractField(admission, [
+            'patientType', 'PatientType', 'patient_type', 'Patient_Type',
+            'PatientICUAdmission.patientType', 'PatientICUAdmission.PatientType',
+            'PatientICUAdmission.patient_type', 'PatientICUAdmission.Patient_Type'
+          ], null);
+
           return {
             id: patientICUAdmissionId || admission.id || admission.Id || admission.roomAdmissionId || admission.RoomAdmissionId || (index + 1),
             patientICUAdmissionId: patientICUAdmissionId, // Store the UUID separately
+            patientNo: patientNo,
+            patientType: patientType,
             bedNumber,
             patientName,
             age,
@@ -259,6 +421,8 @@ export function ICUManagement() {
             admissionDate,
             admissionTime,
             condition,
+            icuPatientStatus: icuPatientStatus,
+            icuAdmissionStatus: icuAdmissionStatus,
             severity,
             attendingDoctor,
             vitals,
@@ -278,6 +442,17 @@ export function ICUManagement() {
       }
     };
 
+    // Load doctors on mount for doctor name lookup
+    const loadDoctors = async () => {
+      try {
+        const doctorsList = await doctorsApi.getAll();
+        setDoctorOptions(doctorsList || []);
+      } catch (error) {
+        console.error('Error loading doctors:', error);
+      }
+    };
+    
+    loadDoctors();
     loadICUPatients();
   }, []);
 
@@ -468,17 +643,191 @@ export function ICUManagement() {
     }
   };
 
+  // Fetch patient appointments for a specific patient
+  const fetchPatientAppointments = async (patientId: string) => {
+    if (!patientId) {
+      setAvailableAppointments([]);
+      return;
+    }
+    
+    try {
+      console.log('Fetching appointments for patient:', patientId);
+      const response = await apiRequest<any>(`/patient-appointments/patient/${patientId}`);
+      console.log('Patient appointments API response:', response);
+      
+      // Handle different response structures
+      let appointments: any[] = [];
+      
+      if (Array.isArray(response)) {
+        appointments = response;
+      } else if (response?.data && Array.isArray(response.data)) {
+        appointments = response.data;
+      } else if (response?.appointments && Array.isArray(response.appointments)) {
+        appointments = response.appointments;
+      } else if (response?.patientAppointments && Array.isArray(response.patientAppointments)) {
+        appointments = response.patientAppointments;
+      }
+      
+      console.log('Mapped appointments:', appointments);
+      setAvailableAppointments(appointments);
+    } catch (err) {
+      console.error('Error fetching patient appointments:', err);
+      setAvailableAppointments([]);
+    }
+  };
+
+  // Fetch emergency bed slots for a specific patient
+  const fetchPatientEmergencyBedSlots = async (patientId: string) => {
+    if (!patientId) {
+      setAvailableEmergencyBedSlots([]);
+      return;
+    }
+    
+    try {
+      console.log('Fetching emergency bed slots for patient:', patientId);
+      const response = await apiRequest<any>(`/emergency-admissions/patient/${patientId}`);
+      console.log('Emergency bed slots API response:', response);
+      
+      // Handle different response structures
+      let emergencyBedSlots: any[] = [];
+      
+      if (Array.isArray(response)) {
+        emergencyBedSlots = response;
+      } else if (response?.data && Array.isArray(response.data)) {
+        emergencyBedSlots = response.data;
+      } else if (response?.admissions && Array.isArray(response.admissions)) {
+        emergencyBedSlots = response.admissions;
+      } else if (response?.emergencyAdmissions && Array.isArray(response.emergencyAdmissions)) {
+        emergencyBedSlots = response.emergencyAdmissions;
+      } else if (response?.emergencyBedSlots && Array.isArray(response.emergencyBedSlots)) {
+        emergencyBedSlots = response.emergencyBedSlots;
+      }
+      
+      console.log('Mapped emergency bed slots:', emergencyBedSlots);
+      setAvailableEmergencyBedSlots(emergencyBedSlots);
+    } catch (err) {
+      console.error('Error fetching emergency bed slots:', err);
+      setAvailableEmergencyBedSlots([]);
+    }
+  };
+
+  // Fetch IPD admissions for a specific patient
+  const fetchPatientIPDAdmissions = async (patientId: string) => {
+    if (!patientId) {
+      setAvailableIPDAdmissions([]);
+      return;
+    }
+    
+    try {
+      console.log('Fetching IPD admissions for patient:', patientId);
+      const response = await apiRequest<any>(`/room-admissions/patient/${patientId}`);
+      console.log('IPD admissions API response:', response);
+      
+      // Handle different response structures
+      let ipdAdmissions: any[] = [];
+      
+      if (Array.isArray(response)) {
+        ipdAdmissions = response;
+      } else if (response?.data && Array.isArray(response.data)) {
+        ipdAdmissions = response.data;
+      } else if (response?.admissions && Array.isArray(response.admissions)) {
+        ipdAdmissions = response.admissions;
+      } else if (response?.roomAdmissions && Array.isArray(response.roomAdmissions)) {
+        ipdAdmissions = response.roomAdmissions;
+      }
+      
+      console.log('Mapped IPD admissions:', ipdAdmissions);
+      setAvailableIPDAdmissions(ipdAdmissions);
+    } catch (err) {
+      console.error('Error fetching IPD admissions:', err);
+      setAvailableIPDAdmissions([]);
+    }
+  };
+
+  // Handle Patient Type change - fetch conditional data
+  const handlePatientTypeChange = async (patientType: string) => {
+    setAddICUAdmissionForm({
+      ...addICUAdmissionForm,
+      patientType: patientType,
+      patientAppointmentId: '',
+      emergencyAdmissionId: '',
+      roomAdmissionId: ''
+    });
+
+    // Clear conditional data if no patient type selected
+    if (!patientType) {
+      setAvailableAppointments([]);
+      setAvailableEmergencyBedSlots([]);
+      setAvailableIPDAdmissions([]);
+      return;
+    }
+
+    try {
+      if (patientType === 'OPD') {
+        // If patient is already selected, fetch their appointments
+        if (addICUAdmissionForm.patientId) {
+          await fetchPatientAppointments(addICUAdmissionForm.patientId);
+        } else {
+          setAvailableAppointments([]);
+        }
+        setAvailableEmergencyBedSlots([]);
+        setAvailableIPDAdmissions([]);
+      } else if (patientType === 'Emergency') {
+        // If patient is already selected, fetch their emergency admissions
+        if (addICUAdmissionForm.patientId) {
+          await fetchPatientEmergencyBedSlots(addICUAdmissionForm.patientId);
+        } else {
+          setAvailableEmergencyBedSlots([]);
+        }
+        setAvailableAppointments([]);
+        setAvailableIPDAdmissions([]);
+      } else if (patientType === 'IPD') {
+        // If patient is already selected, fetch their IPD admissions
+        if (addICUAdmissionForm.patientId) {
+          await fetchPatientIPDAdmissions(addICUAdmissionForm.patientId);
+        } else {
+          setAvailableIPDAdmissions([]);
+        }
+        setAvailableAppointments([]);
+        setAvailableEmergencyBedSlots([]);
+      } else if (patientType === 'Direct') {
+        // Direct type doesn't need conditional fields, clear all
+        setAvailableAppointments([]);
+        setAvailableEmergencyBedSlots([]);
+        setAvailableIPDAdmissions([]);
+      }
+    } catch (err) {
+      console.error(`Error fetching ${patientType} data:`, err);
+    }
+  };
+
   const openAddICUAdmission = async () => {
     try {
       setShowAddICUAdmission(true);
       setAddICUAdmissionError(null);
       setPatientSearchTerm(''); // Reset search term when opening dialog
       setIcuBedSearchTerm(''); // Reset ICU bed search term when opening dialog
+      setDoctorSearchTerm(''); // Reset doctor search term when opening dialog
       // Preload dropdowns
       const patientsList = await admissionsApi.getPatientRegistrations();
       setPatientOptions(patientsList || []);
       // Use existing ICU bed layout as options
       setIcuBedOptions(icuBedLayout || []);
+      // Load doctors
+      const doctorsList = await doctorsApi.getAll();
+      setDoctorOptions(doctorsList || []);
+      // Reset patient type related fields
+      setAddICUAdmissionForm(prev => ({
+        ...prev,
+        patientType: '',
+        patientAppointmentId: '',
+        emergencyAdmissionId: '',
+        doctorId: '',
+        admittedBy: '',
+        admittedByDoctorId: ''
+      }));
+      setAvailableAppointments([]);
+      setAvailableEmergencyBedSlots([]);
     } catch (error: any) {
       console.error('Error loading data for new ICU admission:', error);
       setAddICUAdmissionError(error?.message || 'Failed to load data');
@@ -570,8 +919,35 @@ export function ICUManagement() {
         }
       }
 
-      const payload = {
+      // Validate patient type and conditional fields
+      if (!addICUAdmissionForm.patientType) {
+        throw new Error('Patient Type is required');
+      }
+      
+      if (addICUAdmissionForm.patientType === 'OPD' && !addICUAdmissionForm.patientAppointmentId) {
+        throw new Error('Patient Appointment ID is required for OPD patients');
+      }
+      
+      if (addICUAdmissionForm.patientType === 'IPD' && !addICUAdmissionForm.roomAdmissionId) {
+        throw new Error('Patient IPD Admission ID is required for IPD patients');
+      }
+      
+      if (addICUAdmissionForm.patientType === 'Emergency' && !addICUAdmissionForm.emergencyAdmissionId) {
+        throw new Error('Emergency Admission Bed No is required for Emergency patients');
+      }
+
+      if (!addICUAdmissionForm.admittedByDoctorId && !addICUAdmissionForm.doctorId) {
+        throw new Error('Please select a doctor');
+      }
+
+      const doctorId = addICUAdmissionForm.doctorId || addICUAdmissionForm.admittedByDoctorId || '';
+      if (!doctorId) {
+        throw new Error('Doctor ID is required. Please select a doctor.');
+      }
+
+      const payload: any = {
         PatientId: String(patientId).trim(), // Ensure it's a string UUID and trim whitespace
+        PatientType: addICUAdmissionForm.patientType || 'Direct',
         ICUId: addICUAdmissionForm.icuId,
         ICUBedId: addICUAdmissionForm.icuBedId,
         ICUBedNo: addICUAdmissionForm.icuBedNo,
@@ -583,6 +959,22 @@ export function ICUManagement() {
         PatientCondition: addICUAdmissionForm.patientCondition,
         OnVentilator: addICUAdmissionForm.onVentilator,
         ICUAdmissionStatus: addICUAdmissionForm.icuAdmissionStatus,
+        AttendingDoctorId: String(doctorId),
+        DoctorId: String(doctorId),
+        AdmittedBy: addICUAdmissionForm.admittedBy || '',
+        
+        // Add conditional fields based on PatientType
+        ...(addICUAdmissionForm.patientType === 'OPD' && addICUAdmissionForm.patientAppointmentId ? {
+          AppointmentId: addICUAdmissionForm.patientAppointmentId,
+          PatientAppointmentId: addICUAdmissionForm.patientAppointmentId
+        } : {}),
+        ...(addICUAdmissionForm.patientType === 'IPD' && addICUAdmissionForm.roomAdmissionId ? {
+          RoomAdmissionId: addICUAdmissionForm.roomAdmissionId
+        } : {}),
+        ...(addICUAdmissionForm.patientType === 'Emergency' && addICUAdmissionForm.emergencyAdmissionId ? {
+          EmergencyAdmissionId: addICUAdmissionForm.emergencyAdmissionId,
+          EmergencyBedSlotId: addICUAdmissionForm.emergencyAdmissionId
+        } : {}),
       };
 
       console.log('Saving ICU admission with payload:', payload);
@@ -592,6 +984,33 @@ export function ICUManagement() {
       });
       console.log('ICU admission created successfully:', response);
       setShowAddICUAdmission(false);
+      // Reset form
+      setAddICUAdmissionForm({
+        patientId: '',
+        patientType: '',
+        patientAppointmentId: '',
+        emergencyAdmissionId: '',
+        roomAdmissionId: '',
+        icuId: '',
+        icuBedId: '',
+        icuBedNo: '',
+        icuPatientStatus: '',
+        icuAllocationFromDate: '',
+        icuAllocationToDate: '',
+        diagnosis: '',
+        treatmentDetails: '',
+        patientCondition: '',
+        onVentilator: 'No',
+        icuAdmissionStatus: 'Occupied',
+        doctorId: '',
+        admittedBy: '',
+        admittedByDoctorId: '',
+      });
+      setAvailableAppointments([]);
+      setAvailableEmergencyBedSlots([]);
+      setDoctorSearchTerm('');
+      setPatientSearchTerm('');
+      setIcuBedSearchTerm('');
       // Optionally trigger a manual refresh by reloading the page or re-fetching data
     } catch (error: any) {
       console.error('Error saving ICU admission:', error);
@@ -900,10 +1319,64 @@ export function ICUManagement() {
     }
 
     const extractField = (data: any, fieldVariations: string[], defaultValue: any = '') => {
+      if (!data) return defaultValue;
+      
       for (const field of fieldVariations) {
-        const value = data?.[field];
+        // Check direct field
+        let value = data?.[field];
         if (value !== undefined && value !== null && value !== '') {
           return value;
+        }
+        
+        // Check nested paths (e.g., Doctor.DoctorName, Doctor.name)
+        if (field.includes('.')) {
+          const parts = field.split('.');
+          let nestedValue = data;
+          for (const part of parts) {
+            nestedValue = nestedValue?.[part];
+            if (nestedValue === undefined || nestedValue === null) break;
+          }
+          if (nestedValue !== undefined && nestedValue !== null && nestedValue !== '') {
+            return nestedValue;
+          }
+        }
+        
+        // Check nested objects (Doctor, Patient, etc.)
+        if (data?.Doctor?.[field]) {
+          value = data.Doctor[field];
+          if (value !== undefined && value !== null && value !== '') {
+            return value;
+          }
+        }
+        if (data?.doctor?.[field]) {
+          value = data.doctor[field];
+          if (value !== undefined && value !== null && value !== '') {
+            return value;
+          }
+        }
+        if (data?.AttendingDoctor?.[field]) {
+          value = data.AttendingDoctor[field];
+          if (value !== undefined && value !== null && value !== '') {
+            return value;
+          }
+        }
+        if (data?.attendingDoctor?.[field]) {
+          value = data.attendingDoctor[field];
+          if (value !== undefined && value !== null && value !== '') {
+            return value;
+          }
+        }
+        if (data?.Patient?.[field]) {
+          value = data.Patient[field];
+          if (value !== undefined && value !== null && value !== '') {
+            return value;
+          }
+        }
+        if (data?.patient?.[field]) {
+          value = data.patient[field];
+          if (value !== undefined && value !== null && value !== '') {
+            return value;
+          }
         }
       }
       return defaultValue;
@@ -1001,6 +1474,15 @@ export function ICUManagement() {
       'patientId', 'PatientId', 'patient_id', 'Patient_ID'
     ], null);
 
+    // Extract PatientNo
+    const patientNo = extractField(patientData, [
+      'patientNo', 'PatientNo', 'patient_no', 'Patient_No',
+      'patientNumber', 'PatientNumber', 'patient_number', 'Patient_Number'
+    ], null) || extractField(bedData, [
+      'patientNo', 'PatientNo', 'patient_no', 'Patient_No',
+      'patientNumber', 'PatientNumber', 'patient_number', 'Patient_Number'
+    ], null);
+
     // Extract DoctorId
     const doctorId = extractField(bedData, [
       'doctorId', 'DoctorId', 'doctor_id', 'Doctor_ID',
@@ -1017,10 +1499,34 @@ export function ICUManagement() {
       'patientCondition', 'PatientCondition', 'patient_condition', 'Patient_Condition'
     ], null);
 
+    // Extract ICUAdmissionStatus (Occupied/Discharged)
+    let icuAdmissionStatus = extractField(bedData, [
+      'icuAdmissionStatus', 'ICUAdmissionStatus', 'icu_admission_status', 'ICU_Admission_Status',
+      'admissionStatus', 'AdmissionStatus', 'admission_status', 'Admission_Status'
+    ], null);
+    
+    if (!icuAdmissionStatus && patientData) {
+      icuAdmissionStatus = extractField(patientData, [
+        'icuAdmissionStatus', 'ICUAdmissionStatus', 'icu_admission_status', 'ICU_Admission_Status',
+        'admissionStatus', 'AdmissionStatus', 'admission_status', 'Admission_Status'
+      ], null);
+    }
+    
+    // If still not found, check nested structures
+    if (!icuAdmissionStatus && patientData) {
+      icuAdmissionStatus = extractField(patientData, [
+        'PatientICUAdmission.icuAdmissionStatus', 'PatientICUAdmission.ICUAdmissionStatus',
+        'admission.icuAdmissionStatus', 'admission.ICUAdmissionStatus'
+      ], null);
+    }
+    
+    icuAdmissionStatus = icuAdmissionStatus || 'Occupied';
+
     return {
       id: patientICUAdmissionId || extractField(patientData, ['id', 'Id', 'patientId', 'PatientId'], 0),
       patientICUAdmissionId: patientICUAdmissionId,
       patientId: patientId,
+      patientNo: patientNo,
       doctorId: doctorId,
       icuBedId: icuBedId,
       bedNumber: bedNumber,
@@ -1053,11 +1559,42 @@ export function ICUManagement() {
       ], 'Not Specified'),
       patientCondition: patientCondition || 'Not Specified',
       icuPatientStatus: icuPatientStatusRaw || 'Stable',
+      icuAdmissionStatus: icuAdmissionStatus,
       severity: severity,
-      attendingDoctor: extractField(patientData, [
-        'attendingDoctor', 'AttendingDoctor', 'attending_doctor', 'Attending_Doctor',
-        'doctor', 'Doctor', 'doctorName', 'DoctorName', 'admittedBy', 'AdmittedBy'
-      ], 'Not Assigned'),
+      attendingDoctor: (() => {
+        // Try to extract doctor name from various locations
+        let doctorName = extractField(patientData, [
+          'attendingDoctor', 'AttendingDoctor', 'attending_doctor', 'Attending_Doctor',
+          'doctor', 'Doctor', 'doctorName', 'DoctorName', 'admittedBy', 'AdmittedBy',
+          'Doctor.DoctorName', 'Doctor.name', 'Doctor.Name', 'Doctor.UserName',
+          'doctor.doctorName', 'doctor.name', 'doctor.Name', 'doctor.userName',
+          'AttendingDoctor.DoctorName', 'AttendingDoctor.name', 'AttendingDoctor.Name',
+          'attendingDoctor.doctorName', 'attendingDoctor.name', 'attendingDoctor.Name'
+        ], null);
+        
+        // If not found in patientData, try bedData
+        if (!doctorName) {
+          doctorName = extractField(bedData, [
+            'attendingDoctor', 'AttendingDoctor', 'attending_doctor', 'Attending_Doctor',
+            'doctor', 'Doctor', 'doctorName', 'DoctorName', 'admittedBy', 'AdmittedBy',
+            'Doctor.DoctorName', 'Doctor.name', 'Doctor.Name', 'Doctor.UserName',
+            'doctor.doctorName', 'doctor.name', 'doctor.Name', 'doctor.userName'
+          ], null);
+        }
+        
+        // If we have doctorId but no name, try to look it up from doctorOptions
+        if (!doctorName && doctorId && doctorOptions.length > 0) {
+          const doctor = doctorOptions.find((d: any) => {
+            const dId = String((d as any).id || (d as any).Id || (d as any).UserId || '');
+            return dId === String(doctorId);
+          });
+          if (doctor) {
+            doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || null;
+          }
+        }
+        
+        return doctorName || 'Not Assigned';
+      })(),
       vitals: {
         heartRate: Number(extractField(patientData, [
           'heartRate', 'HeartRate', 'heart_rate', 'Heart_Rate',
@@ -1091,11 +1628,9 @@ export function ICUManagement() {
       ], 'Not Specified'),
       ventilatorSupport: ventilatorSupport,
     };
-    
-    return patient;
   };
 
-  // Function to fetch latest vitals for an ICU admission
+  // Function to fetch ICU visit vitals for an ICU admission
   const fetchLatestVitals = async (icuAdmissionId: string | number | null | undefined) => {
     if (!icuAdmissionId) {
       setVitalsData(null);
@@ -1104,22 +1639,35 @@ export function ICUManagement() {
 
     try {
       setLoadingVitals(true);
-      console.log('Fetching latest vitals for ICU admission:', icuAdmissionId);
-      const response = await apiRequest<any>(`/icu-visit-vitals/icu-admission/${icuAdmissionId}/latest`);
-      console.log('Latest vitals API response:', response);
+      console.log('Fetching ICU visit vitals for ICU admission:', icuAdmissionId);
+      const response = await apiRequest<any>(`/icu-visit-vitals/icu-admission/${icuAdmissionId}`);
+      console.log('%%%%%%%%%%%%%%%%%%%%%ICU visit vitals API response:', response);
       
-      // Handle different response structures: { data: {...} } or direct object
-      const vitals = response?.data || response || null;
+      // Handle different response structures: { data: [...] } or direct array or single object
+      let vitals = null;
+      
+      if (Array.isArray(response)) {
+        // If response is an array, get the latest/most recent vitals (last item or first item)
+        vitals = response.length > 0 ? response[response.length - 1] : null;
+      } else if (response?.data) {
+        if (Array.isArray(response.data)) {
+          vitals = response.data.length > 0 ? response.data[response.data.length - 1] : null;
+        } else {
+          vitals = response.data;
+        }
+      } else if (response) {
+        vitals = response;
+      }
       
       if (vitals) {
-        console.log('Latest vitals data extracted:', vitals);
+        console.log('ICU visit vitals data extracted:', vitals);
         setVitalsData(vitals);
       } else {
         console.warn('No vitals data found in API response');
         setVitalsData(null);
       }
     } catch (error) {
-      console.error('Error fetching latest vitals:', error);
+      console.error('Error fetching ICU visit vitals:', error);
       setVitalsData(null);
     } finally {
       setLoadingVitals(false);
@@ -1129,7 +1677,7 @@ export function ICUManagement() {
   // Use API bed details if available, otherwise fall back to bed layout data
   const selectedPatient = selectedBedDetails 
     ? mapBedDetailsToPatient(selectedBedDetails)
-    : icuBeds.find(bed => bed.icuBedId === selectedICUBedId)?.patient;
+    : icuBeds.find((bed: any) => (bed.icuBedId || bed.id) === selectedICUBedId)?.patient;
 
   // Fetch vitals when selectedPatient changes
   useEffect(() => {
@@ -1224,9 +1772,15 @@ export function ICUManagement() {
                             return (
                               <tr
                                 key={patientId}
-                                onClick={() => {
+                                onClick={async () => {
                                   setAddICUAdmissionForm({ ...addICUAdmissionForm, patientId });
                                   setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                                  // If patient type is already selected, fetch conditional data
+                                  if (addICUAdmissionForm.patientType === 'OPD') {
+                                    await fetchPatientAppointments(patientId);
+                                  } else if (addICUAdmissionForm.patientType === 'Emergency') {
+                                    await fetchPatientEmergencyBedSlots(patientId);
+                                  }
                                 }}
                                 className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
                               >
@@ -1264,6 +1818,135 @@ export function ICUManagement() {
                   </div>
                 )}
               </div>
+              {/* Patient Type */}
+              <div>
+                <Label htmlFor="patientType">Patient Type *</Label>
+                <select
+                  id="patientType"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                  value={addICUAdmissionForm.patientType}
+                  onChange={(e) => handlePatientTypeChange(e.target.value)}
+                  required
+                >
+                  <option value="">Select Patient Type</option>
+                  <option value="OPD">OPD</option>
+                  <option value="IPD">IPD</option>
+                  <option value="Emergency">Emergency</option>
+                  <option value="Direct">Direct</option>
+                 
+                </select>
+              </div>
+
+              {/* Conditional Fields based on PatientType */}
+              {addICUAdmissionForm.patientType === 'OPD' && (
+                <div>
+                  <Label htmlFor="patientAppointmentId">Patient Appointment ID *</Label>
+                  <select
+                    id="patientAppointmentId"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                    value={addICUAdmissionForm.patientAppointmentId}
+                    onChange={(e) => setAddICUAdmissionForm({ ...addICUAdmissionForm, patientAppointmentId: e.target.value })}
+                    required
+                  >
+                    <option value="">Select Appointment</option>
+                    {availableAppointments.map((appointment: any) => {
+                      const appointmentId = appointment.id || appointment.patientAppointmentId || appointment.PatientAppointmentId || '';
+                      const tokenNo = appointment.tokenNo || appointment.TokenNo || '';
+                      const appointmentDate = appointment.appointmentDate || appointment.AppointmentDate || '';
+                      let formattedDate = '';
+                      if (appointmentDate) {
+                        try {
+                          if (typeof appointmentDate === 'string') {
+                            formattedDate = appointmentDate.split('T')[0];
+                          } else {
+                            formattedDate = new Date(appointmentDate).toISOString().split('T')[0];
+                          }
+                        } catch {
+                          formattedDate = String(appointmentDate).split('T')[0] || 'N/A';
+                        }
+                      } else {
+                        formattedDate = 'N/A';
+                      }
+                      return (
+                        <option key={appointmentId} value={appointmentId}>
+                          {tokenNo ? `Token: ${tokenNo} - ${formattedDate}` : `Appointment ID: ${appointmentId} - ${formattedDate}`}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+
+              {addICUAdmissionForm.patientType === 'IPD' && (
+                <div>
+                  <Label htmlFor="roomAdmissionId">Patient IPD Admission ID *</Label>
+                  <select
+                    id="roomAdmissionId"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                    value={addICUAdmissionForm.roomAdmissionId}
+                    onChange={(e) => setAddICUAdmissionForm({ ...addICUAdmissionForm, roomAdmissionId: e.target.value })}
+                    required
+                  >
+                    <option value="">Select Patient IPD Admission ID</option>
+                    {availableIPDAdmissions.map((admission: any) => {
+                      // Extract RoomAdmissionId (prioritize this field)
+                      const roomAdmissionId = admission.roomAdmissionId || admission.RoomAdmissionId || admission.admissionId || admission.id || '';
+                      const bedNumber = admission.bedNumber || admission.BedNumber || admission.bedNo || admission.BedNo || '';
+                      const roomType = admission.roomType || admission.RoomType || '';
+                      const admissionDate = admission.roomAllocationDate || admission.RoomAllocationDate || admission.admissionDate || admission.AdmissionDate || '';
+                      let formattedDate = '';
+                      if (admissionDate) {
+                        try {
+                          if (typeof admissionDate === 'string') {
+                            formattedDate = admissionDate.split('T')[0];
+                          } else {
+                            formattedDate = new Date(admissionDate).toISOString().split('T')[0];
+                          }
+                        } catch {
+                          formattedDate = String(admissionDate).split('T')[0] || 'N/A';
+                        }
+                      } else {
+                        formattedDate = 'N/A';
+                      }
+                      const status = admission.admissionStatus || admission.AdmissionStatus || admission.status || admission.Status || 'Active';
+                      return (
+                        <option key={roomAdmissionId} value={roomAdmissionId}>
+                          {bedNumber ? `Bed: ${bedNumber} - ${roomType} - ${formattedDate} (${status})` : `ID: ${roomAdmissionId} - ${formattedDate} (${status})`}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+
+              {addICUAdmissionForm.patientType === 'Emergency' && (
+                <div>
+                  <Label htmlFor="emergencyAdmissionId">Emergency Admission Bed No *</Label>
+                  <select
+                    id="emergencyAdmissionId"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                    value={addICUAdmissionForm.emergencyAdmissionId}
+                    onChange={(e) => setAddICUAdmissionForm({ ...addICUAdmissionForm, emergencyAdmissionId: e.target.value })}
+                    required
+                  >
+                    <option value="">Select Emergency Admission Bed No</option>
+                    {availableEmergencyBedSlots.map((slot: any) => {
+                      // Extract EmergencyAdmissionId (prioritize this field)
+                      const emergencyAdmissionId = slot.emergencyAdmissionId || slot.EmergencyAdmissionId || slot.id || '';
+                      // Fallback to other IDs if EmergencyAdmissionId is not available
+                      const slotId = emergencyAdmissionId || slot.emergencyAdmissionId || slot.EmergencyAdmissionId || '';
+                      const bedNo = slot.emergencyBedSlotNo || slot.EmergencyBedSlotNo || slot.bedNo || slot.BedNo || slot.emergencyBedNo || slot.EmergencyBedNo || '';
+                      const status = slot.emergencyStatus || slot.EmergencyStatus || slot.status || slot.Status || '';
+                      return (
+                        <option key={slotId} value={emergencyAdmissionId || slotId}>
+                          {bedNo ? `Bed: ${bedNo} - ${status}` : `ID: ${emergencyAdmissionId || slotId} - ${status}`}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+
               <div className="w-full">
                 <Label htmlFor="add-icubed-search">ICU Bed *</Label>
                 <div className="relative mb-2">
@@ -1352,25 +2035,112 @@ export function ICUManagement() {
                   </div>
                 )}
               </div>
+              
+              {/* Doctor Selection - Same pattern as Admissions */}
+              <div>
+                <Label htmlFor="doctor-search">Admitted By (Doctor) *</Label>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                  <Input
+                    id="doctor-search"
+                    placeholder="Search by Doctor Name, ID, or Specialty..."
+                    value={doctorSearchTerm}
+                    onChange={(e) => setDoctorSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                {doctorSearchTerm && (
+                  <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
+                    <table className="w-full">
+                      <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Doctor ID</th>
+                          <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                          <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Specialty</th>
+                          <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Type</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {doctorOptions
+                          .filter((doctor: any) => {
+                            if (!doctorSearchTerm) return false;
+                            const searchLower = doctorSearchTerm.toLowerCase();
+                            const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                            const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                            const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                            return (
+                              doctorId.toLowerCase().includes(searchLower) ||
+                              doctorName.toLowerCase().includes(searchLower) ||
+                              specialty.toLowerCase().includes(searchLower)
+                            );
+                          })
+                          .map((doctor: any) => {
+                            const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                            const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                            const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || 'General';
+                            const doctorType = (doctor as any).type || (doctor as any).Type || (doctor as any).DoctorType || '';
+                            const isSelected = addICUAdmissionForm.admittedByDoctorId === doctorId;
+                            return (
+                              <tr
+                                key={doctorId}
+                                onClick={() => {
+                                  setAddICUAdmissionForm({ 
+                                    ...addICUAdmissionForm, 
+                                    admittedByDoctorId: doctorId,
+                                    doctorId: doctorId,
+                                    admittedBy: doctorName
+                                  });
+                                  setDoctorSearchTerm(`${doctorName} - ${specialty}`);
+                                }}
+                                className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
+                              >
+                                <td className="py-2 px-3 text-sm text-gray-900 font-mono">{doctorId || '-'}</td>
+                                <td className="py-2 px-3 text-sm text-gray-600">{doctorName || 'Unknown'}</td>
+                                <td className="py-2 px-3 text-sm text-gray-600">{specialty || '-'}</td>
+                                <td className="py-2 px-3 text-sm text-gray-600">
+                                  <Badge variant={doctorType === 'inhouse' ? 'default' : 'outline'}>
+                                    {doctorType || 'N/A'}
+                                  </Badge>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                    {doctorOptions.filter((doctor: any) => {
+                      if (!doctorSearchTerm) return false;
+                      const searchLower = doctorSearchTerm.toLowerCase();
+                      const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                      const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                      const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                      return (
+                        doctorId.toLowerCase().includes(searchLower) ||
+                        doctorName.toLowerCase().includes(searchLower) ||
+                        specialty.toLowerCase().includes(searchLower)
+                      );
+                    }).length === 0 && (
+                      <div className="text-center py-8 text-sm text-gray-700">
+                        No doctors found. Try a different search term.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>ICU Patient Status</Label>
-                  <Select
-                    onValueChange={(val) => {
-                      console.log('ICU Patient Status selected:', val);
-                      setAddICUAdmissionForm(prev => ({ ...prev, icuPatientStatus: val }));
-                    }}
+                  <select
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
                     value={addICUAdmissionForm.icuPatientStatus || ''}
+                    onChange={(e) => setAddICUAdmissionForm(prev => ({ ...prev, icuPatientStatus: e.target.value }))}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select ICU patient status" />
-                    </SelectTrigger>
-                    <SelectContent className="z-[99999] !pointer-events-auto" position="popper">
-                      <SelectItem value="Serious">Serious</SelectItem>
-                      <SelectItem value="Critical">Critical</SelectItem>
-                      <SelectItem value="Stable">Stable</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <option value="">Select ICU patient status</option>
+                    <option value="Serious">Serious</option>
+                    {/* <option value="Available">Available</option> */}
+                    <option value="Critical">Critical</option>
+                    <option value="Stable">Stable</option>
+                  </select>
                 </div>
                 <div>
                 <Label>ICU Allocation From Date</Label>
@@ -1452,7 +2222,36 @@ export function ICUManagement() {
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-4 pb-4 px-6 flex-shrink-0 border-t border-gray-200">
-              <Button variant="outline" onClick={() => setShowAddICUAdmission(false)} disabled={savingICUAdmission}>
+              <Button variant="outline" onClick={() => {
+                setShowAddICUAdmission(false);
+                setAddICUAdmissionForm({
+                  patientId: '',
+                  patientType: '',
+                  patientAppointmentId: '',
+                  emergencyAdmissionId: '',
+                  roomAdmissionId: '',
+                  icuId: '',
+                  icuBedId: '',
+                  icuBedNo: '',
+                  icuPatientStatus: '',
+                  icuAllocationFromDate: '',
+                  icuAllocationToDate: '',
+                  diagnosis: '',
+                  treatmentDetails: '',
+                  patientCondition: '',
+                  onVentilator: 'No',
+                  icuAdmissionStatus: 'Occupied',
+                  doctorId: '',
+                  admittedBy: '',
+                  admittedByDoctorId: '',
+                });
+                setAvailableAppointments([]);
+                setAvailableEmergencyBedSlots([]);
+                setAvailableIPDAdmissions([]);
+                setPatientSearchTerm('');
+                setIcuBedSearchTerm('');
+                setDoctorSearchTerm('');
+              }} disabled={savingICUAdmission}>
                 Cancel
               </Button>
               <Button onClick={handleSaveICUAdmission} disabled={savingICUAdmission}>
@@ -1559,6 +2358,12 @@ export function ICUManagement() {
                     // Check if bed has admission details (patient exists)
                     const hasAdmission = bed.patient !== undefined && bed.patient !== null;
                     
+                    // Check if ICU Patient Status is Critical
+                    const isCritical = bed.icuPatientStatus === 'Critical' || 
+                                      (bed.patient?.icuPatientStatus && 
+                                       String(bed.patient.icuPatientStatus).toLowerCase().includes('critical')) ||
+                                      (bed.patient?.severity === 'Critical');
+                    
                     return (
                     <div
                       key={bed.bedNumber}
@@ -1566,6 +2371,8 @@ export function ICUManagement() {
                       className={`p-4 border-2 rounded-lg text-center transition-all cursor-pointer ${
                         selectedICUBedId === bedId
                           ? 'border-blue-500 bg-blue-50 scale-105'
+                          : isCritical
+                            ? 'border-red-600 bg-red-200 hover:border-red-700 hover:bg-red-300'
                           : hasAdmission
                             ? 'border-red-300 bg-red-50 hover:border-red-400'
                           : 'border-green-300 bg-green-50 hover:border-green-400'
@@ -1582,21 +2389,30 @@ export function ICUManagement() {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          handleBedClick();
+                          handleBedClick(e as any);
                         }
                       }}
                     >
-                      <p className="text-gray-900 mb-1">{bed.bedNumber}</p>
+                      <p className={`mb-1 font-medium ${isCritical ? 'text-red-900' : 'text-gray-900'}`}>{bed.bedNumber}</p>
                       <div className="flex items-center justify-center gap-1">
                         <span className={`size-2 rounded-full ${
-                          hasAdmission
+                          isCritical
+                            ? 'bg-red-600'
+                          : hasAdmission
                               ? 'bg-red-500'
                             : 'bg-green-500'
                         }`} />
-                        <span className="text-xs text-gray-600">
+                        <span className={`text-xs ${isCritical ? 'text-red-900 font-semibold' : 'text-gray-600'}`}>
                           {hasAdmission ? (bed as any).icuAdmissionStatus || 'Occupied' : 'Available'}
                         </span>
                       </div>
+                      {isCritical && (
+                        <div className="mt-1">
+                          <Badge variant="destructive" className="text-xs">
+                            Critical
+                          </Badge>
+                        </div>
+                      )}
                       {bed.patient?.ventilatorSupport && (
                         <div className="mt-1">
                           <Badge variant="secondary" className="text-xs">
@@ -1622,6 +2438,10 @@ export function ICUManagement() {
                   <div className="flex items-center gap-2">
                     <span className="size-3 rounded-full bg-red-500" />
                     <span className="text-gray-600">Occupied</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="size-3 rounded-full bg-red-600" />
+                    <span className="text-gray-600 font-semibold text-red-700">Critical</span>
                   </div>
                 </div>
               </CardContent>
@@ -1667,8 +2487,8 @@ export function ICUManagement() {
 
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <p className="text-gray-500">Patient Id</p>
-                        <p className="text-gray-900 font-mono text-xs">{selectedPatient.patientId || 'N/A'}</p>
+                        <p className="text-gray-500">Patient No</p>
+                        <p className="text-gray-900 font-mono text-xs">{selectedPatient.patientNo || 'N/A'}</p>
                       </div>
                       <div>
                         <p className="text-gray-500">Age</p>
@@ -1679,12 +2499,8 @@ export function ICUManagement() {
                         <p className="text-gray-900">{selectedPatient.gender}</p>
                       </div>
                       <div>
-                        <p className="text-gray-500">PatientICUAdmissionId</p>
-                        <p className="text-gray-900 font-mono text-xs">{selectedPatient.patientICUAdmissionId || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">DoctorId</p>
-                        <p className="text-gray-900 font-mono text-xs">{selectedPatient.doctorId || 'N/A'}</p>
+                        <p className="text-gray-500">Doctor Name</p>
+                        <p className="text-gray-900">{selectedPatient.attendingDoctor || 'N/A'}</p>
                       </div>
                       <div>
                         <p className="text-gray-500">OnVentilator</p>
@@ -1716,43 +2532,63 @@ export function ICUManagement() {
                         <Activity className="size-5 text-blue-600" />
                         Vital Signs
                       </h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center gap-2 mb-1">
-                            <HeartPulse className="size-4 text-red-600" />
-                            <p className="text-xs text-gray-500">Heart Rate</p>
-                          </div>
-                          <p className="text-lg text-gray-900">{selectedPatient.vitals.heartRate} bpm</p>
+                      {loadingVitals ? (
+                        <div className="text-center py-8 text-gray-500">
+                          Loading vital signs...
                         </div>
-                        <div className="p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Activity className="size-4 text-blue-600" />
-                            <p className="text-xs text-gray-500">Blood Pressure</p>
+                      ) : vitalsData ? (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-2 mb-1">
+                              <HeartPulse className="size-4 text-red-600" />
+                              <p className="text-xs text-gray-500">Heart Rate</p>
+                            </div>
+                            <p className="text-lg text-gray-900">
+                              {vitalsData.heartRate || vitalsData.HeartRate || vitalsData.hr || vitalsData.HR || vitalsData.heart_rate || 'N/A'} bpm
+                            </p>
                           </div>
-                          <p className="text-lg text-gray-900">{selectedPatient.vitals.bloodPressure}</p>
-                        </div>
-                        <div className="p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Thermometer className="size-4 text-orange-600" />
-                            <p className="text-xs text-gray-500">Temperature</p>
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Activity className="size-4 text-blue-600" />
+                              <p className="text-xs text-gray-500">Blood Pressure</p>
+                            </div>
+                            <p className="text-lg text-gray-900">
+                              {vitalsData.bloodPressure || vitalsData.BloodPressure || vitalsData.bp || vitalsData.BP || vitalsData.blood_pressure || 'N/A'}
+                            </p>
                           </div>
-                          <p className="text-lg text-gray-900">{selectedPatient.vitals.temperature}°C</p>
-                        </div>
-                        <div className="p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Droplet className="size-4 text-cyan-600" />
-                            <p className="text-xs text-gray-500">O₂ Saturation</p>
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Thermometer className="size-4 text-orange-600" />
+                              <p className="text-xs text-gray-500">Temperature</p>
+                            </div>
+                            <p className="text-lg text-gray-900">
+                              {vitalsData.temperature || vitalsData.Temperature || vitalsData.temp || vitalsData.Temp || vitalsData.temperature_c || 'N/A'}°C
+                            </p>
                           </div>
-                          <p className="text-lg text-gray-900">{selectedPatient.vitals.oxygenSaturation}%</p>
-                        </div>
-                        <div className="p-3 bg-gray-50 rounded-lg col-span-2">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Wind className="size-4 text-teal-600" />
-                            <p className="text-xs text-gray-500">Respiratory Rate</p>
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Droplet className="size-4 text-cyan-600" />
+                              <p className="text-xs text-gray-500">O₂ Saturation</p>
+                            </div>
+                            <p className="text-lg text-gray-900">
+                              {vitalsData.oxygenSaturation || vitalsData.OxygenSaturation || vitalsData.spo2 || vitalsData.SpO2 || vitalsData.o2Sat || vitalsData.oxygen_saturation || 'N/A'}%
+                            </p>
                           </div>
-                          <p className="text-lg text-gray-900">{selectedPatient.vitals.respiratoryRate} /min</p>
+                          <div className="p-3 bg-gray-50 rounded-lg col-span-2">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Wind className="size-4 text-teal-600" />
+                              <p className="text-xs text-gray-500">Respiratory Rate</p>
+                            </div>
+                            <p className="text-lg text-gray-900">
+                              {vitalsData.respiratoryRate || vitalsData.RespiratoryRate || vitalsData.rr || vitalsData.RR || vitalsData.respiratory_rate || 'N/A'} /min
+                            </p>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          No vital signs data available
+                        </div>
+                      )}
                     </div>
 
                     
@@ -1786,16 +2622,18 @@ export function ICUManagement() {
                       <th className="dashboard-table-header-cell">Bed</th>
                       <th className="dashboard-table-header-cell">Patient</th>
                       <th className="dashboard-table-header-cell">Condition</th>
-                      <th className="dashboard-table-header-cell">Severity</th>
                       <th className="dashboard-table-header-cell">Doctor</th>
                       <th className="dashboard-table-header-cell">Ventilator</th>
+                      <th className="dashboard-table-header-cell">Patient Type</th>
+                      <th className="dashboard-table-header-cell">ICU Patient Status</th>
+                      <th className="dashboard-table-header-cell">ICU Admission Status</th>
                       <th className="dashboard-table-header-cell">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                       {patients.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="dashboard-table-empty-cell">
+                          <td colSpan={9} className="dashboard-table-empty-cell">
                             No ICU patients found
                           </td>
                         </tr>
@@ -1810,14 +2648,6 @@ export function ICUManagement() {
                           <p className="dashboard-table-body-cell-secondary text-xs">{patient.age}Y / {patient.gender}</p>
                         </td>
                         <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.condition}</td>
-                        <td className="dashboard-table-body-cell">
-                          <Badge variant={
-                            patient.severity === 'Critical' ? 'destructive' :
-                            patient.severity === 'Serious' ? 'default' : 'secondary'
-                          }>
-                            {patient.severity}
-                          </Badge>
-                        </td>
                         <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.attendingDoctor}</td>
                         <td className="dashboard-table-body-cell">
                           {patient.ventilatorSupport ? (
@@ -1830,38 +2660,44 @@ export function ICUManagement() {
                           )}
                         </td>
                         <td className="dashboard-table-body-cell">
+                          <Badge variant="outline">
+                            {patient.patientType || 'N/A'}
+                          </Badge>
+                        </td>
+                        <td className="dashboard-table-body-cell">
+                          <Badge variant={
+                            patient.icuPatientStatus === 'Critical' ? 'destructive' :
+                            patient.icuPatientStatus === 'Serious' ? 'default' :
+                            patient.icuPatientStatus === 'Stable' ? 'secondary' : 'outline'
+                          }>
+                            {patient.icuPatientStatus || 'N/A'}
+                          </Badge>
+                        </td>
+                        <td className="dashboard-table-body-cell">
+                          <Badge variant={
+                            patient.icuAdmissionStatus === 'Occupied' ? 'default' :
+                            patient.icuAdmissionStatus === 'Discharged' ? 'secondary' : 'outline'
+                          }>
+                            {patient.icuAdmissionStatus || 'N/A'}
+                          </Badge>
+                        </td>
+                        <td className="dashboard-table-body-cell">
                           <Button
                             variant="outline"
                             size="sm"
                             className="dashboard-manage-button"
                             onClick={() => {
-                              console.log('========================================');
-                              console.log('Manage ICU Case button clicked');
-                              console.log('Patient data:', patient);
-                              console.log('patient.patientICUAdmissionId:', patient.patientICUAdmissionId);
-                              console.log('patient.id:', patient.id);
-                              
                               // Navigate to Manage ICU Case page with patient ICU admission ID (UUID)
                               // Prefer patientICUAdmissionId if available, otherwise use id
                               const patientICUAdmissionId = patient.patientICUAdmissionId || patient.id;
-                              console.log('Selected patientICUAdmissionId for navigation:', patientICUAdmissionId);
-                              console.log('Type:', typeof patientICUAdmissionId);
                               
                               if (patientICUAdmissionId) {
-                                // Ensure it's passed as a string (UUID)
-                                const url = `manageicucase?patientICUAdmissionId=${String(patientICUAdmissionId)}`;
-                                console.log('Setting window.location.hash to:', url);
-                                console.log('Current hash before change:', window.location.hash);
-                                console.log('Current view should change to: manageicucase');
-                                
-                                // Set hash (browser automatically adds # prefix)
-                                window.location.hash = url;
-                                
-                                console.log('Hash after change:', window.location.hash);
-                                console.log('========================================');
+                                // Navigate using React Router
+                                navigate(`/manage-icu-case?patientICUAdmissionId=${String(patientICUAdmissionId)}`);
                               } else {
                                 console.error('Patient ICU Admission ID not found for navigation');
                                 console.error('Available patient fields:', Object.keys(patient));
+                                alert('Patient ICU Admission ID not found. Cannot navigate to Manage ICU Case.');
                               }
                             }}
                           >

@@ -21,6 +21,7 @@ import { LabTest as LabTestType, Doctor } from '../types';
 import { Textarea } from './ui/textarea';
 import { DialogFooter } from './ui/dialog';
 import { Switch } from './ui/switch';
+import { convertToIST } from '../utils/timeUtils';
 
 interface LabTest {
   id: number;
@@ -132,6 +133,9 @@ export function Laboratory() {
   const [editPatientLabTestFormData, setEditPatientLabTestFormData] = useState<any>(null);
   const [editPatientLabTestSubmitting, setEditPatientLabTestSubmitting] = useState(false);
   const [editPatientLabTestSubmitError, setEditPatientLabTestSubmitError] = useState<string | null>(null);
+  // File upload state for Edit ReportsUrl (similar to OT Documents)
+  const [editSelectedFiles, setEditSelectedFiles] = useState<File[]>([]);
+  const [editUploadedDocumentUrls, setEditUploadedDocumentUrls] = useState<string[]>([]);
 
   // New Lab Order Dialog State
   const [newLabOrderFormData, setNewLabOrderFormData] = useState({
@@ -166,12 +170,8 @@ export function Laboratory() {
   const [showLabTestList, setShowLabTestList] = useState(false);
   const [showDoctorList, setShowDoctorList] = useState(false);
   
-  // File upload state for ReportsUrl
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  // File upload state for ReportsUrl (multiple files like OT Documents)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   // Fetch test status counts from API
   useEffect(() => {
@@ -1245,6 +1245,30 @@ export function Laboratory() {
       status: (test as any).statusValue || test.status || 'Active',
       charges: test.charges || 0
     });
+    
+    // Parse existing documents from reportsUrl field (similar to OT Documents)
+    let existingDocUrls: string[] = [];
+    if (test.reportsUrl) {
+      try {
+        // Try parsing as JSON array first
+        const parsed = JSON.parse(test.reportsUrl);
+        if (Array.isArray(parsed)) {
+          existingDocUrls = parsed;
+        } else if (typeof parsed === 'string') {
+          existingDocUrls = [parsed];
+        }
+      } catch {
+        // If not JSON, treat as comma-separated string or single URL
+        if (test.reportsUrl.includes(',')) {
+          existingDocUrls = test.reportsUrl.split(',').map((url: string) => url.trim()).filter((url: string) => url);
+        } else {
+          existingDocUrls = [test.reportsUrl];
+        }
+      }
+    }
+    setEditUploadedDocumentUrls(existingDocUrls);
+    setEditSelectedFiles([]);
+    
     setIsEditPatientLabTestDialogOpen(true);
   };
 
@@ -1274,8 +1298,23 @@ export function Laboratory() {
         Status: editPatientLabTestFormData.status
       };
 
-      if (editPatientLabTestFormData.reportsUrl) {
-        payload.ReportsUrl = editPatientLabTestFormData.reportsUrl;
+      // Upload new files first if any are selected (similar to OT Documents)
+      let documentUrls: string[] = [...editUploadedDocumentUrls];
+      if (editSelectedFiles.length > 0) {
+        try {
+          const newUrls = await uploadFiles(editSelectedFiles, editPatientLabTestFormData.patientId);
+          documentUrls = [...documentUrls, ...newUrls];
+        } catch (error) {
+          alert(`Failed to upload files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          return;
+        }
+      }
+      
+      // Combine all document URLs (JSON array)
+      const combinedReportsUrl = documentUrls.length > 0 ? JSON.stringify(documentUrls) : null;
+      
+      if (combinedReportsUrl) {
+        payload.ReportsUrl = combinedReportsUrl;
       }
       if (editPatientLabTestFormData.testDoneDateTime) {
         payload.TestDoneDateTime = editPatientLabTestFormData.testDoneDateTime;
@@ -1309,6 +1348,8 @@ export function Laboratory() {
       setIsEditPatientLabTestDialogOpen(false);
       setEditingPatientLabTest(null);
       setEditPatientLabTestFormData(null);
+      setEditSelectedFiles([]);
+      setEditUploadedDocumentUrls([]);
     } catch (err) {
       console.error('Error saving PatientLabTest:', err);
       setEditPatientLabTestSubmitError(err instanceof Error ? err.message : 'Failed to save patient lab test');
@@ -1382,13 +1423,7 @@ export function Laboratory() {
       setNewLabOrderSubmitError(null);
       
       // Reset file upload state
-      setSelectedFile(null);
-      setUploadError(null);
-      setUploadProgress(0);
-      setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      setSelectedFiles([]);
     } catch (err) {
       console.error('Error fetching data for new lab order:', err);
     }
@@ -1549,202 +1584,97 @@ export function Laboratory() {
     }
   };
 
-  // Handle file upload for ReportsUrl
-  const handleFileUpload = async () => {
-    if (!selectedFile) {
-      setUploadError('Please select a file first');
-      return;
+  // Helper function to format date for file suffix
+  const formatDateForFileSuffix = (): string => {
+    const now = new Date();
+    const istDate = convertToIST(now);
+    const day = String(istDate.getUTCDate()).padStart(2, '0');
+    const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+    const year = istDate.getUTCFullYear();
+    return `${day}_${month}_${year}`;
+  };
+
+  // Helper function to add date suffix to filename
+  const addDateSuffixToFileName = (fileName: string): string => {
+    const dateSuffix = formatDateForFileSuffix();
+    const lastDotIndex = fileName.lastIndexOf('.');
+    if (lastDotIndex === -1) {
+      // No extension
+      return `${fileName}_${dateSuffix}`;
     }
+    const nameWithoutExt = fileName.substring(0, lastDotIndex);
+    const extension = fileName.substring(lastDotIndex);
+    return `${nameWithoutExt}_${dateSuffix}${extension}`;
+  };
 
-    try {
-      setUploading(true);
-      setUploadError(null);
-      setUploadProgress(0);
-
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('folder', 'lab-reports'); // Optional: specify folder
-
-      // Get API base URL
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
-      // Upload endpoint - adjust as needed based on your backend API
-      // Common endpoints: /upload, /files/upload, /api/upload, /patient-lab-tests/upload
-      const uploadUrl = `${API_BASE_URL}/upload`;
-
-      // Create XMLHttpRequest for upload progress tracking
-      return new Promise<string>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-
-        // Track upload progress
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            const percentComplete = (e.loaded / e.total) * 100;
-            setUploadProgress(percentComplete);
-          }
-        });
-
-        // Handle successful upload
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              let response: any;
-              const responseText = xhr.responseText;
-              
-              // Try to parse JSON response
-              if (responseText) {
-                try {
-                  response = JSON.parse(responseText);
-                } catch (parseError) {
-                  // If not JSON, treat as plain text URL
-                  const trimmedText = responseText.trim();
-                  if (trimmedText.startsWith('http://') || trimmedText.startsWith('https://')) {
-                    const fileUrl = trimmedText;
-                    setNewLabOrderFormData(prev => ({ ...prev, reportsUrl: fileUrl }));
-                    setSelectedFile(null);
-                    setUploadProgress(0);
-                    setUploading(false);
-                    resolve(fileUrl);
-                    return;
-                  }
-                  throw new Error('Invalid response format');
-                }
-              } else {
-                throw new Error('Empty response from server');
-              }
-
-              // Handle different response structures
-              // Try multiple possible response formats
-              let fileUrl: string | null = null;
-              
-              // Format 1: { url: "..." }
-              if (response?.url) {
-                fileUrl = response.url;
-              }
-              // Format 2: { data: { url: "..." } }
-              else if (response?.data?.url) {
-                fileUrl = response.data.url;
-              }
-              // Format 3: { fileUrl: "..." }
-              else if (response?.fileUrl) {
-                fileUrl = response.fileUrl;
-              }
-              // Format 4: { file_url: "..." }
-              else if (response?.file_url) {
-                fileUrl = response.file_url;
-              }
-              // Format 5: { location: "..." }
-              else if (response?.location) {
-                fileUrl = response.location;
-              }
-              // Format 6: { path: "..." } - construct full URL
-              else if (response?.path) {
-                const path = response.path;
-                // If path is already a full URL, use it as is
-                if (path.startsWith('http://') || path.startsWith('https://')) {
-                  fileUrl = path;
-                } else {
-                  // Otherwise, construct full URL from base URL and path
-                  fileUrl = `${API_BASE_URL.replace('/api', '')}${path.startsWith('/') ? path : '/' + path}`;
-                }
-              }
-              // Format 7: { filename: "..." } - construct URL from filename
-              else if (response?.filename) {
-                const filename = response.filename;
-                fileUrl = `${API_BASE_URL.replace('/api', '')}/uploads/lab-reports/${filename}`;
-              }
-              // Format 8: Direct string response (already handled above)
-              
-              if (fileUrl) {
-                // Ensure URL is properly formatted
-                const formattedUrl = fileUrl.trim();
-                
-                // Update form data with the file URL
-                setNewLabOrderFormData(prev => ({ ...prev, reportsUrl: formattedUrl }));
-                setSelectedFile(null);
-                setUploadProgress(0);
-                setUploading(false);
-                
-                console.log('File uploaded successfully. URL:', formattedUrl);
-                resolve(formattedUrl);
-              } else {
-                console.error('Upload response structure:', response);
-                throw new Error('No file URL found in response. Response: ' + JSON.stringify(response));
-              }
-            } catch (error) {
-              const errorMsg = error instanceof Error ? error.message : 'Failed to parse upload response';
-              setUploadError(errorMsg);
-              setUploading(false);
-              console.error('Error parsing upload response:', error);
-              reject(new Error(errorMsg));
-            }
+  // Function to upload files (similar to OT Documents)
+  const uploadFiles = async (files: File[], patientId: string): Promise<string[]> => {
+    if (files.length === 0) return [];
+    if (!patientId) {
+      throw new Error('Patient ID is required for file upload');
+    }
+    
+    const uploadedUrls: string[] = [];
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+    
+    for (const file of files) {
+      try {
+        const formData = new FormData();
+        // Add date suffix to filename before uploading
+        const fileNameWithSuffix = addDateSuffixToFileName(file.name);
+        // Append file with the exact field name 'file' that multer expects
+        formData.append('file', file, fileNameWithSuffix);
+        // Append folder parameter (required by backend) - must be in FormData
+        formData.append('folder', 'lab-reports');
+        // Append PatientId parameter (required by backend, must be UUID) - also in query as fallback
+        formData.append('PatientId', patientId);
+        
+        // Debug: Log form data keys
+        console.log('Uploading file:', file.name, 'Size:', file.size, 'Type:', file.type);
+        console.log('FormData entries:');
+        for (const [key, value] of formData.entries()) {
+          if (value instanceof File) {
+            console.log(`  ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
           } else {
-            let errorMsg = `Upload failed with status ${xhr.status}`;
-            try {
-              const errorResponse = JSON.parse(xhr.responseText);
-              errorMsg = errorResponse.message || errorResponse.error || errorMsg;
-            } catch {
-              // Use default error message
-            }
-            setUploadError(errorMsg);
-            setUploading(false);
-            reject(new Error(errorMsg));
+            console.log(`  ${key}:`, value);
           }
+        }
+        
+        // Send folder and PatientId as query parameters too (as fallback for multer async issue)
+        // Construct URL properly - append /upload to the base URL
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        const uploadUrlObj = new URL(`${baseUrl}/upload`);
+        uploadUrlObj.searchParams.append('folder', 'lab-reports');
+        uploadUrlObj.searchParams.append('PatientId', patientId);
+        const uploadUrl = uploadUrlObj.toString();
+        
+        console.log('Constructed upload URL:', uploadUrl);
+        console.log('File being sent:', { name: file.name, size: file.size, type: file.type });
+        
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData,
+          // Don't set Content-Type header - browser will set it with boundary for multipart/form-data
         });
-
-        // Handle upload errors
-        xhr.addEventListener('error', () => {
-          const errorMsg = 'Network error during file upload';
-          setUploadError(errorMsg);
-          setUploading(false);
-          reject(new Error(errorMsg));
-        });
-
-        // Handle upload abort
-        xhr.addEventListener('abort', () => {
-          setUploadError('Upload cancelled');
-          setUploading(false);
-          reject(new Error('Upload cancelled'));
-        });
-
-        // Start the upload
-        xhr.open('POST', uploadUrl);
-        xhr.send(formData);
-      });
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to upload file';
-      setUploadError(errorMsg);
-      setUploading(false);
-      console.error('Error uploading file:', error);
-    }
-  };
-
-  // Handle file selection
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Validate file size (e.g., max 10MB)
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (file.size > maxSize) {
-        setUploadError('File size exceeds 10MB limit');
-        return;
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `Failed to upload ${file.name}`);
+        }
+        
+        const result = await response.json();
+        if (result.success && result.url) {
+          uploadedUrls.push(result.url);
+        } else {
+          throw new Error(`Invalid response for ${file.name}: ${JSON.stringify(result)}`);
+        }
+      } catch (error) {
+        console.error(`Error uploading file ${file.name}:`, error);
+        throw error;
       }
-      
-      // Validate file type (optional - adjust as needed)
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-      if (!allowedTypes.includes(file.type)) {
-        setUploadError('Invalid file type. Please upload PDF, Word, or Image files.');
-        return;
-      }
-
-      setSelectedFile(file);
-      setUploadError(null);
     }
-  };
-
-  // Handle Browse button click
-  const handleBrowseClick = () => {
-    fileInputRef.current?.click();
+    
+    return uploadedUrls;
   };
 
   // Handle saving New Lab Order
@@ -1804,9 +1734,39 @@ export function Laboratory() {
       }
       // Direct patient type: no conditional fields needed
 
-      // Add optional fields
+      // Upload files first if any are selected (now that we have patientId)
+      let documentUrls: string[] = [];
+      // Parse existing reportsUrl if it's a JSON array
       if (newLabOrderFormData.reportsUrl) {
-        payload.ReportsUrl = newLabOrderFormData.reportsUrl;
+        try {
+          const parsed = JSON.parse(newLabOrderFormData.reportsUrl);
+          if (Array.isArray(parsed)) {
+            documentUrls = parsed;
+          } else if (typeof parsed === 'string') {
+            documentUrls = [parsed];
+          }
+        } catch {
+          // If not JSON, treat as single URL string
+          documentUrls = [newLabOrderFormData.reportsUrl];
+        }
+      }
+      
+      if (selectedFiles.length > 0) {
+        try {
+          const newUrls = await uploadFiles(selectedFiles, newLabOrderFormData.patientId);
+          documentUrls = [...documentUrls, ...newUrls];
+        } catch (error) {
+          alert(`Failed to upload files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          return;
+        }
+      }
+      
+      // Combine all document URLs (JSON array)
+      const combinedReportsUrl = documentUrls.length > 0 ? JSON.stringify(documentUrls) : null;
+
+      // Add optional fields
+      if (combinedReportsUrl) {
+        payload.ReportsUrl = combinedReportsUrl;
       }
       
       if (newLabOrderFormData.testDoneDate) {
@@ -1845,13 +1805,7 @@ export function Laboratory() {
       setShowDoctorList(false);
       
       // Reset file upload state
-      setSelectedFile(null);
-      setUploadError(null);
-      setUploadProgress(0);
-      setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      setSelectedFiles([]);
       
       // Refresh the tests list by calling the fetch function
       window.location.reload(); // Simple refresh for now - could be optimized to refetch only
@@ -2310,117 +2264,41 @@ export function Laboratory() {
                     />
                   </div>
 
-                  {/* Report URL with File Upload */}
+                  {/* Reports URL with File Upload (similar to OT Documents) */}
                   <div className="dialog-form-field">
-                    <Label htmlFor="reportsUrl" className="dialog-label-standard">Reports URL</Label>
-                    
-                    {/* Hidden file input */}
-                    <input
-                      ref={fileInputRef}
+                    <Label htmlFor="add-reportsUrl" className="dialog-label-standard">Reports URL</Label>
+                    <Input
+                      id="add-reportsUrl"
                       type="file"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                      id="fileUpload"
+                      multiple
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setSelectedFiles(prev => [...prev, ...files]);
+                      }}
+                      className="dialog-input-standard"
                     />
-                    
-                    {/* URL Input and Action Buttons */}
-                    <div className="flex gap-2">
-                      <Input
-                        id="reportsUrl"
-                        placeholder="Enter report URL or upload a file"
-                        className="dialog-input-standard flex-1"
-                        value={newLabOrderFormData.reportsUrl}
-                        onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, reportsUrl: e.target.value })}
-                        disabled={uploading}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleBrowseClick}
-                        disabled={uploading}
-                        className="gap-2"
-                      >
-                        <FolderOpen className="size-4" />
-                        Browse
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleFileUpload}
-                        disabled={!selectedFile || uploading}
-                        className="gap-2"
-                      >
-                        {uploading ? (
-                          <>
-                            <Clock className="size-4 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="size-4" />
-                            Upload
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    
-                    {/* Selected file display */}
-                    {selectedFile && (
-                      <div className="mt-2 flex items-center justify-between p-2 bg-gray-50 rounded-md border border-gray-200">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <FileText className="size-4 text-gray-500 flex-shrink-0" />
-                          <span className="text-sm text-gray-700 truncate" title={selectedFile.name}>
-                            {selectedFile.name}
-                          </span>
-                          <span className="text-xs text-gray-500 flex-shrink-0">
-                            ({(selectedFile.size / 1024).toFixed(2)} KB)
-                          </span>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedFile(null);
-                            setUploadError(null);
-                            if (fileInputRef.current) {
-                              fileInputRef.current.value = '';
-                            }
-                          }}
-                          className="h-6 w-6 p-0"
-                        >
-                          <X className="size-3" />
-                        </Button>
+                    {selectedFiles.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {selectedFiles.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                            <span>{file.name}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                              }}
+                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ))}
                       </div>
                     )}
-                    
-                    {/* Upload progress */}
-                    {uploading && uploadProgress > 0 && (
-                      <div className="mt-2">
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${uploadProgress}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-gray-600 mt-1">{Math.round(uploadProgress)}% uploaded</p>
-                      </div>
-                    )}
-                    
-                    {/* Upload error */}
-                    {uploadError && (
-                      <div className="mt-2 p-2 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
-                        {uploadError}
-                      </div>
-                    )}
-                    
-                    {/* Success message */}
-                    {newLabOrderFormData.reportsUrl && !selectedFile && !uploading && (
-                      <div className="mt-2 p-2 bg-green-50 border border-green-200 text-green-700 rounded-md text-sm">
-                        Report URL set: <a href={newLabOrderFormData.reportsUrl} target="_blank" rel="noopener noreferrer" className="underline">View</a>
-                      </div>
-                    )}
+                    <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Save Lab Order"</p>
                   </div>
 
                   {/* Ordered By Doctor - Searchable */}
@@ -3208,14 +3086,82 @@ export function Laboratory() {
                       </select>
                     </div>
                     <div className="dialog-field-single-column">
-                      <Label htmlFor="editReportsUrl" className="dialog-label-standard">ReportsUrl</Label>
+                      <Label htmlFor="edit-reportsUrl" className="dialog-label-standard">ReportsUrl</Label>
+                      
+                      {/* Display existing uploaded documents */}
+                      {editUploadedDocumentUrls.length > 0 && (
+                        <div className="mb-3 space-y-2">
+                          <p className="text-sm text-gray-600 font-medium">Uploaded Documents:</p>
+                          <div className="space-y-1">
+                            {editUploadedDocumentUrls.map((url, index) => {
+                              const fileName = url.split('/').pop() || `Document ${index + 1}`;
+                              return (
+                                <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                  <a
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-2"
+                                  >
+                                    <span>{fileName}</span>
+                                    <span className="text-xs text-gray-500">(opens in new tab)</span>
+                                  </a>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      // Remove from UI - backend will auto-delete when Update is clicked
+                                      setEditUploadedDocumentUrls(prev => prev.filter((_, i) => i !== index));
+                                    }}
+                                    className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                                    title="Remove file (will be deleted when you click Update)"
+                                  >
+                                    ×
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* File input for adding more documents */}
                       <Input
-                        id="editReportsUrl"
-                        value={editPatientLabTestFormData.reportsUrl}
-                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, reportsUrl: e.target.value })}
-                        placeholder="Enter report URL"
+                        id="edit-reportsUrl"
+                        type="file"
+                        multiple
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          setEditSelectedFiles(prev => [...prev, ...files]);
+                          // Reset the input so the same file can be selected again
+                          e.target.value = '';
+                        }}
                         className="dialog-input-standard"
                       />
+                      {editSelectedFiles.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-sm text-gray-600 font-medium">New Files to Upload:</p>
+                          {editSelectedFiles.map((file, index) => (
+                            <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-blue-50 p-2 rounded">
+                              <span>{file.name}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setEditSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                                }}
+                                className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Update"</p>
                     </div>
                     <div className="dialog-field-single-column">
                       <Label htmlFor="editTestDoneDateTime" className="dialog-label-standard">TestDoneDateTime</Label>
@@ -3254,7 +3200,11 @@ export function Laboratory() {
               )}
             </div>
             <div className="dialog-footer-standard">
-              <Button variant="outline" onClick={() => setIsEditPatientLabTestDialogOpen(false)} className="dialog-footer-button">
+              <Button variant="outline" onClick={() => {
+                setIsEditPatientLabTestDialogOpen(false);
+                setEditSelectedFiles([]);
+                setEditUploadedDocumentUrls([]);
+              }} className="dialog-footer-button">
                 Cancel
               </Button>
               <Button onClick={handleSaveEditPatientLabTest} disabled={editPatientLabTestSubmitting} className="dialog-footer-button">

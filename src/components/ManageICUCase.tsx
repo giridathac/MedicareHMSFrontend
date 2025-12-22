@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
@@ -26,6 +27,8 @@ interface ICUAdmission {
   bedNumber?: string;
   admissionDate?: string;
   admissionTime?: string;
+  icuAllocationFromDate?: string;
+  icuAllocationToDate?: string;
   condition?: string;
   severity?: string;
   attendingDoctor?: string;
@@ -42,11 +45,8 @@ interface ICUAdmission {
 }
 
 export function ManageICUCase() {
-  console.log('========================================');
-  console.log('ManageICUCase component rendered/mounted');
-  console.log('Current window.location.hash:', window.location.hash);
-  console.log('========================================');
-  
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { staff } = useStaff();
   const { roles } = useRoles();
   
@@ -134,10 +134,6 @@ export function ManageICUCase() {
     orderedBy: '',
     description: '',
     charges: '',
-    patientType: '',
-    appointmentId: '',
-    roomAdmissionId: '',
-    emergencyBedSlotId: '',
     labTestDone: 'No',
     reportsUrl: '',
     testStatus: 'Pending',
@@ -166,35 +162,17 @@ export function ManageICUCase() {
   }, [staff, roles]);
 
   useEffect(() => {
-    // Get patientICUAdmissionId from URL hash parameters (should be a UUID string)
-    console.log('========================================');
-    console.log('ManageICUCase: useEffect triggered');
-    console.log('Component mounted/updated');
-    console.log('Current window.location.hash:', window.location.hash);
-    console.log('Current window.location.href:', window.location.href);
-    
-    const hash = window.location.hash.slice(1);
-    console.log('Hash after slice(1):', hash);
-    
-    const params = new URLSearchParams(hash.split('?')[1] || '');
-    console.log('URL Parameters:', Object.fromEntries(params.entries()));
-    
-    const patientICUAdmissionId = params.get('patientICUAdmissionId') || params.get('id');
-    console.log('Extracted patientICUAdmissionId:', patientICUAdmissionId);
-    console.log('========================================');
+    // Get patientICUAdmissionId from URL search parameters (should be a UUID string)
+    const patientICUAdmissionId = searchParams.get('patientICUAdmissionId') || searchParams.get('id');
     
     if (patientICUAdmissionId) {
       // Pass as string (UUID) - don't convert to number
-      console.log('Calling fetchICUAdmissionDetails with ID:', patientICUAdmissionId);
       fetchICUAdmissionDetails(patientICUAdmissionId);
     } else {
-      console.error('Patient ICU Admission ID is missing from URL');
-      console.error('Hash:', hash);
-      console.error('Params:', Object.fromEntries(params.entries()));
       setError('Patient ICU Admission ID is missing from URL');
       setLoading(false);
     }
-  }, []);
+  }, [searchParams]);
   
   // Also listen for hash changes in case the component is already mounted
   useEffect(() => {
@@ -352,6 +330,14 @@ export function ManageICUCase() {
           'admissionTime', 'AdmissionTime', 'admission_time', 'Admission_Time',
           'admitTime', 'AdmitTime', 'admit_time', 'Admit_Time',
           'time', 'Time'
+        ], ''),
+        icuAllocationFromDate: extractField(admission, [
+          'icuAllocationFromDate', 'ICUAllocationFromDate', 'icu_allocation_from_date', 'ICU_Allocation_From_Date',
+          'allocationFromDate', 'AllocationFromDate', 'allocation_from_date', 'Allocation_From_Date'
+        ], ''),
+        icuAllocationToDate: extractField(admission, [
+          'icuAllocationToDate', 'ICUAllocationToDate', 'icu_allocation_to_date', 'ICU_Allocation_To_Date',
+          'allocationToDate', 'AllocationToDate', 'allocation_to_date', 'Allocation_To_Date'
         ], ''),
         condition: extractField(admission, [
           'condition', 'Condition', 'patientCondition', 'PatientCondition',
@@ -735,7 +721,7 @@ export function ManageICUCase() {
   };
 
   const handleBack = () => {
-    window.location.hash = 'icu';
+    navigate('/icu');
   };
 
   // Handle opening Add Patient Lab Test dialog
@@ -758,7 +744,6 @@ export function ManageICUCase() {
         orderedBy: '',
         description: '',
         charges: '',
-        patientType: '',
         appointmentId: '',
         roomAdmissionId: '',
         emergencyBedSlotId: '',
@@ -805,7 +790,6 @@ export function ManageICUCase() {
         orderedBy: test.orderedBy || '',
         description: test.description || '',
         charges: test.charges ? String(test.charges) : '',
-        patientType: (test as any).patientType || '',
         appointmentId: (test as any).appointmentId || '',
         roomAdmissionId: test.roomAdmissionId ? String(test.roomAdmissionId) : '',
         emergencyBedSlotId: (test as any).emergencyBedSlotId || '',
@@ -854,10 +838,6 @@ export function ManageICUCase() {
         throw new Error('Ordered Date is required');
       }
 
-      if (!labTestFormData.patientType || labTestFormData.patientType === '') {
-        throw new Error('Patient Type is required. Please select OPD, IPD, or Emergency.');
-      }
-
       // Get selected lab test details
       const selectedLabTest = availableLabTests.find((lt: LabTest) => {
         const lid = (lt as any).labTestId || (lt as any).id || '';
@@ -874,38 +854,15 @@ export function ManageICUCase() {
         LabTestId: Number(labTestFormData.labTestId),
         Priority: labTestFormData.priority || 'Normal',
         OrderedDate: labTestFormData.orderedDate,
-        PatientType: labTestFormData.patientType,
         LabTestDone: labTestFormData.labTestDone || 'No',
         TestStatus: labTestFormData.testStatus || 'Pending',
       };
 
-      // Add conditional fields based on PatientType (only if they have values)
-      if (labTestFormData.patientType === 'OPD') {
-        if (labTestFormData.appointmentId && labTestFormData.appointmentId.trim() !== '') {
-          payload.AppointmentId = String(labTestFormData.appointmentId).trim();
-        }
-      }
-      if (labTestFormData.patientType === 'IPD') {
-        if (labTestFormData.roomAdmissionId && labTestFormData.roomAdmissionId.trim() !== '') {
-          payload.RoomAdmissionId = String(labTestFormData.roomAdmissionId).trim();
-        }
-      }
-      if (labTestFormData.patientType === 'Emergency') {
-        if (labTestFormData.emergencyBedSlotId && labTestFormData.emergencyBedSlotId.trim() !== '') {
-          payload.EmergencyBedSlotId = String(labTestFormData.emergencyBedSlotId).trim();
-        }
-      }
-
       // Add optional fields
-      if (labTestFormData.orderedBy && labTestFormData.orderedBy.trim() !== '') {
-        payload.OrderedBy = labTestFormData.orderedBy.trim();
-      }
       if (labTestFormData.description && labTestFormData.description.trim() !== '') {
         payload.Description = labTestFormData.description.trim();
       }
-      if (labTestFormData.charges && labTestFormData.charges.trim() !== '') {
-        payload.Charges = Number(labTestFormData.charges);
-      } else if (selectedLabTest.charges) {
+      if (selectedLabTest.charges) {
         payload.Charges = selectedLabTest.charges;
       }
       if (labTestFormData.reportsUrl && labTestFormData.reportsUrl.trim() !== '') {
@@ -974,7 +931,6 @@ export function ManageICUCase() {
         orderedBy: '',
         description: '',
         charges: '',
-        patientType: '',
         appointmentId: '',
         roomAdmissionId: '',
         emergencyBedSlotId: '',
@@ -1547,12 +1503,12 @@ export function ManageICUCase() {
                 <p className="text-gray-900 font-medium mt-1">{icuAdmission.gender || 'N/A'}</p>
               </div>
               <div>
-                <Label className="text-sm text-gray-500">Admission Date and Time</Label>
-                <p className="text-gray-900 font-medium mt-1">{icuAdmission.admissionDate || 'N/A'}</p>
+                <Label className="text-sm text-gray-500">ICU Allocation From Date</Label>
+                <p className="text-gray-900 font-medium mt-1">{icuAdmission.icuAllocationFromDate || 'N/A'}</p>
               </div>
               <div>
-                <Label className="text-sm text-gray-500">Admission Time</Label>
-                <p className="text-gray-900 font-medium mt-1">{icuAdmission.admissionTime || 'N/A'}</p>
+                <Label className="text-sm text-gray-500">ICU Allocation To Date</Label>
+                <p className="text-gray-900 font-medium mt-1">{icuAdmission.icuAllocationToDate || 'N/A'}</p>
               </div>
               <div>
                 <Label className="text-sm text-gray-500">Attending Doctor</Label>
@@ -2610,25 +2566,6 @@ export function ManageICUCase() {
                       required
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="orderedBy">Ordered By</Label>
-                    <Input
-                      id="orderedBy"
-                      value={labTestFormData.orderedBy}
-                      onChange={(e) => setLabTestFormData({ ...labTestFormData, orderedBy: e.target.value })}
-                      placeholder="Enter name of person ordering"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="charges">Charges</Label>
-                    <Input
-                      id="charges"
-                      type="number"
-                      value={labTestFormData.charges}
-                      onChange={(e) => setLabTestFormData({ ...labTestFormData, charges: e.target.value })}
-                      placeholder="Enter charges (optional)"
-                    />
-                  </div>
                   <div className="col-span-2">
                     <Label htmlFor="description">Description</Label>
                     <Textarea
@@ -2639,62 +2576,6 @@ export function ManageICUCase() {
                       rows={4}
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="patientType">Patient Type *</Label>
-                    <select
-                      id="patientType"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                      value={labTestFormData.patientType}
-                      onChange={(e) => {
-                        setLabTestFormData({ 
-                          ...labTestFormData, 
-                          patientType: e.target.value,
-                          appointmentId: '', // Reset conditional fields when type changes
-                          roomAdmissionId: '',
-                          emergencyBedSlotId: ''
-                        });
-                      }}
-                      required
-                    >
-                      <option value="">Select...</option>
-                      <option value="OPD">OPD</option>
-                      <option value="IPD">IPD</option>
-                      <option value="Emergency">Emergency</option>
-                    </select>
-                  </div>
-                  {labTestFormData.patientType === 'OPD' && (
-                    <div>
-                      <Label htmlFor="appointmentId">Appointment ID</Label>
-                      <Input
-                        id="appointmentId"
-                        value={labTestFormData.appointmentId}
-                        onChange={(e) => setLabTestFormData({ ...labTestFormData, appointmentId: e.target.value })}
-                        placeholder="Enter Appointment ID (optional)"
-                      />
-                    </div>
-                  )}
-                  {labTestFormData.patientType === 'IPD' && (
-                    <div>
-                      <Label htmlFor="roomAdmissionId">Room Admission ID</Label>
-                      <Input
-                        id="roomAdmissionId"
-                        value={labTestFormData.roomAdmissionId}
-                        onChange={(e) => setLabTestFormData({ ...labTestFormData, roomAdmissionId: e.target.value })}
-                        placeholder="Enter Room Admission ID (optional)"
-                      />
-                    </div>
-                  )}
-                  {labTestFormData.patientType === 'Emergency' && (
-                    <div>
-                      <Label htmlFor="emergencyBedSlotId">Emergency Bed Slot ID</Label>
-                      <Input
-                        id="emergencyBedSlotId"
-                        value={labTestFormData.emergencyBedSlotId}
-                        onChange={(e) => setLabTestFormData({ ...labTestFormData, emergencyBedSlotId: e.target.value })}
-                        placeholder="Enter Emergency Bed Slot ID (optional)"
-                      />
-                    </div>
-                  )}
                   <div>
                     <Label htmlFor="labTestDone">Lab Test Done *</Label>
                     <select

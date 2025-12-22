@@ -18,6 +18,7 @@ import { doctorsApi } from '../api/doctors';
 import { Doctor } from '../types';
 import { staffApi } from '../api/staff';
 import { PatientAdmitVisitVitals } from '../api/admissions';
+import { convertToIST } from '../utils/timeUtils';
 import '../styles/dashboard.css';
 
 export function ManageIPDAdmission() {
@@ -65,6 +66,8 @@ export function ManageIPDAdmission() {
   const [showLabTestList, setShowLabTestList] = useState(false);
   const [ipdLabTestDoctorSearchTerm, setIpdLabTestDoctorSearchTerm] = useState('');
   const [showIpdLabTestDoctorList, setShowIpdLabTestDoctorList] = useState(false);
+  // File upload state for ReportsUrl (similar to OT Documents)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   // Doctor Visit Dialog State
   const [isAddDoctorVisitDialogOpen, setIsAddDoctorVisitDialogOpen] = useState(false);
@@ -662,10 +665,104 @@ export function ManageIPDAdmission() {
       setIpdLabTestDoctorSearchTerm('');
       setShowIpdLabTestDoctorList(false);
       setIpdLabTestSubmitError(null);
+      setSelectedFiles([]);
       setIsAddIPDLabTestDialogOpen(true);
     } else {
       setIpdLabTestSubmitError('Admission data is not loaded. Please wait and try again.');
     }
+  };
+
+  // Helper function to format date for file suffix
+  const formatDateForFileSuffix = (): string => {
+    const now = new Date();
+    const istDate = convertToIST(now);
+    const day = String(istDate.getUTCDate()).padStart(2, '0');
+    const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+    const year = istDate.getUTCFullYear();
+    return `${day}_${month}_${year}`;
+  };
+
+  // Helper function to add date suffix to filename
+  const addDateSuffixToFileName = (fileName: string): string => {
+    const dateSuffix = formatDateForFileSuffix();
+    const lastDotIndex = fileName.lastIndexOf('.');
+    if (lastDotIndex === -1) {
+      // No extension
+      return `${fileName}_${dateSuffix}`;
+    }
+    const nameWithoutExt = fileName.substring(0, lastDotIndex);
+    const extension = fileName.substring(lastDotIndex);
+    return `${nameWithoutExt}_${dateSuffix}${extension}`;
+  };
+
+  // Function to upload files (similar to OT Documents)
+  const uploadFiles = async (files: File[], patientId: string): Promise<string[]> => {
+    if (files.length === 0) return [];
+    if (!patientId) {
+      throw new Error('Patient ID is required for file upload');
+    }
+    
+    const uploadedUrls: string[] = [];
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+    
+    for (const file of files) {
+      try {
+        const formData = new FormData();
+        // Add date suffix to filename before uploading
+        const fileNameWithSuffix = addDateSuffixToFileName(file.name);
+        // Append file with the exact field name 'file' that multer expects
+        formData.append('file', file, fileNameWithSuffix);
+        // Append folder parameter (required by backend) - must be in FormData
+        formData.append('folder', 'lab-reports');
+        // Append PatientId parameter (required by backend, must be UUID) - also in query as fallback
+        formData.append('PatientId', patientId);
+        
+        // Debug: Log form data keys
+        console.log('Uploading file:', file.name, 'Size:', file.size, 'Type:', file.type);
+        console.log('FormData entries:');
+        for (const [key, value] of formData.entries()) {
+          if (value instanceof File) {
+            console.log(`  ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
+          } else {
+            console.log(`  ${key}:`, value);
+          }
+        }
+        
+        // Send folder and PatientId as query parameters too (as fallback for multer async issue)
+        // Construct URL properly - append /upload to the base URL
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        const uploadUrlObj = new URL(`${baseUrl}/upload`);
+        uploadUrlObj.searchParams.append('folder', 'lab-reports');
+        uploadUrlObj.searchParams.append('PatientId', patientId);
+        const uploadUrl = uploadUrlObj.toString();
+        
+        console.log('Constructed upload URL:', uploadUrl);
+        console.log('File being sent:', { name: file.name, size: file.size, type: file.type });
+        
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData,
+          // Don't set Content-Type header - browser will set it with boundary for multipart/form-data
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `Failed to upload ${file.name}`);
+        }
+        
+        const result = await response.json();
+        if (result.success && result.url) {
+          uploadedUrls.push(result.url);
+        } else {
+          throw new Error(`Invalid response for ${file.name}: ${JSON.stringify(result)}`);
+        }
+      } catch (error) {
+        console.error(`Error uploading file ${file.name}:`, error);
+        throw error;
+      }
+    }
+    
+    return uploadedUrls;
   };
 
   // Handle saving IPD Lab Test
@@ -769,8 +866,38 @@ export function ManageIPDAdmission() {
       } else if (selectedLabTest.charges) {
         payload.Charges = selectedLabTest.charges;
       }
+      // Upload files first if any are selected (now that we have patientId)
+      let documentUrls: string[] = [];
+      // Parse existing reportsUrl if it's a JSON array
       if (ipdLabTestFormData.reportsUrl && ipdLabTestFormData.reportsUrl.trim() !== '') {
-        payload.ReportsUrl = ipdLabTestFormData.reportsUrl.trim();
+        try {
+          const parsed = JSON.parse(ipdLabTestFormData.reportsUrl);
+          if (Array.isArray(parsed)) {
+            documentUrls = parsed;
+          } else if (typeof parsed === 'string') {
+            documentUrls = [parsed];
+          }
+        } catch {
+          // If not JSON, treat as single URL string
+          documentUrls = [ipdLabTestFormData.reportsUrl.trim()];
+        }
+      }
+      
+      if (selectedFiles.length > 0) {
+        try {
+          const newUrls = await uploadFiles(selectedFiles, String(patientIdValue).trim());
+          documentUrls = [...documentUrls, ...newUrls];
+        } catch (error) {
+          alert(`Failed to upload files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          return;
+        }
+      }
+      
+      // Combine all document URLs (JSON array)
+      const combinedReportsUrl = documentUrls.length > 0 ? JSON.stringify(documentUrls) : null;
+      
+      if (combinedReportsUrl) {
+        payload.ReportsUrl = combinedReportsUrl;
       }
       if (ipdLabTestFormData.testDoneDateTime && ipdLabTestFormData.testDoneDateTime.trim() !== '') {
         // Convert datetime-local to ISO 8601 format
@@ -846,6 +973,7 @@ export function ManageIPDAdmission() {
         testStatus: 'Pending',
         testDoneDateTime: ''
       });
+      setSelectedFiles([]);
       setLabTestSearchTerm('');
       setShowLabTestList(false);
       setIpdLabTestDoctorSearchTerm('');
@@ -1725,15 +1853,15 @@ export function ManageIPDAdmission() {
                             </td>
                             <td className="py-3 px-4">
                               <div className="flex items-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleOpenEditDoctorVisitDialog(visit)}
-                                  className="gap-1"
-                                >
-                                  <Edit className="size-3" />
-                                  View & Edit
-                                </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenEditDoctorVisitDialog(visit)}
+                                className="gap-1"
+                              >
+                                <Edit className="size-3" />
+                                View & Edit
+                              </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -1888,6 +2016,7 @@ export function ManageIPDAdmission() {
           setIsAddIPDLabTestDialogOpen(false);
           setIsEditIPDLabTestDialogOpen(false);
           setEditingLabTestId(null);
+          setSelectedFiles([]);
         }
       }}>
         <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
@@ -2134,13 +2263,39 @@ export function ManageIPDAdmission() {
                   </select>
                 </div>
                 <div>
-                  <Label htmlFor="ipdReportsUrl">Reports URL</Label>
+                  <Label htmlFor="add-ipdReportsUrl">Reports URL</Label>
                   <Input
-                    id="ipdReportsUrl"
-                    value={ipdLabTestFormData.reportsUrl}
-                    onChange={(e) => setIpdLabTestFormData({ ...ipdLabTestFormData, reportsUrl: e.target.value })}
-                    placeholder="Enter reports URL (optional)"
+                    id="add-ipdReportsUrl"
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      setSelectedFiles(prev => [...prev, ...files]);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
                   />
+                  {selectedFiles.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {selectedFiles.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                          <span>{file.name}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                            }}
+                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Save"</p>
                 </div>
                 <div>
                   <Label htmlFor="ipdTestDoneDateTime">Test Done Date & Time</Label>
@@ -2163,6 +2318,7 @@ export function ManageIPDAdmission() {
                 setIsEditIPDLabTestDialogOpen(false);
                 setEditingLabTestId(null);
                 setIpdLabTestSubmitError(null);
+                setSelectedFiles([]);
               }}
               disabled={ipdLabTestSubmitting}
             >
