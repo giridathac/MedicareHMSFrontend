@@ -68,6 +68,7 @@ export function ManageIPDAdmission() {
   const [showIpdLabTestDoctorList, setShowIpdLabTestDoctorList] = useState(false);
   // File upload state for ReportsUrl (similar to OT Documents)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [editUploadedDocumentUrls, setEditUploadedDocumentUrls] = useState<string[]>([]);
 
   // Doctor Visit Dialog State
   const [isAddDoctorVisitDialogOpen, setIsAddDoctorVisitDialogOpen] = useState(false);
@@ -591,6 +592,29 @@ export function ManageIPDAdmission() {
       testDoneDateTime: labTest.testDoneDateTime ? new Date(labTest.testDoneDateTime).toISOString().slice(0, 16) : ''
     });
 
+    // Parse existing documents from reportsUrl field
+    let existingDocUrls: string[] = [];
+    if (labTest.reportsUrl) {
+      try {
+        // Try parsing as JSON array first
+        const parsed = JSON.parse(labTest.reportsUrl);
+        if (Array.isArray(parsed)) {
+          existingDocUrls = parsed;
+        } else if (typeof parsed === 'string') {
+          existingDocUrls = [parsed];
+        }
+      } catch {
+        // If not JSON, treat as comma-separated string or single URL
+        if (labTest.reportsUrl.includes(',')) {
+          existingDocUrls = labTest.reportsUrl.split(',').map((url: string) => url.trim()).filter((url: string) => url);
+        } else {
+          existingDocUrls = [labTest.reportsUrl];
+        }
+      }
+    }
+    setEditUploadedDocumentUrls(existingDocUrls);
+    setSelectedFiles([]);
+
     setLabTestSearchTerm(selectedLabTest ? `${selectedLabTest.testName || 'Unknown'} (${selectedLabTest.testCategory || 'N/A'})` : '');
     setShowLabTestList(false);
     setIpdLabTestDoctorSearchTerm(selectedDoctor ? (selectedDoctor.name || selectedDoctor.doctorName || '') : '');
@@ -598,6 +622,33 @@ export function ManageIPDAdmission() {
     setIpdLabTestSubmitError(null);
     setIsEditIPDLabTestDialogOpen(true);
   };
+
+  // Update documents when editing lab test dialog opens or when form data changes
+  useEffect(() => {
+    if (isEditIPDLabTestDialogOpen && editingLabTestId && ipdLabTestFormData.reportsUrl) {
+      // Parse existing documents from reportsUrl field
+      let existingDocUrls: string[] = [];
+      if (ipdLabTestFormData.reportsUrl) {
+        try {
+          // Try parsing as JSON array first
+          const parsed = JSON.parse(ipdLabTestFormData.reportsUrl);
+          if (Array.isArray(parsed)) {
+            existingDocUrls = parsed;
+          } else if (typeof parsed === 'string') {
+            existingDocUrls = [parsed];
+          }
+        } catch {
+          // If not JSON, treat as comma-separated string or single URL
+          if (ipdLabTestFormData.reportsUrl.includes(',')) {
+            existingDocUrls = ipdLabTestFormData.reportsUrl.split(',').map((url: string) => url.trim()).filter((url: string) => url);
+          } else {
+            existingDocUrls = [ipdLabTestFormData.reportsUrl];
+          }
+        }
+      }
+      setEditUploadedDocumentUrls(existingDocUrls);
+    }
+  }, [isEditIPDLabTestDialogOpen, editingLabTestId, ipdLabTestFormData.reportsUrl]);
 
   // Handle opening Add IPD Lab Test dialog
   const handleOpenAddIPDLabTestDialog = async () => {
@@ -867,9 +918,11 @@ export function ManageIPDAdmission() {
         payload.Charges = selectedLabTest.charges;
       }
       // Upload files first if any are selected (now that we have patientId)
-      let documentUrls: string[] = [];
-      // Parse existing reportsUrl if it's a JSON array
-      if (ipdLabTestFormData.reportsUrl && ipdLabTestFormData.reportsUrl.trim() !== '') {
+      // Start with existing uploaded documents (for edit mode)
+      let documentUrls: string[] = editingLabTestId ? [...editUploadedDocumentUrls] : [];
+      
+      // If not in edit mode, parse existing reportsUrl if it's a JSON array
+      if (!editingLabTestId && ipdLabTestFormData.reportsUrl && ipdLabTestFormData.reportsUrl.trim() !== '') {
         try {
           const parsed = JSON.parse(ipdLabTestFormData.reportsUrl);
           if (Array.isArray(parsed)) {
@@ -882,7 +935,7 @@ export function ManageIPDAdmission() {
           documentUrls = [ipdLabTestFormData.reportsUrl.trim()];
         }
       }
-      
+
       if (selectedFiles.length > 0) {
         try {
           const newUrls = await uploadFiles(selectedFiles, String(patientIdValue).trim());
@@ -946,9 +999,7 @@ export function ManageIPDAdmission() {
       setIsAddIPDLabTestDialogOpen(false);
       setIsEditIPDLabTestDialogOpen(false);
       setEditingLabTestId(null);
-      setIsEditIPDLabTestDialogOpen(false);
-      setEditingLabTestId(null);
-      
+
       // Refresh the lab tests list
       if (admission?.roomAdmissionId) {
         await fetchPatientLabTests(admission.roomAdmissionId);
@@ -974,6 +1025,7 @@ export function ManageIPDAdmission() {
         testDoneDateTime: ''
       });
       setSelectedFiles([]);
+      setEditUploadedDocumentUrls([]);
       setLabTestSearchTerm('');
       setShowLabTestList(false);
       setIpdLabTestDoctorSearchTerm('');
@@ -2017,6 +2069,7 @@ export function ManageIPDAdmission() {
           setIsEditIPDLabTestDialogOpen(false);
           setEditingLabTestId(null);
           setSelectedFiles([]);
+          setEditUploadedDocumentUrls([]);
         }
       }}>
         <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
@@ -2264,6 +2317,46 @@ export function ManageIPDAdmission() {
                 </div>
                 <div>
                   <Label htmlFor="add-ipdReportsUrl">Reports URL</Label>
+                  
+                  {/* Display existing uploaded documents */}
+                  {isEditIPDLabTestDialogOpen && editUploadedDocumentUrls.length > 0 && (
+                    <div className="mb-3 space-y-2">
+                      <p className="text-sm text-gray-600 font-medium">Uploaded Documents:</p>
+                      <div className="space-y-1">
+                        {editUploadedDocumentUrls.map((url, index) => {
+                          const fileName = url.split('/').pop() || `Document ${index + 1}`;
+                          return (
+                            <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-2"
+                              >
+                                <span>{fileName}</span>
+                                <span className="text-xs text-gray-500">(opens in new tab)</span>
+                              </a>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  // Remove from UI - backend will auto-delete when Update is clicked
+                                  setEditUploadedDocumentUrls(prev => prev.filter((_, i) => i !== index));
+                                }}
+                                className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                                title="Remove file (will be deleted when you click Update)"
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* File input for adding more documents */}
                   <Input
                     id="add-ipdReportsUrl"
                     type="file"
@@ -2272,13 +2365,16 @@ export function ManageIPDAdmission() {
                     onChange={(e) => {
                       const files = Array.from(e.target.files || []);
                       setSelectedFiles(prev => [...prev, ...files]);
+                      // Reset the input so the same file can be selected again
+                      e.target.value = '';
                     }}
                     className="w-full px-3 py-2 border border-gray-200 rounded-md"
                   />
                   {selectedFiles.length > 0 && (
                     <div className="mt-2 space-y-1">
+                      <p className="text-sm text-gray-600 font-medium">New Files to Upload:</p>
                       {selectedFiles.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                        <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-blue-50 p-2 rounded">
                           <span>{file.name}</span>
                           <Button
                             type="button"
