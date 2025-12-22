@@ -73,6 +73,7 @@ export function Admissions() {
   const [doctorOptions, setDoctorOptions] = useState<any[]>([]);
   const [availableAppointments, setAvailableAppointments] = useState<any[]>([]);
   const [availableEmergencyBedSlots, setAvailableEmergencyBedSlots] = useState<any[]>([]);
+  const [availableIPDAdmissions, setAvailableIPDAdmissions] = useState<any[]>([]);
   const [roomAllocationDate, setRoomAllocationDate] = useState<Date | null>(null);
   const [addAdmissionForm, setAddAdmissionForm] = useState({
     patientId: '',
@@ -533,19 +534,54 @@ export function Admissions() {
     }
   };
 
+  // Fetch IPD admissions for a specific patient
+  const fetchPatientIPDAdmissions = async (patientId: string) => {
+    if (!patientId) {
+      setAvailableIPDAdmissions([]);
+      return;
+    }
+    
+    try {
+      console.log('Fetching IPD admissions for patient:', patientId);
+      const response = await apiRequest<any>(`/room-admissions/patient/${patientId}`);
+      console.log('IPD admissions API response:', response);
+      
+      // Handle different response structures
+      let ipdAdmissions: any[] = [];
+      
+      if (Array.isArray(response)) {
+        ipdAdmissions = response;
+      } else if (response?.data && Array.isArray(response.data)) {
+        ipdAdmissions = response.data;
+      } else if (response?.admissions && Array.isArray(response.admissions)) {
+        ipdAdmissions = response.admissions;
+      } else if (response?.roomAdmissions && Array.isArray(response.roomAdmissions)) {
+        ipdAdmissions = response.roomAdmissions;
+      }
+      
+      console.log('Mapped IPD admissions:', ipdAdmissions);
+      setAvailableIPDAdmissions(ipdAdmissions);
+    } catch (err) {
+      console.error('Error fetching IPD admissions:', err);
+      setAvailableIPDAdmissions([]);
+    }
+  };
+
   // Handle Patient Type change - fetch conditional data
   const handlePatientTypeChange = async (patientType: string) => {
     setAddAdmissionForm({
       ...addAdmissionForm,
       patientType: patientType,
       patientAppointmentId: '',
-      emergencyBedSlotId: ''
+      emergencyBedSlotId: '',
+      roomAdmissionId: ''
     });
 
     // Clear conditional data if no patient type selected
     if (!patientType) {
       setAvailableAppointments([]);
       setAvailableEmergencyBedSlots([]);
+      setAvailableIPDAdmissions([]);
       return;
     }
 
@@ -557,6 +593,8 @@ export function Admissions() {
         } else {
           setAvailableAppointments([]);
         }
+        setAvailableEmergencyBedSlots([]);
+        setAvailableIPDAdmissions([]);
       } else if (patientType === 'Emergency') {
         // If patient is already selected, fetch their emergency admissions
         if (addAdmissionForm.patientId) {
@@ -564,10 +602,22 @@ export function Admissions() {
         } else {
           setAvailableEmergencyBedSlots([]);
         }
+        setAvailableAppointments([]);
+        setAvailableIPDAdmissions([]);
+      } else if (patientType === 'IPD') {
+        // If patient is already selected, fetch their IPD admissions
+        if (addAdmissionForm.patientId) {
+          await fetchPatientIPDAdmissions(addAdmissionForm.patientId);
+        } else {
+          setAvailableIPDAdmissions([]);
+        }
+        setAvailableAppointments([]);
+        setAvailableEmergencyBedSlots([]);
       } else if (patientType === 'Direct') {
         // Direct type doesn't need conditional fields, clear all
         setAvailableAppointments([]);
         setAvailableEmergencyBedSlots([]);
+        setAvailableIPDAdmissions([]);
       }
     } catch (err) {
       console.error(`Error fetching ${patientType} data:`, err);
@@ -589,6 +639,9 @@ export function Admissions() {
       }
       if (addAdmissionForm.patientType === 'OPD' && !addAdmissionForm.patientAppointmentId) {
         throw new Error('Patient Appointment ID is required for OPD patients');
+      }
+      if (addAdmissionForm.patientType === 'IPD' && !addAdmissionForm.roomAdmissionId) {
+        throw new Error('Patient IPD Admission ID is required for IPD patients');
       }
       if (addAdmissionForm.patientType === 'Emergency' && !addAdmissionForm.emergencyBedSlotId) {
         throw new Error('Emergency Admission Bed No is required for Emergency patients');
@@ -740,6 +793,11 @@ export function Admissions() {
         admissionData.patientAppointmentId = String(addAdmissionForm.patientAppointmentId);
         admissionData.appointmentId = String(addAdmissionForm.patientAppointmentId);
       }
+      if (addAdmissionForm.patientType === 'IPD' && addAdmissionForm.roomAdmissionId) {
+        // The roomAdmissionId field contains the RoomAdmissionId from the dropdown selection
+        admissionData.roomAdmissionId = String(addAdmissionForm.roomAdmissionId);
+        admissionData.previousRoomAdmissionId = String(addAdmissionForm.roomAdmissionId);
+      }
       if (addAdmissionForm.patientType === 'Emergency' && addAdmissionForm.emergencyBedSlotId) {
         // The emergencyBedSlotId field contains the EmergencyAdmissionId from the dropdown selection
         admissionData.emergencyAdmissionId = String(addAdmissionForm.emergencyBedSlotId);
@@ -753,19 +811,118 @@ export function Admissions() {
       }
 
       // Call the API to create or update admission
+      let createdAdmission: any = null;
       if (editingAdmission && (editingAdmission.roomAdmissionId || editingAdmission.admissionId)) {
         const roomAdmissionId = editingAdmission.roomAdmissionId || editingAdmission.admissionId;
         const updateData = {
           ...admissionData,
           roomAdmissionId: Number(roomAdmissionId)
         };
-        await admissionsApi.update(updateData);
+        createdAdmission = await admissionsApi.update(updateData);
         console.log('Admission updated successfully');
         // Close edit dialog after update
         setIsViewEditDialogOpen(false);
       } else {
-        await admissionsApi.create(admissionData);
+        createdAdmission = await admissionsApi.create(admissionData);
         console.log('Admission created successfully');
+        
+        // Create PatientICUAdmission record if isLinkedToICU is Yes
+        if (addAdmissionForm.isLinkedToICU === 'Yes') {
+          try {
+            // Get ICU bed layout to find available ICU beds
+            const icuBedLayout = await admissionsApi.getICUBedLayout();
+            console.log('ICU Bed Layout:', icuBedLayout);
+            
+            // Find first available ICU bed or use first bed if none available
+            let selectedICUBed: any = null;
+            let selectedICUId: string = '';
+            
+            if (icuBedLayout && icuBedLayout.length > 0) {
+              // Try to find an available bed
+              selectedICUBed = icuBedLayout.find((bed: any) => {
+                const status = bed.status || bed.Status || '';
+                return status.toLowerCase() === 'available' || status.toLowerCase() === 'vacant';
+              });
+              
+              // If no available bed, use first bed
+              if (!selectedICUBed) {
+                selectedICUBed = icuBedLayout[0];
+              }
+              
+              // Extract ICU and bed IDs
+              selectedICUId = selectedICUBed.icuId || selectedICUBed.ICUId || selectedICUBed.ICU_ID || '';
+              const icuBedId = selectedICUBed.icuBedId || selectedICUBed.ICUBedId || selectedICUBed.id || '';
+              const icuBedNo = selectedICUBed.bedNumber || selectedICUBed.bedNo || selectedICUBed.icuBedNo || selectedICUBed.ICUBedNo || '';
+              
+              // Get RoomAdmissionId - prioritize newly created admission ID, then fall back to form value
+              const roomAdmissionId = createdAdmission?.roomAdmissionId || createdAdmission?.admissionId || createdAdmission?.id || 
+                                      (addAdmissionForm.patientType === 'IPD' ? addAdmissionForm.roomAdmissionId : '') || '';
+              
+              // Prepare ICU admission payload with all fields from admission form
+              const icuAdmissionPayload: any = {
+                PatientId: String(patientId).trim(),
+                PatientType: addAdmissionForm.patientType || 'Direct',
+                ICUId: String(selectedICUId),
+                ICUBedId: String(icuBedId),
+                ICUBedNo: icuBedNo,
+                ICUPatientStatus: 'Critical', // Default status
+                ICUAllocationFromDate: addAdmissionForm.roomAllocationDate || new Date().toISOString().split('T')[0],
+                ICUAllocationToDate: '', // Can be left empty
+                Diagnosis: addAdmissionForm.diagnosis || '',
+                TreatementDetails: addAdmissionForm.caseDetails || addAdmissionForm.caseSheet || '',
+                PatientCondition: addAdmissionForm.caseDetails || '',
+                OnVentilator: 'No', // Default
+                ICUAdmissionStatus: 'Occupied',
+                
+                // Add AttendingDoctorId/DoctorId from admission
+                ...(admissionData.doctorId ? {
+                  AttendingDoctorId: String(admissionData.doctorId),
+                  DoctorId: String(admissionData.doctorId)
+                } : {}),
+                
+                // Add RoomAdmissionId if available (prioritize newly created, then form value for IPD)
+                ...(roomAdmissionId ? {
+                  RoomAdmissionId: String(roomAdmissionId)
+                } : {}),
+                
+                // Add conditional fields based on PatientType
+                ...(addAdmissionForm.patientType === 'OPD' && addAdmissionForm.patientAppointmentId ? {
+                  AppointmentId: String(addAdmissionForm.patientAppointmentId),
+                  PatientAppointmentId: String(addAdmissionForm.patientAppointmentId)
+                } : {}),
+                ...(addAdmissionForm.patientType === 'Emergency' && addAdmissionForm.emergencyBedSlotId ? {
+                  EmergencyBedSlotId: String(addAdmissionForm.emergencyBedSlotId),
+                  EmergencyAdmissionId: String(addAdmissionForm.emergencyBedSlotId)
+                } : {}),
+              };
+              
+              console.log('Creating PatientICUAdmission with payload:', icuAdmissionPayload);
+              const icuAdmissionResponse = await admissionsApi.createPatientICUAdmission(icuAdmissionPayload);
+              console.log('PatientICUAdmission created successfully:', icuAdmissionResponse);
+              
+              // Update admission with ICU admission ID if returned
+              if (icuAdmissionResponse?.data?.patientICUAdmissionId || icuAdmissionResponse?.patientICUAdmissionId) {
+                const icuAdmissionId = icuAdmissionResponse?.data?.patientICUAdmissionId || icuAdmissionResponse?.patientICUAdmissionId;
+                if (createdAdmission?.roomAdmissionId || createdAdmission?.admissionId) {
+                  const roomAdmissionIdForUpdate = createdAdmission.roomAdmissionId || createdAdmission.admissionId;
+                  await admissionsApi.update({
+                    ...admissionData,
+                    roomAdmissionId: Number(roomAdmissionIdForUpdate),
+                    icuAdmissionId: String(icuAdmissionId)
+                  });
+                  console.log('Admission updated with ICU Admission ID:', icuAdmissionId);
+                }
+              }
+            } else {
+              console.warn('No ICU beds available. Cannot create ICU admission.');
+            }
+          } catch (icuError: any) {
+            console.error('Error creating PatientICUAdmission:', icuError);
+            // Don't fail the entire admission creation if ICU admission fails
+            // Just log the error
+            console.warn('Admission created but ICU admission creation failed:', icuError?.message || 'Unknown error');
+          }
+        }
       }
 
       // Refresh admissions list
@@ -826,6 +983,7 @@ export function Admissions() {
       });
       setAvailableAppointments([]);
       setAvailableEmergencyBedSlots([]);
+      setAvailableIPDAdmissions([]);
       setAdmissionError(null);
     } catch (error: any) {
       console.error('Error saving admission:', error);
@@ -934,6 +1092,7 @@ export function Admissions() {
       });
       setAvailableAppointments([]);
       setAvailableEmergencyBedSlots([]);
+      setAvailableIPDAdmissions([]);
     }
   }, [isDialogOpen]);
 
@@ -1113,6 +1272,8 @@ export function Admissions() {
                                       await fetchPatientAppointments(patientId);
                                     } else if (updatedForm.patientType === 'Emergency' && patientId) {
                                       await fetchPatientEmergencyBedSlots(patientId);
+                                    } else if (updatedForm.patientType === 'IPD' && patientId) {
+                                      await fetchPatientIPDAdmissions(patientId);
                                     }
                                     // Keep dropdown open to allow selecting a different patient
                                   }}
@@ -1166,6 +1327,7 @@ export function Admissions() {
                   >
                     <option value="">Select Patient Type</option>
                     <option value="OPD">OPD</option>
+                    <option value="IPD">IPD</option>
                     <option value="Emergency">Emergency</option>
                     <option value="Direct">Direct</option>
                   </select>
@@ -1204,6 +1366,48 @@ export function Admissions() {
                         return (
                           <option key={appointmentId} value={appointmentId}>
                             {tokenNo ? `Token: ${tokenNo} - ${formattedDate}` : `Appointment ID: ${appointmentId} - ${formattedDate}`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+
+                {addAdmissionForm.patientType === 'IPD' && (
+                  <div>
+                    <Label htmlFor="roomAdmissionId">Patient IPD Admission ID *</Label>
+                    <select
+                      id="roomAdmissionId"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                      value={addAdmissionForm.roomAdmissionId}
+                      onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, roomAdmissionId: e.target.value })}
+                      required
+                    >
+                      <option value="">Select Patient IPD Admission ID</option>
+                      {availableIPDAdmissions.map((admission: any) => {
+                        // Extract RoomAdmissionId (prioritize this field)
+                        const roomAdmissionId = admission.roomAdmissionId || admission.RoomAdmissionId || admission.admissionId || admission.id || '';
+                        const bedNumber = admission.bedNumber || admission.BedNumber || admission.bedNo || admission.BedNo || '';
+                        const roomType = admission.roomType || admission.RoomType || '';
+                        const admissionDate = admission.roomAllocationDate || admission.RoomAllocationDate || admission.admissionDate || admission.AdmissionDate || '';
+                        let formattedDate = '';
+                        if (admissionDate) {
+                          try {
+                            if (typeof admissionDate === 'string') {
+                              formattedDate = admissionDate.split('T')[0];
+                            } else {
+                              formattedDate = new Date(admissionDate).toISOString().split('T')[0];
+                            }
+                          } catch {
+                            formattedDate = String(admissionDate).split('T')[0] || 'N/A';
+                          }
+                        } else {
+                          formattedDate = 'N/A';
+                        }
+                        const status = admission.admissionStatus || admission.AdmissionStatus || admission.status || admission.Status || 'Active';
+                        return (
+                          <option key={roomAdmissionId} value={roomAdmissionId}>
+                            {bedNumber ? `Bed: ${bedNumber} - ${roomType} - ${formattedDate} (${status})` : `ID: ${roomAdmissionId} - ${formattedDate} (${status})`}
                           </option>
                         );
                       })}
