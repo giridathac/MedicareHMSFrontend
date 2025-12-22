@@ -6,6 +6,7 @@ import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { ResizableDialogContent } from './ResizableDialogContent';
+import { CustomResizableDialog, CustomResizableDialogHeader, CustomResizableDialogTitle, CustomResizableDialogClose } from './CustomResizableDialog';
 import { Badge } from './ui/badge';
 import { TestTube, Search, FileText, Clock, CheckCircle, AlertCircle, Download, Edit, Upload, FolderOpen, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -22,6 +23,9 @@ import { Textarea } from './ui/textarea';
 import { DialogFooter } from './ui/dialog';
 import { Switch } from './ui/switch';
 import { convertToIST } from '../utils/timeUtils';
+import { getCurrentIST } from '../config/timezone';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 interface LabTest {
   id: number;
@@ -125,17 +129,19 @@ export function Laboratory() {
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [weeklyReportError, setWeeklyReportError] = useState<string | null>(null);
   
-  // View and Edit PatientLabTest state
+  // View PatientLabTest state
   const [viewingPatientLabTest, setViewingPatientLabTest] = useState<any>(null);
   const [isViewPatientLabTestDialogOpen, setIsViewPatientLabTestDialogOpen] = useState(false);
+  
+  // Manage PatientLabTest state
   const [editingPatientLabTest, setEditingPatientLabTest] = useState<any>(null);
-  const [isEditPatientLabTestDialogOpen, setIsEditPatientLabTestDialogOpen] = useState(false);
-  const [editPatientLabTestFormData, setEditPatientLabTestFormData] = useState<any>(null);
-  const [editPatientLabTestSubmitting, setEditPatientLabTestSubmitting] = useState(false);
-  const [editPatientLabTestSubmitError, setEditPatientLabTestSubmitError] = useState<string | null>(null);
-  // File upload state for Edit ReportsUrl (similar to OT Documents)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState<any>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editSubmitError, setEditSubmitError] = useState<string | null>(null);
   const [editSelectedFiles, setEditSelectedFiles] = useState<File[]>([]);
   const [editUploadedDocumentUrls, setEditUploadedDocumentUrls] = useState<string[]>([]);
+  const [editTestDoneDateTime, setEditTestDoneDateTime] = useState<Date | null>(null);
 
   // New Lab Order Dialog State
   const [newLabOrderFormData, setNewLabOrderFormData] = useState({
@@ -1221,13 +1227,24 @@ export function Laboratory() {
     setIsViewPatientLabTestDialogOpen(true);
   };
 
+  // Helper function to convert date string to Date object for DatePicker
+  const getDateFromTestDoneDateTime = (dateTime: string | null | undefined): Date | null => {
+    if (!dateTime) return null;
+    try {
+      const date = new Date(dateTime);
+      return isNaN(date.getTime()) ? null : convertToIST(date);
+    } catch {
+      return null;
+    }
+  };
+
   // Handle editing PatientLabTest
   const handleEditPatientLabTest = (test: any) => {
     console.log('Edit Patient Lab Test - test object:', test);
-    console.log('Edit Patient Lab Test - patientNo:', test.patientNo);
-    console.log('Edit Patient Lab Test - testName:', test.testName);
     setEditingPatientLabTest(test);
-    setEditPatientLabTestFormData({
+    const testDoneDateTime = getDateFromTestDoneDateTime(test.testDoneDateTime);
+    setEditTestDoneDateTime(testDoneDateTime);
+    setEditFormData({
       patientLabTestsId: test.patientLabTestsId || test.id,
       patientId: test.patientId || '',
       patientNo: test.patientNo || (test as any).PatientNo || (test as any).Patient?.PatientNo || '',
@@ -1246,11 +1263,10 @@ export function Laboratory() {
       charges: test.charges || 0
     });
     
-    // Parse existing documents from reportsUrl field (similar to OT Documents)
+    // Parse existing documents from reportsUrl field
     let existingDocUrls: string[] = [];
     if (test.reportsUrl) {
       try {
-        // Try parsing as JSON array first
         const parsed = JSON.parse(test.reportsUrl);
         if (Array.isArray(parsed)) {
           existingDocUrls = parsed;
@@ -1258,7 +1274,6 @@ export function Laboratory() {
           existingDocUrls = [parsed];
         }
       } catch {
-        // If not JSON, treat as comma-separated string or single URL
         if (test.reportsUrl.includes(',')) {
           existingDocUrls = test.reportsUrl.split(',').map((url: string) => url.trim()).filter((url: string) => url);
         } else {
@@ -1269,17 +1284,15 @@ export function Laboratory() {
     setEditUploadedDocumentUrls(existingDocUrls);
     setEditSelectedFiles([]);
     
-    setIsEditPatientLabTestDialogOpen(true);
+    setIsEditDialogOpen(true);
   };
 
-  // Update documents when editingPatientLabTest is updated (after save, fresh data from API)
+  // Update documents when editingPatientLabTest is updated
   useEffect(() => {
-    if (editingPatientLabTest && isEditPatientLabTestDialogOpen) {
-      // Parse existing documents from reportsUrl field
+    if (editingPatientLabTest && isEditDialogOpen) {
       let existingDocUrls: string[] = [];
       if (editingPatientLabTest.reportsUrl) {
         try {
-          // Try parsing as JSON array first
           const parsed = JSON.parse(editingPatientLabTest.reportsUrl);
           if (Array.isArray(parsed)) {
             existingDocUrls = parsed;
@@ -1287,7 +1300,6 @@ export function Laboratory() {
             existingDocUrls = [parsed];
           }
         } catch {
-          // If not JSON, treat as comma-separated string or single URL
           if (editingPatientLabTest.reportsUrl.includes(',')) {
             existingDocUrls = editingPatientLabTest.reportsUrl.split(',').map((url: string) => url.trim()).filter((url: string) => url);
           } else {
@@ -1297,100 +1309,97 @@ export function Laboratory() {
       }
       setEditUploadedDocumentUrls(existingDocUrls);
     }
-  }, [editingPatientLabTest, isEditPatientLabTestDialogOpen]);
+  }, [editingPatientLabTest, isEditDialogOpen]);
 
   // Handle saving edited PatientLabTest
   const handleSaveEditPatientLabTest = async () => {
-    if (!editPatientLabTestFormData || !editingPatientLabTest) {
+    if (!editFormData || !editingPatientLabTest) {
       return;
     }
 
     try {
-      setEditPatientLabTestSubmitting(true);
-      setEditPatientLabTestSubmitError(null);
+      setEditSubmitting(true);
+      setEditSubmitError(null);
 
-      const patientLabTestsId = editPatientLabTestFormData.patientLabTestsId;
-      if (!patientLabTestsId) {
-        throw new Error('Patient Lab Test ID is required');
-      }
+      const patientLabTestsId = editFormData.patientLabTestsId;
 
-      const payload: any = {
-        PatientLabTestsId: patientLabTestsId,
-        PatientId: editPatientLabTestFormData.patientId,
-        LabTestId: Number(editPatientLabTestFormData.labTestId),
-        PatientType: editPatientLabTestFormData.patientType,
-        Priority: editPatientLabTestFormData.priority,
-        TestStatus: editPatientLabTestFormData.testStatus,
-        LabTestDone: editPatientLabTestFormData.labTestDone,
-        Status: editPatientLabTestFormData.status
-      };
-
-      // Upload new files first if any are selected (similar to OT Documents)
+      // Upload new files if any
       let documentUrls: string[] = [...editUploadedDocumentUrls];
       if (editSelectedFiles.length > 0) {
         try {
-          const newUrls = await uploadFiles(editSelectedFiles, editPatientLabTestFormData.patientId);
+          const newUrls = await uploadFiles(editSelectedFiles, editFormData.patientId);
           documentUrls = [...documentUrls, ...newUrls];
         } catch (error) {
           alert(`Failed to upload files: ${error instanceof Error ? error.message : 'Unknown error'}`);
           return;
         }
       }
-      
+
       // Combine all document URLs (JSON array)
       const combinedReportsUrl = documentUrls.length > 0 ? JSON.stringify(documentUrls) : null;
-      
+
+      const payload: any = {
+        PatientId: editFormData.patientId,
+        LabTestId: Number(editFormData.labTestId),
+        PatientType: editFormData.patientType,
+        Priority: editFormData.priority,
+        TestStatus: editFormData.testStatus,
+        LabTestDone: editFormData.labTestDone,
+        Status: editFormData.status || 'Active',
+      };
+
       if (combinedReportsUrl) {
         payload.ReportsUrl = combinedReportsUrl;
       }
-      if (editPatientLabTestFormData.testDoneDateTime) {
-        payload.TestDoneDateTime = editPatientLabTestFormData.testDoneDateTime;
-      }
-      if (editPatientLabTestFormData.roomAdmissionId) {
-        payload.RoomAdmissionId = Number(editPatientLabTestFormData.roomAdmissionId);
-      }
-      if (editPatientLabTestFormData.emergencyBedSlotId) {
-        payload.EmergencyBedSlotId = Number(editPatientLabTestFormData.emergencyBedSlotId);
-      }
-      if (editPatientLabTestFormData.billId) {
-        payload.BillId = Number(editPatientLabTestFormData.billId);
-      }
-      if (editPatientLabTestFormData.charges) {
-        payload.Charges = Number(editPatientLabTestFormData.charges);
+
+      if (editTestDoneDateTime) {
+        // Format date to YYYY-MM-DD HH:MM:SS format
+        const istDate = convertToIST(editTestDoneDateTime);
+        const year = istDate.getUTCFullYear();
+        const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(istDate.getUTCDate()).padStart(2, '0');
+        const hours = String(istDate.getUTCHours()).padStart(2, '0');
+        const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+        const seconds = String(istDate.getUTCSeconds()).padStart(2, '0');
+        payload.TestDoneDateTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
       }
 
-      console.log('Updating PatientLabTest with payload:', payload);
-      const updateResponse = await apiRequest<any>(`/patient-lab-tests/${patientLabTestsId}`, {
+      if (editFormData.roomAdmissionId) {
+        payload.RoomAdmissionId = Number(editFormData.roomAdmissionId);
+      }
+
+      if (editFormData.emergencyBedSlotId) {
+        payload.EmergencyBedSlotId = Number(editFormData.emergencyBedSlotId);
+      }
+
+      if (editFormData.billId) {
+        payload.BillId = Number(editFormData.billId);
+      }
+
+      console.log('Saving edit with payload:', payload);
+      const updateResponse = await apiRequest(`/patient-lab-tests/${patientLabTestsId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
-      // Refresh the tests list by calling the main fetch function
-      await fetchPatientLabTests();
-      
-      // Update editingPatientLabTest with fresh data from API response
-      // This ensures the useEffect will update editUploadedDocumentUrls with fresh reportsUrl
-      if (updateResponse) {
-        const updatedTest = updateResponse.data || updateResponse;
-        if (updatedTest) {
-          setEditingPatientLabTest(updatedTest);
-        }
-      }
+      // Update the editingPatientLabTest with fresh data from API
+      setEditingPatientLabTest(updateResponse);
+
+      // Refresh the tests list
+      window.location.reload();
 
       // Close dialog
-      setIsEditPatientLabTestDialogOpen(false);
+      setIsEditDialogOpen(false);
       setEditingPatientLabTest(null);
-      setEditPatientLabTestFormData(null);
+      setEditFormData(null);
       setEditSelectedFiles([]);
       setEditUploadedDocumentUrls([]);
+      setEditTestDoneDateTime(null);
     } catch (err) {
-      console.error('Error saving PatientLabTest:', err);
-      setEditPatientLabTestSubmitError(err instanceof Error ? err.message : 'Failed to save patient lab test');
+      console.error('Error saving edit:', err);
+      setEditSubmitError(err instanceof Error ? err.message : 'Failed to save changes');
     } finally {
-      setEditPatientLabTestSubmitting(false);
+      setEditSubmitting(false);
     }
   };
 
@@ -2544,50 +2553,29 @@ export function Laboratory() {
           </TabsList>
 
           <TabsContent value="all">
-            <TestsList 
-              tests={filteredTests} 
+            <TestsList
+              tests={filteredTests}
               onSelectTest={setSelectedTest}
-              onEditTest={(test) => {
-                setEditingPatientLabTest(test);
-                setEditPatientLabTestFormData({
-                  patientLabTestsId: test.patientLabTestsId || test.id,
-                  patientId: test.patientId || '',
-                  patientNo: test.patientNo || (test as any).PatientNo || (test as any).Patient?.PatientNo || '',
-                  labTestId: test.labTestId || '',
-                  testName: test.testName || test.labTestName || (test as any).TestName || (test as any).LabTest?.TestName || '',
-                  patientType: test.patientType || 'OPD',
-                  priority: test.priority || 'Normal',
-                  testStatus: test.testStatus || test.status || 'Pending',
-                  labTestDone: test.labTestDone === 'Yes' || test.labTestDone === true ? 'Yes' : 'No',
-                  reportsUrl: test.reportsUrl || '',
-                  testDoneDateTime: test.testDoneDateTime || '',
-                  roomAdmissionId: test.roomAdmissionId || '',
-                  emergencyBedSlotId: test.emergencyBedSlotId || '',
-                  billId: test.billId || '',
-                  status: (test as any).statusValue || test.status || 'Active',
-                  charges: test.charges || 0
-                });
-                setIsEditPatientLabTestDialogOpen(true);
-              }}
+              onEditTest={handleEditPatientLabTest}
             />
           </TabsContent>
           <TabsContent value="pending">
-            <TestsList 
-              tests={getTestsByStatus('Pending')} 
+            <TestsList
+              tests={getTestsByStatus('Pending')}
               onSelectTest={setSelectedTest}
               onEditTest={handleEditPatientLabTest}
             />
           </TabsContent>
           <TabsContent value="progress">
-            <TestsList 
-              tests={[...getTestsByStatus('In Progress'), ...getTestsByStatus('Sample Collected')]} 
+            <TestsList
+              tests={[...getTestsByStatus('In Progress'), ...getTestsByStatus('Sample Collected')]}
               onSelectTest={setSelectedTest}
               onEditTest={handleEditPatientLabTest}
             />
           </TabsContent>
           <TabsContent value="completed">
-            <TestsList 
-              tests={[...getTestsByStatus('Completed'), ...getTestsByStatus('Reported')]} 
+            <TestsList
+              tests={[...getTestsByStatus('Completed'), ...getTestsByStatus('Reported')]}
               onSelectTest={setSelectedTest}
               onEditTest={handleEditPatientLabTest}
             />
@@ -3029,227 +3017,252 @@ export function Laboratory() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit PatientLabTest Dialog */}
-      <Dialog open={isEditPatientLabTestDialogOpen} onOpenChange={setIsEditPatientLabTestDialogOpen}>
-        <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
-          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
-            <DialogHeader className="dialog-header-standard">
-              <DialogTitle className="dialog-title-standard-view">Edit Patient Lab Test</DialogTitle>
-            </DialogHeader>
-            <div className="dialog-body-content-wrapper">
-              {editPatientLabTestFormData && (
-                <div className="dialog-form-container">
-                  {editPatientLabTestSubmitError && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-                      {editPatientLabTestSubmitError}
-                    </div>
-                  )}
-                  <div className="dialog-form-field-grid">
-                    <div className="dialog-field-single-column">
-                      <Label htmlFor="editPatientNo" className="dialog-label-standard">Patient No</Label>
-                      <Input
-                        id="editPatientNo"
-                        value={editPatientLabTestFormData?.patientNo ? String(editPatientLabTestFormData.patientNo) : 'N/A'}
-                        disabled
-                        className="dialog-input-standard"
-                        style={{ fontWeight: 'normal' }}
-                      />
-                    </div>
-                    <div className="dialog-field-single-column">
-                      <Label htmlFor="editTestName" className="dialog-label-standard">Lab Name</Label>
-                      <Input
-                        id="editTestName"
-                        value={editPatientLabTestFormData?.testName ? String(editPatientLabTestFormData.testName) : 'N/A'}
-                        disabled
-                        className="dialog-input-standard"
-                        style={{ fontWeight: 'normal' }}
-                      />
-                    </div>
-                    <div className="dialog-field-single-column">
-                      <Label htmlFor="editPatientType" className="dialog-label-standard">PatientType *</Label>
-                      <select
-                        id="editPatientType"
-                        aria-label="PatientType"
-                        className="dialog-select-standard"
-                        value={editPatientLabTestFormData.patientType}
-                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, patientType: e.target.value })}
-                        disabled
-                      >
-                        <option value="OPD">OPD</option>
-                        <option value="IPD">IPD</option>
-                        <option value="Emergency">Emergency</option>
-                        <option value="Direct">Direct</option>
-                      </select>
-                    </div>
-                    <div className="dialog-field-single-column">
-                      <Label htmlFor="editPriority" className="dialog-label-standard">Priority *</Label>
-                      <select
-                        id="editPriority"
-                        aria-label="Priority"
-                        className="dialog-select-standard"
-                        value={editPatientLabTestFormData.priority}
-                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, priority: e.target.value })}
-                      >
-                        <option value="Normal">Normal</option>
-                        <option value="Urgent">Urgent</option>
-                      </select>
-                    </div>
-                    <div className="dialog-field-single-column">
-                      <Label htmlFor="editTestStatus" className="dialog-label-standard">TestStatus *</Label>
-                      <select
-                        id="editTestStatus"
-                        aria-label="TestStatus"
-                        className="dialog-select-standard"
-                        value={editPatientLabTestFormData.testStatus}
-                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, testStatus: e.target.value })}
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="InProgress">InProgress</option>
-                        <option value="Completed">Completed</option>
-                      </select>
-                    </div>
-                    <div className="dialog-field-single-column">
-                      <Label htmlFor="editLabTestDone" className="dialog-label-standard">LabTestDone *</Label>
-                      <select
-                        id="editLabTestDone"
-                        aria-label="LabTestDone"
-                        className="dialog-select-standard"
-                        value={editPatientLabTestFormData.labTestDone}
-                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, labTestDone: e.target.value })}
-                      >
-                        <option value="No">No</option>
-                        <option value="Yes">Yes</option>
-                      </select>
-                    </div>
-                    <div className="dialog-field-single-column">
-                      <Label htmlFor="edit-reportsUrl" className="dialog-label-standard">ReportsUrl</Label>
-                      
-                      {/* Display existing uploaded documents */}
-                      {editUploadedDocumentUrls.length > 0 && (
-                        <div className="mb-3 space-y-2">
-                          <p className="text-sm text-gray-600 font-medium">Uploaded Documents:</p>
-                          <div className="space-y-1">
-                            {editUploadedDocumentUrls.map((url, index) => {
-                              const fileName = url.split('/').pop() || `Document ${index + 1}`;
-                              return (
-                                <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                                  <a
-                                    href={url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-2"
-                                  >
-                                    <span>{fileName}</span>
-                                    <span className="text-xs text-gray-500">(opens in new tab)</span>
-                                  </a>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      // Remove from UI - backend will auto-delete when Update is clicked
-                                      setEditUploadedDocumentUrls(prev => prev.filter((_, i) => i !== index));
-                                    }}
-                                    className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                                    title="Remove file (will be deleted when you click Update)"
-                                  >
-                                    ×
-                                  </Button>
-                                </div>
-                              );
-                            })}
+      {/* Manage PatientLabTest Dialog using CustomResizableDialog */}
+      <CustomResizableDialog 
+        open={isEditDialogOpen} 
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open);
+          if (!open) {
+            setEditingPatientLabTest(null);
+            setEditFormData(null);
+            setEditSelectedFiles([]);
+            setEditUploadedDocumentUrls([]);
+            setEditTestDoneDateTime(null);
+          }
+        }}
+        className="p-0 gap-0"
+        initialWidth={550}
+        maxWidth={typeof window !== 'undefined' ? window.innerWidth - 40 : 1800}
+      >
+        <CustomResizableDialogClose onClick={() => setIsEditDialogOpen(false)} />
+        <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+          <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+            <CustomResizableDialogTitle className="dialog-title-standard-view">Manage Patient Lab Test</CustomResizableDialogTitle>
+          </CustomResizableDialogHeader>
+          <div className="dialog-body-content-wrapper">
+            {editFormData && (
+              <div className="dialog-form-container">
+                {editSubmitError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+                    {editSubmitError}
+                  </div>
+                )}
+                <div className="dialog-form-field-grid">
+                  <div className="dialog-field-single-column">
+                    <Label htmlFor="editPatientNo" className="dialog-label-standard">Patient No</Label>
+                    <Input
+                      id="editPatientNo"
+                      value={editFormData?.patientNo ? String(editFormData.patientNo) : 'N/A'}
+                      disabled
+                      className="dialog-input-standard"
+                      style={{ fontWeight: 'normal' }}
+                    />
+                  </div>
+                  <div className="dialog-field-single-column">
+                    <Label htmlFor="editTestName" className="dialog-label-standard">Lab Name</Label>
+                    <Input
+                      id="editTestName"
+                      value={editFormData?.testName ? String(editFormData.testName) : 'N/A'}
+                      disabled
+                      className="dialog-input-standard"
+                      style={{ fontWeight: 'normal' }}
+                    />
+                  </div>
+                  <div className="dialog-field-single-column">
+                    <Label htmlFor="editPatientType" className="dialog-label-standard">PatientType *</Label>
+                    <select
+                      id="editPatientType"
+                      aria-label="PatientType"
+                      className="dialog-select-standard"
+                      value={editFormData.patientType}
+                      onChange={(e) => setEditFormData({ ...editFormData, patientType: e.target.value })}
+                      disabled
+                    >
+                      <option value="OPD">OPD</option>
+                      <option value="IPD">IPD</option>
+                      <option value="Emergency">Emergency</option>
+                      <option value="Direct">Direct</option>
+                    </select>
+                  </div>
+                  <div className="dialog-field-single-column">
+                    <Label htmlFor="editPriority" className="dialog-label-standard">Priority *</Label>
+                    <select
+                      id="editPriority"
+                      aria-label="Priority"
+                      className="dialog-select-standard"
+                      value={editFormData.priority}
+                      onChange={(e) => setEditFormData({ ...editFormData, priority: e.target.value })}
+                    >
+                      <option value="Normal">Normal</option>
+                      <option value="Urgent">Urgent</option>
+                    </select>
+                  </div>
+                  <div className="dialog-field-single-column">
+                    <Label htmlFor="editTestStatus" className="dialog-label-standard">TestStatus *</Label>
+                    <select
+                      id="editTestStatus"
+                      aria-label="TestStatus"
+                      className="dialog-select-standard"
+                      value={editFormData.testStatus}
+                      onChange={(e) => setEditFormData({ ...editFormData, testStatus: e.target.value })}
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="InProgress">InProgress</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </div>
+                  <div className="dialog-field-single-column">
+                    <Label htmlFor="editLabTestDone" className="dialog-label-standard">LabTestDone *</Label>
+                    <select
+                      id="editLabTestDone"
+                      aria-label="LabTestDone"
+                      className="dialog-select-standard"
+                      value={editFormData.labTestDone}
+                      onChange={(e) => setEditFormData({ ...editFormData, labTestDone: e.target.value })}
+                    >
+                      <option value="No">No</option>
+                      <option value="Yes">Yes</option>
+                    </select>
+                  </div>
+                  <div className="dialog-field-single-column">
+                    <Label htmlFor="editTestDoneDateTime" className="dialog-label-standard">TestDoneDateTime</Label>
+                    <DatePicker
+                      id="editTestDoneDateTime"
+                      selected={editTestDoneDateTime}
+                      onChange={(date: Date | null) => {
+                        setEditTestDoneDateTime(date);
+                      }}
+                      showTimeSelect
+                      timeIntervals={1}
+                      timeCaption="Time"
+                      timeFormat="hh:mm aa"
+                      dateFormat="dd-MM-yyyy hh:mm aa"
+                      placeholderText="dd-mm-yyyy HH:MM AM/PM"
+                      className="dialog-input-standard w-full"
+                      wrapperClassName="w-full"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={100}
+                      scrollableYearDropdown
+                    />
+                  </div>
+                  <div className="dialog-form-field" style={{ gridColumn: '1 / -1', width: '100%' }}>
+                    <Label htmlFor="edit-reportsUrl" className="dialog-label-standard">ReportsUrl</Label>
+                    
+                    {/* Display existing uploaded documents */}
+                    {editUploadedDocumentUrls.length > 0 && (
+                      <div className="mb-3 space-y-2">
+                        <p className="text-sm text-gray-600 font-medium">Uploaded Documents:</p>
+                        <div className="space-y-1">
+                          {editUploadedDocumentUrls.map((url, index) => {
+                            const fileName = url.split('/').pop() || `Document ${index + 1}`;
+                            return (
+                              <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-2"
+                                >
+                                  <span>{fileName}</span>
+                                  <span className="text-xs text-gray-500">(opens in new tab)</span>
+                                </a>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditUploadedDocumentUrls(prev => prev.filter((_, i) => i !== index));
+                                  }}
+                                  className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                                  title="Remove file (will be deleted when you click Update)"
+                                >
+                                  ×
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* File input for adding more documents */}
+                    <Input
+                      id="edit-reportsUrl"
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setEditSelectedFiles(prev => [...prev, ...files]);
+                        e.target.value = '';
+                      }}
+                      className="dialog-input-standard w-full"
+                    />
+                    {editSelectedFiles.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-sm text-gray-600 font-medium">New Files to Upload:</p>
+                        {editSelectedFiles.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-blue-50 p-2 rounded">
+                            <span>{file.name}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                              }}
+                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                            >
+                              ×
+                            </Button>
                           </div>
-                        </div>
-                      )}
-                      
-                      {/* File input for adding more documents */}
-                      <Input
-                        id="edit-reportsUrl"
-                        type="file"
-                        multiple
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files || []);
-                          setEditSelectedFiles(prev => [...prev, ...files]);
-                          // Reset the input so the same file can be selected again
-                          e.target.value = '';
-                        }}
-                        className="dialog-input-standard"
-                      />
-                      {editSelectedFiles.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          <p className="text-sm text-gray-600 font-medium">New Files to Upload:</p>
-                          {editSelectedFiles.map((file, index) => (
-                            <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-blue-50 p-2 rounded">
-                              <span>{file.name}</span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setEditSelectedFiles(prev => prev.filter((_, i) => i !== index));
-                                }}
-                                className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                              >
-                                ×
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Update"</p>
-                    </div>
-                    <div className="dialog-field-single-column">
-                      <Label htmlFor="editTestDoneDateTime" className="dialog-label-standard">TestDoneDateTime</Label>
-                      <Input
-                        id="editTestDoneDateTime"
-                        type="datetime-local"
-                        value={editPatientLabTestFormData.testDoneDateTime ? new Date(editPatientLabTestFormData.testDoneDateTime).toISOString().slice(0, 16) : ''}
-                        onChange={(e) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, testDoneDateTime: e.target.value })}
-                        className="dialog-input-standard"
-                      />
-                    </div>
-                    <div className="dialog-field-single-column">
-                      <div className="flex items-center gap-3">
-                        <Label htmlFor="edit-status" className="dialog-label-standard">Status</Label>
-                        <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
-                          <Switch
-                            id="edit-status"
-                            checked={editPatientLabTestFormData.status === 'Active' || editPatientLabTestFormData.status === 'active' || editPatientLabTestFormData.status === undefined}
-                            onCheckedChange={(checked) => setEditPatientLabTestFormData({ ...editPatientLabTestFormData, status: checked ? 'Active' : 'Inactive' })}
-                            className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
-                            style={{
-                              width: '2.5rem',
-                              height: '1.5rem',
-                              minWidth: '2.5rem',
-                              minHeight: '1.5rem',
-                              display: 'inline-flex',
-                              position: 'relative',
-                              backgroundColor: (editPatientLabTestFormData.status === 'Active' || editPatientLabTestFormData.status === 'active' || editPatientLabTestFormData.status === undefined) ? '#2563eb' : '#d1d5db',
-                            }}
-                          />
-                        </div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Update"</p>
+                  </div>
+                  <div className="dialog-field-single-column">
+                    <div className="flex items-center gap-3">
+                      <Label htmlFor="edit-status" className="dialog-label-standard">Status</Label>
+                      <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
+                        <Switch
+                          id="edit-status"
+                          checked={editFormData.status === 'Active' || editFormData.status === 'active' || editFormData.status === undefined}
+                          onCheckedChange={(checked) => setEditFormData({ ...editFormData, status: checked ? 'Active' : 'Inactive' })}
+                          className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
+                          style={{
+                            width: '2.5rem',
+                            height: '1.5rem',
+                            minWidth: '2.5rem',
+                            minHeight: '1.5rem',
+                            display: 'inline-flex',
+                            position: 'relative',
+                            backgroundColor: (editFormData.status === 'Active' || editFormData.status === 'active' || editFormData.status === undefined) ? '#2563eb' : '#d1d5db',
+                          }}
+                        />
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
-            <div className="dialog-footer-standard">
-              <Button variant="outline" onClick={() => {
-                setIsEditPatientLabTestDialogOpen(false);
-                setEditSelectedFiles([]);
-                setEditUploadedDocumentUrls([]);
-              }} className="dialog-footer-button">
-                Cancel
-              </Button>
-              <Button onClick={handleSaveEditPatientLabTest} disabled={editPatientLabTestSubmitting} className="dialog-footer-button">
-                {editPatientLabTestSubmitting ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </div>
+              </div>
+            )}
           </div>
-        </ResizableDialogContent>
-      </Dialog>
+          <div className="dialog-footer-standard flex justify-end gap-2 px-6 py-3 flex-shrink-0 border-t">
+            <Button variant="outline" onClick={() => {
+              setIsEditDialogOpen(false);
+              setEditSelectedFiles([]);
+              setEditUploadedDocumentUrls([]);
+            }} className="dialog-footer-button">
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEditPatientLabTest} disabled={editSubmitting} className="dialog-footer-button">
+              {editSubmitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
+      </CustomResizableDialog>
       </div>
       </div>
     </div>
