@@ -291,13 +291,17 @@ export function ICUManagement() {
                           (severityRaw === 'Serious' || severityRaw === 'serious' || severityRaw === 'SERIOUS') ? 'Serious' : 'Stable';
 
           // Extract attending doctor with enhanced nested object support
+          // Prioritize attendingDoctorName as specified
           let attendingDoctor = extractField(admission, [
+            'attendingDoctorName', 'AttendingDoctorName', 'attending_doctor_name', 'Attending_Doctor_Name',
+            'PatientICUAdmission.attendingDoctorName', 'PatientICUAdmission.AttendingDoctorName',
             'attendingDoctor', 'AttendingDoctor', 'attending_doctor', 'Attending_Doctor',
             'doctor', 'Doctor', 'doctorName', 'DoctorName', 'admittedBy', 'AdmittedBy',
             'Doctor.DoctorName', 'Doctor.name', 'Doctor.Name', 'Doctor.UserName',
             'doctor.doctorName', 'doctor.name', 'doctor.Name', 'doctor.userName',
             'AttendingDoctor.DoctorName', 'AttendingDoctor.name', 'AttendingDoctor.Name',
             'attendingDoctor.doctorName', 'attendingDoctor.name', 'attendingDoctor.Name',
+            'PatientICUAdmission.attendingDoctorName', 'PatientICUAdmission.AttendingDoctorName',
             'PatientICUAdmission.AttendingDoctor', 'PatientICUAdmission.attendingDoctor',
             'PatientICUAdmission.Doctor', 'PatientICUAdmission.doctor',
             'PatientICUAdmission.AttendingDoctor.DoctorName', 'PatientICUAdmission.AttendingDoctor.name',
@@ -408,6 +412,7 @@ export function ICUManagement() {
             'PatientICUAdmission.patientType', 'PatientICUAdmission.PatientType',
             'PatientICUAdmission.patient_type', 'PatientICUAdmission.Patient_Type'
           ], null);
+          console.log('&&&&&&&&&&&&&&&&&&&&&&&&&&PatientType:', patientType);
 
           return {
             id: patientICUAdmissionId || admission.id || admission.Id || admission.roomAdmissionId || admission.RoomAdmissionId || (index + 1),

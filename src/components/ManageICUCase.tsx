@@ -6,7 +6,7 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { FlaskConical, Stethoscope, Heart, ArrowLeft, Activity, FileText, Plus, Eye, Edit } from 'lucide-react';
 import { admissionsApi } from '../api/admissions';
@@ -16,6 +16,7 @@ import { useStaff } from '../hooks/useStaff';
 import { useRoles } from '../hooks/useRoles';
 import { labTestsApi } from '../api/labTests';
 import { LabTest } from '../types';
+import { doctorsApi } from '../api/doctors';
 
 interface ICUAdmission {
   id?: number | string;
@@ -102,14 +103,17 @@ export function ManageICUCase() {
     bloodPressure: '',
     temperature: '',
     oxygenSaturation: '',
+    o2Saturation: '',
+    pulseRate: '',
     respiratoryRate: '',
     bloodSugar: '',
     recordedDateTime: '',
-    recordedBy: '',
     dailyOrHourlyVitals: '',
     nurseId: '',
     nurseVisitsDetails: '',
-    patientCondition: ''
+    patientCondition: '',
+    vitalsStatus: '',
+    vitalsRemarks: ''
   });
   const [icuVitalsSubmitting, setIcuVitalsSubmitting] = useState(false);
   const [icuVitalsSubmitError, setIcuVitalsSubmitError] = useState<string | null>(null);
@@ -119,6 +123,11 @@ export function ManageICUCase() {
   const [icuVitalsLoading, setIcuVitalsLoading] = useState(false);
   const [icuVitalsError, setIcuVitalsError] = useState<string | null>(null);
   const [editingICUVitalsId, setEditingICUVitalsId] = useState<string | number | null>(null);
+  
+  // Doctor selection state for Add/Edit ICU Doctor Visit
+  const [availableDoctors, setAvailableDoctors] = useState<any[]>([]);
+  const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
+  const [showDoctorList, setShowDoctorList] = useState(false);
   
   // Add Patient Lab Test Dialog State
   const [isAddLabTestDialogOpen, setIsAddLabTestDialogOpen] = useState(false);
@@ -679,6 +688,51 @@ export function ManageICUCase() {
           }
           return def;
         };
+        
+        // Extract nurseId first
+        const nurseIdValue = extract(v, ['nurseId', 'NurseId', 'nurse_id', 'Nurse_ID']);
+        
+        // Extract nurse name with multiple variations
+        let nurseNameValue = extract(v, [
+          'nurseName', 'NurseName', 'nurse_name', 'Nurse_Name',
+          'nurseFullName', 'NurseFullName', 'nurse_full_name', 'Nurse_Full_Name'
+        ], '');
+        
+        // If not found, try nested Nurse object with various field names
+        if (!nurseNameValue || nurseNameValue === '') {
+          const nurseObj = v?.Nurse || v?.nurse;
+          if (nurseObj) {
+            nurseNameValue = nurseObj.UserName || 
+                            nurseObj.userName || 
+                            nurseObj.name || 
+                            nurseObj.Name || 
+                            nurseObj.fullName || 
+                            nurseObj.FullName ||
+                            nurseObj.nurseName ||
+                            nurseObj.NurseName || '';
+          }
+        }
+        
+        // Also check for direct nested path variations
+        if (!nurseNameValue || nurseNameValue === '') {
+          nurseNameValue = extract(v, [
+            'Nurse.UserName', 'Nurse.name', 'Nurse.Name', 'Nurse.fullName', 'Nurse.FullName',
+            'nurse.UserName', 'nurse.name', 'nurse.Name', 'nurse.fullName', 'nurse.FullName'
+          ], '');
+        }
+        
+        // If still not found and we have a nurseId, try to find the nurse in the staff list
+        if ((!nurseNameValue || nurseNameValue === '') && nurseIdValue && staff && staff.length > 0) {
+          const foundNurse = staff.find((s: any) => {
+            const staffId = s.UserId || s.userId || s.id || s.Id;
+            return staffId && String(staffId) === String(nurseIdValue);
+          });
+          if (foundNurse) {
+            nurseNameValue = (foundNurse as any).UserName || (foundNurse as any).userName || (foundNurse as any).name || (foundNurse as any).Name || '';
+            console.log(`Found nurse name from staff list: ${nurseNameValue} for nurseId: ${nurseIdValue}`);
+          }
+        }
+        
         return {
           icuVisitVitalsId: extract(v, ['icuVisitVitalsId', 'ICUVisitVitalsId', 'icuNurseVisitVitalsId', 'ICUNurseVisitVitalsId', 'id', 'Id']),
           icuAdmissionId: extract(v, ['icuAdmissionId', 'ICUAdmissionId']),
@@ -699,11 +753,20 @@ export function ManageICUCase() {
           recordedDateTime: extract(v, ['recordedDateTime', 'RecordedDateTime']),
           recordedBy: extract(v, ['recordedBy', 'RecordedBy']),
           dailyOrHourlyVitals: extract(v, ['dailyOrHourlyVitals', 'DailyOrHourlyVitals']),
-          nurseId: extract(v, ['nurseId', 'NurseId']),
+          nurseId: nurseIdValue,
+          nurseName: nurseNameValue || 'N/A',
           nurseVisitsDetails: extract(v, ['nurseVisitsDetails', 'NurseVisitsDetails', 'visitsDetails', 'VisitsDetails']),
           patientCondition: extract(v, [
             'patientCondition', 'PatientCondition', 'patientStatus', 'PatientStatus',
             'condition', 'Condition', 'status', 'Status'
+          ]),
+          pulseRate: extract(v, [
+            'pulseRate', 'PulseRate', 'pulse_rate', 'Pulse_Rate',
+            'pulse', 'Pulse', 'PR', 'pr'
+          ]),
+          vitalsRemarks: extract(v, [
+            'vitalsRemarks', 'VitalsRemarks', 'vitals_remarks', 'Vitals_Remarks',
+            'remarks', 'Remarks', 'vitalsNotes', 'VitalsNotes', 'notes', 'Notes'
           ]),
         };
       };
@@ -994,14 +1057,17 @@ export function ManageICUCase() {
         bloodPressure: '',
         temperature: '',
         oxygenSaturation: '',
+        o2Saturation: '',
+        pulseRate: '',
         respiratoryRate: '',
         bloodSugar: '',
         recordedDateTime: new Date().toISOString().slice(0, 16), // Current date/time in local format
-        recordedBy: '',
         dailyOrHourlyVitals: '',
         nurseId: '',
         nurseVisitsDetails: '',
-        patientCondition: ''
+        patientCondition: '',
+        vitalsStatus: '',
+        vitalsRemarks: ''
       });
       setNurseSearchTerm('');
       setShowNurseList(false);
@@ -1087,6 +1153,15 @@ export function ManageICUCase() {
         payload.OxygenSaturation = null;
         payload.O2 = null;
       }
+      // O2 Saturation (separate field)
+      if (icuVitalsFormData.o2Saturation && icuVitalsFormData.o2Saturation.trim() !== '') {
+        const o2SatVal = Number(icuVitalsFormData.o2Saturation);
+        payload.O2Saturation = o2SatVal;
+      }
+      // Pulse Rate (separate from heart rate)
+      if (icuVitalsFormData.pulseRate && icuVitalsFormData.pulseRate.trim() !== '') {
+        payload.PulseRate = Number(icuVitalsFormData.pulseRate);
+      }
       if (icuVitalsFormData.respiratoryRate && icuVitalsFormData.respiratoryRate.trim() !== '') {
         payload.RespiratoryRate = Number(icuVitalsFormData.respiratoryRate);
       }
@@ -1099,9 +1174,6 @@ export function ManageICUCase() {
       // Add optional string fields only if they have values
       if (icuVitalsFormData.bloodPressure && icuVitalsFormData.bloodPressure.trim() !== '') {
         payload.BloodPressure = icuVitalsFormData.bloodPressure.trim();
-      }
-      if (icuVitalsFormData.recordedBy && icuVitalsFormData.recordedBy.trim() !== '') {
-        payload.RecordedBy = icuVitalsFormData.recordedBy.trim();
       }
       if (icuVitalsFormData.dailyOrHourlyVitals && icuVitalsFormData.dailyOrHourlyVitals.trim() !== '') {
         payload.DailyOrHourlyVitals = icuVitalsFormData.dailyOrHourlyVitals.trim();
@@ -1116,6 +1188,12 @@ export function ManageICUCase() {
         payload.PatientCondition = icuVitalsFormData.patientCondition.trim();
       } else {
         payload.PatientCondition = null;
+      }
+      if (icuVitalsFormData.vitalsStatus && icuVitalsFormData.vitalsStatus.trim() !== '') {
+        payload.VitalsStatus = icuVitalsFormData.vitalsStatus.trim();
+      }
+      if (icuVitalsFormData.vitalsRemarks && icuVitalsFormData.vitalsRemarks.trim() !== '') {
+        payload.VitalsRemarks = icuVitalsFormData.vitalsRemarks.trim();
       }
 
       console.log('API Payload (formatted):', JSON.stringify(payload, null, 2));
@@ -1166,14 +1244,17 @@ export function ManageICUCase() {
         bloodPressure: '',
         temperature: '',
         oxygenSaturation: '',
+        o2Saturation: '',
+        pulseRate: '',
         respiratoryRate: '',
         bloodSugar: '',
         recordedDateTime: '',
-        recordedBy: '',
         dailyOrHourlyVitals: '',
         nurseId: '',
         nurseVisitsDetails: '',
-        patientCondition: ''
+        patientCondition: '',
+        vitalsStatus: '',
+        vitalsRemarks: ''
       });
       setNurseSearchTerm('');
       setShowNurseList(false);
@@ -1249,10 +1330,11 @@ export function ManageICUCase() {
   };
 
   // Handle opening Add ICU Doctor Visit dialog
-  const handleOpenAddDoctorVisitDialog = () => {
+  const handleOpenAddDoctorVisitDialog = async () => {
     if (icuAdmission) {
       setEditingDoctorVisitId(null);
       setDoctorVisitFormData({
+        icuDoctorVisitId: '',
         icuAdmissionId: String(icuAdmission.patientICUAdmissionId || icuAdmission.id || ''),
         patientId: String(icuAdmission.patientId || ''),
         doctorId: '', // Will need to be set from attendingDoctor or fetched
@@ -1262,12 +1344,24 @@ export function ManageICUCase() {
         status: 'Active'
       });
       setDoctorVisitSubmitError(null);
+      setDoctorSearchTerm('');
+      setShowDoctorList(false);
+      
+      // Fetch available doctors
+      try {
+        const doctorsList = await doctorsApi.getAll();
+        setAvailableDoctors(doctorsList || []);
+      } catch (err) {
+        console.error('Error fetching doctors:', err);
+        setAvailableDoctors([]);
+      }
+      
       setIsAddDoctorVisitDialogOpen(true);
     }
   };
 
   // Handle opening Edit ICU Doctor Visit dialog
-  const handleOpenEditDoctorVisitDialog = (visit: PatientDoctorVisit) => {
+  const handleOpenEditDoctorVisitDialog = async (visit: PatientDoctorVisit) => {
     console.log('========================================');
     console.log('Opening edit dialog for doctor visit');
     console.log('Visit object:', visit);
@@ -1298,6 +1392,15 @@ export function ManageICUCase() {
       return;
     }
     
+    // Fetch available doctors
+    try {
+      const doctorsList = await doctorsApi.getAll();
+      setAvailableDoctors(doctorsList || []);
+    } catch (err) {
+      console.error('Error fetching doctors:', err);
+      setAvailableDoctors([]);
+    }
+    
     const finalVisitId = icuDoctorVisitsId || visitId;
     console.log('Setting editingDoctorVisitId to:', finalVisitId);
     setEditingDoctorVisitId(finalVisitId);
@@ -1322,19 +1425,31 @@ export function ManageICUCase() {
       }
     }
     
+    const doctorIdValue = String(visit.doctorId || '');
     const formData = {
       icuDoctorVisitId: String(icuDoctorVisitsId || visitId || ''),
       icuAdmissionId: String(icuAdmission.patientICUAdmissionId || icuAdmission.id || ''),
       patientId: String(icuAdmission.patientId || ''),
-      doctorId: String(visit.doctorId || visit.doctorName || ''),
+      doctorId: doctorIdValue,
       doctorVisitedDateTime: formattedDateTime || new Date().toISOString().slice(0, 16),
       visitsDetails: (visit as any).visitsDetails || visit.notes || visit.visitsRemarks || '',
       patientCondition: visit.patientCondition || '',
       status: visit.status || 'Active' // Map Status to Status
     };
     
+    // Find doctor name for search term
+    const selectedDoctor = availableDoctors.find((d: any) => {
+      const dId = String((d as any).id || (d as any).Id || (d as any).UserId || '');
+      return dId === doctorIdValue;
+    });
+    const doctorName = selectedDoctor 
+      ? ((selectedDoctor as any).name || (selectedDoctor as any).Name || (selectedDoctor as any).UserName || '')
+      : (visit.doctorName || '');
+    
     console.log('Setting form data:', formData);
     setDoctorVisitFormData(formData);
+    setDoctorSearchTerm(doctorName || '');
+    setShowDoctorList(false);
     setDoctorVisitSubmitError(null);
     
     console.log('Opening dialog...');
@@ -1554,15 +1669,16 @@ export function ManageICUCase() {
 
         {/* Tabs for Diagnosis & Treatment, Lab Tests, Doctor Visits, ICU Nurse Visits */}
         <Tabs defaultValue="diagnosis-treatment" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="diagnosis-treatment" className="gap-2">
               <FileText className="size-4" />
               Diagnosis & Treatment
             </TabsTrigger>
-            <TabsTrigger value="lab-tests" className="gap-2">
+            {/* Lab Tests tab commented out */}
+            {/* <TabsTrigger value="lab-tests" className="gap-2">
               <FlaskConical className="size-4" />
               Lab Tests
-            </TabsTrigger>
+            </TabsTrigger> */}
             <TabsTrigger value="doctor-visits" className="gap-2">
               <Stethoscope className="size-4" />
               Doctor Visits
@@ -1649,7 +1765,8 @@ export function ManageICUCase() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="lab-tests" className="mt-6">
+          {/* Lab Tests tab content commented out */}
+          {/* <TabsContent value="lab-tests" className="mt-6">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -1756,7 +1873,7 @@ export function ManageICUCase() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          </TabsContent> */}
 
           <TabsContent value="doctor-visits" className="mt-6">
             <Card>
@@ -1784,7 +1901,6 @@ export function ManageICUCase() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 text-gray-700">Doctor Visit ID</th>
                           <th className="text-left py-3 px-4 text-gray-700">Doctor</th>
                           <th className="text-left py-3 px-4 text-gray-700">Visit Date</th>
                           <th className="text-left py-3 px-4 text-gray-700">Visit Details</th>
@@ -1796,7 +1912,6 @@ export function ManageICUCase() {
                       <tbody>
                         {patientDoctorVisits.map((visit) => (
                           <tr key={visit.icuDoctorVisitsId || (visit as any).iCUDoctorVisitId || visit.patientDoctorVisitId || visit.id} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-3 px-4">{visit.icuDoctorVisitsId || (visit as any).iCUDoctorVisitId || visit.patientDoctorVisitId || visit.id || 'N/A'}</td>
                             <td className="py-3 px-4">{visit.doctorName || 'N/A'}</td>
                             <td className="py-3 px-4">{visit.visitDate || 'N/A'}</td>
                             <td className="py-3 px-4">{(visit as any).visitsDetails || visit.notes || visit.visitsRemarks || 'N/A'}</td>
@@ -1819,7 +1934,7 @@ export function ManageICUCase() {
                                 className="gap-2"
                               >
                                 <Edit className="size-4" />
-                                Edit
+                                View & Edit
                               </Button>
                             </td>
                           </tr>
@@ -1858,7 +1973,6 @@ export function ManageICUCase() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 text-gray-700">Vitals ID</th>
                           <th className="text-left py-3 px-4 text-gray-700">Recorded Date & Time</th>
                           <th className="text-left py-3 px-4 text-gray-700">HR</th>
                           <th className="text-left py-3 px-4 text-gray-700">BP</th>
@@ -1867,7 +1981,7 @@ export function ManageICUCase() {
                           <th className="text-left py-3 px-4 text-gray-700">RR</th>
                           <th className="text-left py-3 px-4 text-gray-700">Blood Sugar</th>
                           <th className="text-left py-3 px-4 text-gray-700">Daily/Hourly</th>
-                          <th className="text-left py-3 px-4 text-gray-700">Nurse</th>
+                          <th className="text-left py-3 px-4 text-gray-700">Nurse Name</th>
                           <th className="text-left py-3 px-4 text-gray-700">Patient Condition</th>
                           <th className="text-left py-3 px-4 text-gray-700">Action</th>
                         </tr>
@@ -1875,7 +1989,6 @@ export function ManageICUCase() {
                       <tbody>
                         {icuVitalsList.map((vital) => (
                           <tr key={vital.icuVisitVitalsId || vital.id} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-3 px-4">{vital.icuVisitVitalsId || 'N/A'}</td>
                             <td className="py-3 px-4">{vital.recordedDateTime || 'N/A'}</td>
                             <td className="py-3 px-4">{vital.heartRate ? `${vital.heartRate} bpm` : 'N/A'}</td>
                             <td className="py-3 px-4">{vital.bloodPressure || 'N/A'}</td>
@@ -1892,7 +2005,7 @@ export function ManageICUCase() {
                                 : 'N/A'}
                             </td>
                             <td className="py-3 px-4">{vital.dailyOrHourlyVitals || 'N/A'}</td>
-                            <td className="py-3 px-4">{vital.nurseId || 'N/A'}</td>
+                            <td className="py-3 px-4">{(vital as any).nurseName || 'N/A'}</td>
                             <td className="py-3 px-4">
                               {vital.patientCondition || (vital as any).patientStatus || (vital as any).PatientStatus || (vital as any).PatientCondition || 'N/A'}
                             </td>
@@ -1902,12 +2015,15 @@ export function ManageICUCase() {
                                 size="sm"
                                 onClick={() => {
                                   setEditingICUVitalsId(vital.icuVisitVitalsId);
-                                  // Extract O2Saturation with fallbacks
+                                  // Extract values with fallbacks
                                   const o2Value = vital.oxygenSaturation || (vital as any).O2Saturation || (vital as any).O2 || (vital as any).o2Saturation;
-                                  // Extract BloodSugar with fallbacks
-                                  const bloodSugarValue = vital.bloodSugar || (vital as any).BloodSugar || (vital as any).bloodGlucose || (vital as any).Glucose;
+                                  const pulseRateValue = (vital as any).pulseRate || (vital as any).PulseRate || (vital as any).pulse_rate || (vital as any).Pulse_Rate || '';
+                                  const vitalsStatusValue = (vital as any).vitalsStatus || (vital as any).VitalsStatus || (vital as any).vitals_status || (vital as any).Vitals_Status || '';
+                                  const vitalsRemarksValue = (vital as any).vitalsRemarks || (vital as any).VitalsRemarks || (vital as any).vitals_remarks || (vital as any).Vitals_Remarks || '';
                                   // Extract PatientCondition/PatientStatus with fallbacks
                                   const patientConditionValue = vital.patientCondition || (vital as any).patientStatus || (vital as any).PatientStatus || (vital as any).PatientCondition || '';
+                                  // Extract BloodSugar with fallbacks
+                                  const bloodSugarValue = vital.bloodSugar || (vital as any).BloodSugar || (vital as any).bloodGlucose || (vital as any).Glucose;
                                   
                                   setIcuVitalsFormData({
                                     icuVisitVitalsId: String(vital.icuVisitVitalsId || ''),
@@ -1917,46 +2033,17 @@ export function ManageICUCase() {
                                     bloodPressure: vital.bloodPressure || '',
                                     temperature: vital.temperature ? String(vital.temperature) : '',
                                     oxygenSaturation: o2Value ? String(o2Value) : '',
+                                    o2Saturation: (vital as any).o2Saturation || (vital as any).O2Saturation || o2Value ? String((vital as any).o2Saturation || (vital as any).O2Saturation || o2Value) : '',
+                                    pulseRate: pulseRateValue ? String(pulseRateValue) : '',
                                     respiratoryRate: vital.respiratoryRate ? String(vital.respiratoryRate) : '',
                                     bloodSugar: bloodSugarValue ? String(bloodSugarValue) : '',
                                     recordedDateTime: vital.recordedDateTime ? vital.recordedDateTime.slice(0, 16) : '',
-                                    recordedBy: vital.recordedBy || '',
                                     dailyOrHourlyVitals: vital.dailyOrHourlyVitals || '',
                                     nurseId: vital.nurseId ? String(vital.nurseId) : '',
                                     nurseVisitsDetails: vital.nurseVisitsDetails || '',
-                                    patientCondition: patientConditionValue
-                                  });
-                                  setNurseSearchTerm(vital.nurseId ? String(vital.nurseId) : '');
-                                  setShowNurseList(false);
-                                  setIcuVitalsSubmitError(null);
-                                  setIsAddICUVitalsDialogOpen(true);
-                                }}
-                                className="gap-2"
-                              >
-                                <Eye className="size-4" />
-                                View
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingICUVitalsId(vital.icuVisitVitalsId);
-                                  setIcuVitalsFormData({
-                                    icuVisitVitalsId: String(vital.icuVisitVitalsId || ''),
-                                    icuAdmissionId: String(vital.icuAdmissionId || icuAdmission?.patientICUAdmissionId || ''),
-                                    patientId: String(vital.patientId || icuAdmission?.patientId || ''),
-                                    heartRate: vital.heartRate ? String(vital.heartRate) : '',
-                                    bloodPressure: vital.bloodPressure || '',
-                                    temperature: vital.temperature ? String(vital.temperature) : '',
-                                    oxygenSaturation: vital.oxygenSaturation ? String(vital.oxygenSaturation) : '',
-                                    respiratoryRate: vital.respiratoryRate ? String(vital.respiratoryRate) : '',
-                                    bloodSugar: vital.bloodSugar ? String(vital.bloodSugar) : '',
-                                    recordedDateTime: vital.recordedDateTime ? vital.recordedDateTime.slice(0, 16) : '',
-                                    recordedBy: vital.recordedBy || '',
-                                    dailyOrHourlyVitals: vital.dailyOrHourlyVitals || '',
-                                    nurseId: vital.nurseId ? String(vital.nurseId) : '',
-                                    nurseVisitsDetails: vital.nurseVisitsDetails || '',
-                                    patientCondition: vital.patientCondition || ''
+                                    patientCondition: patientConditionValue,
+                                    vitalsStatus: vitalsStatusValue,
+                                    vitalsRemarks: vitalsRemarksValue
                                   });
                                   setNurseSearchTerm(vital.nurseId ? String(vital.nurseId) : '');
                                   setShowNurseList(false);
@@ -1966,7 +2053,7 @@ export function ManageICUCase() {
                                 className="gap-2"
                               >
                                 <Edit className="size-4" />
-                                Edit
+                                View & Edit
                               </Button>
                             </td>
                           </tr>
@@ -1985,6 +2072,7 @@ export function ManageICUCase() {
           <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
             <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
               <DialogTitle>{editingDoctorVisitId ? 'Edit ICU Doctor Visit' : 'Add ICU Doctor Visit'}</DialogTitle>
+              <DialogDescription className="sr-only">Dialog for adding or editing ICU doctor visit details</DialogDescription>
             </DialogHeader>
             <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
               <div className="space-y-4 py-4">
@@ -2025,14 +2113,82 @@ export function ManageICUCase() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="doctorId">Doctor ID *</Label>
+                  <Label htmlFor="doctorId">Doctor *</Label>
                   <Input
                     id="doctorId"
-                    value={doctorVisitFormData.doctorId}
-                    onChange={(e) => setDoctorVisitFormData({ ...doctorVisitFormData, doctorId: e.target.value })}
-                    placeholder="Enter Doctor ID"
+                    value={doctorSearchTerm}
+                    onChange={(e) => {
+                      setDoctorSearchTerm(e.target.value);
+                      setShowDoctorList(true);
+                    }}
+                    onFocus={() => setShowDoctorList(true)}
+                    placeholder="Search and select doctor..."
+                    className="cursor-pointer"
                     required
                   />
+                  {showDoctorList && (
+                    <div className="mt-1 border border-gray-200 rounded-md max-h-48 overflow-y-auto bg-white z-50 relative">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="text-left py-2 px-3 text-gray-700 font-semibold">ID</th>
+                            <th className="text-left py-2 px-3 text-gray-700 font-semibold">Name</th>
+                            <th className="text-left py-2 px-3 text-gray-700 font-semibold">Specialty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {availableDoctors
+                            .filter((doctor: any) => {
+                              if (!doctorSearchTerm) return true;
+                              const searchLower = doctorSearchTerm.toLowerCase();
+                              const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                              const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                              const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                              return (
+                                doctorId.toLowerCase().includes(searchLower) ||
+                                doctorName.toLowerCase().includes(searchLower) ||
+                                specialty.toLowerCase().includes(searchLower)
+                              );
+                            })
+                            .map((doctor: any) => {
+                              const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                              const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || 'Unknown';
+                              const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                              const isSelected = doctorVisitFormData.doctorId === doctorId;
+                              return (
+                                <tr
+                                  key={doctorId}
+                                  onClick={() => {
+                                    setDoctorVisitFormData({ ...doctorVisitFormData, doctorId: doctorId });
+                                    setDoctorSearchTerm(doctorName);
+                                    setShowDoctorList(false);
+                                  }}
+                                  className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
+                                >
+                                  <td className="py-2 px-3 text-sm text-gray-900 font-mono">{doctorId || '-'}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-600">{doctorName}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-600">{specialty || '-'}</td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                      {availableDoctors.filter((doctor: any) => {
+                        if (!doctorSearchTerm) return true;
+                        const searchLower = doctorSearchTerm.toLowerCase();
+                        const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                        const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                        const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                        return (
+                          doctorId.toLowerCase().includes(searchLower) ||
+                          doctorName.toLowerCase().includes(searchLower) ||
+                          specialty.toLowerCase().includes(searchLower)
+                        );
+                      }).length === 0 && (
+                        <div className="text-center py-4 text-gray-500 text-sm">No doctors found</div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="doctorVisitedDateTime">Doctor Visited Date & Time *</Label>
@@ -2088,6 +2244,8 @@ export function ManageICUCase() {
                 onClick={() => {
                   setIsAddDoctorVisitDialogOpen(false);
                   setEditingDoctorVisitId(null);
+                  setDoctorSearchTerm('');
+                  setShowDoctorList(false);
                 }}
                 disabled={doctorVisitSubmitting}
               >
@@ -2108,6 +2266,7 @@ export function ManageICUCase() {
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add ICU Nurse Visit</DialogTitle>
+              <DialogDescription className="sr-only">Dialog for adding ICU nurse visit details</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               {nurseVisitSubmitError && (
@@ -2201,6 +2360,7 @@ export function ManageICUCase() {
           <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
             <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
               <DialogTitle>{editingICUVitalsId ? 'Edit ICU Visit Vitals' : 'Add ICU Visit Vitals'}</DialogTitle>
+              <DialogDescription className="sr-only">Dialog for adding or editing ICU visit vitals</DialogDescription>
             </DialogHeader>
             <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
               <div className="space-y-4 py-4">
@@ -2259,16 +2419,7 @@ export function ManageICUCase() {
                       placeholder="Enter temperature"
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="oxygenSaturation">O₂ Saturation (%)</Label>
-                    <Input
-                      id="oxygenSaturation"
-                      type="number"
-                      value={icuVitalsFormData.oxygenSaturation}
-                      onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, oxygenSaturation: e.target.value })}
-                      placeholder="Enter O₂ saturation"
-                    />
-                  </div>
+                 
                   <div>
                     <Label htmlFor="respiratoryRate">Respiratory Rate (/min)</Label>
                     <Input
@@ -2297,15 +2448,6 @@ export function ManageICUCase() {
                       value={icuVitalsFormData.recordedDateTime}
                       onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, recordedDateTime: e.target.value })}
                       required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="recordedBy">Recorded By</Label>
-                    <Input
-                      id="recordedBy"
-                      value={icuVitalsFormData.recordedBy}
-                      onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, recordedBy: e.target.value })}
-                      placeholder="Enter name of person recording"
                     />
                   </div>
                   <div>
@@ -2395,6 +2537,52 @@ export function ManageICUCase() {
                     />
                   </div>
                   <div>
+                    <Label htmlFor="o2Saturation">O₂ Saturation (%)</Label>
+                    <Input
+                      id="o2Saturation"
+                      type="number"
+                      value={icuVitalsFormData.o2Saturation}
+                      onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, o2Saturation: e.target.value })}
+                      placeholder="Enter O₂ saturation"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="pulseRate">Pulse Rate (bpm)</Label>
+                    <Input
+                      id="pulseRate"
+                      type="number"
+                      value={icuVitalsFormData.pulseRate}
+                      onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, pulseRate: e.target.value })}
+                      placeholder="Enter pulse rate"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="vitalsStatus">Vitals Status *</Label>
+                    <select
+                      id="vitalsStatus"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                      value={icuVitalsFormData.vitalsStatus}
+                      onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, vitalsStatus: e.target.value })}
+                      required
+                    >
+                      <option value="">Select...</option>
+                      <option value="Stable">Stable</option>
+                      <option value="Critical">Critical</option>
+                      <option value="Improving">Improving</option>
+                      <option value="Normal">Normal</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <Label htmlFor="vitalsRemarks">Vitals Remarks</Label>
+                    <Textarea
+                      id="vitalsRemarks"
+                      value={icuVitalsFormData.vitalsRemarks}
+                      onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, vitalsRemarks: e.target.value })}
+                      placeholder="Enter vitals remarks..."
+                      rows={3}
+                    />
+                  </div>
+                  <div>
                     <Label htmlFor="patientCondition">Patient Condition *</Label>
                     <select
                       id="patientCondition"
@@ -2434,6 +2622,7 @@ export function ManageICUCase() {
           <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
             <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
               <DialogTitle>{editingLabTestId ? 'Edit Lab Test Details' : 'Add New Lab Tests Details'}</DialogTitle>
+              <DialogDescription className="sr-only">Dialog for adding or editing lab test details</DialogDescription>
             </DialogHeader>
             <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
               <div className="space-y-4 py-4">
@@ -2648,6 +2837,7 @@ export function ManageICUCase() {
           <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
             <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
               <DialogTitle>View Lab Test Details</DialogTitle>
+              <DialogDescription className="sr-only">Dialog for viewing lab test details</DialogDescription>
             </DialogHeader>
             <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
               <div className="space-y-4 py-4">
