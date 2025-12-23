@@ -20,6 +20,7 @@ import { Textarea } from './ui/textarea';
 import { DialogFooter } from './ui/dialog';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+import { formatDateTimeIST } from '../utils/timeUtils';
 
 // Fallback room capacity data (used when API data is not available)
 const fallbackRoomCapacity: RoomCapacityOverview = {
@@ -2773,7 +2774,9 @@ function AdmissionsList({
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-primary">{admission.patientName}</td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.age}Y / {admission.gender}</td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.roomType}</td>
-                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.admissionDate}</td>
+                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">
+                      {admission.admissionDate ? formatDateTimeIST(admission.admissionDate) : 'N/A'}
+                    </td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">
                       {admission.admittingDoctorName || admission.admittedBy || 'N/A'}
                     </td>

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { XIcon } from "lucide-react";
 import { cn } from "./ui/utils";
 
@@ -116,7 +117,7 @@ export function CustomResizableDialog({
 
   const effectiveMaxWidth = Math.min(maxWidth, window.innerWidth - 40);
 
-  return (
+  const dialogContent = (
     <div className="fixed inset-0 z-[100]">
       {/* Overlay */}
       <div
@@ -144,7 +145,7 @@ export function CustomResizableDialog({
           position: 'relative',
           borderRadius: '16px',
           border: '1px solid #e5e7eb',
-          overflow: 'hidden'
+          overflow: 'visible'
         }}
         onClick={(e) => {
           // Don't stop propagation if clicking on resize handles
@@ -154,7 +155,7 @@ export function CustomResizableDialog({
           e.stopPropagation();
         }}
       >
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative z-0 pointer-events-auto" style={{ borderRadius: 'inherit' }}>
+        <div className="flex-1 flex flex-col min-h-0 relative z-10 pointer-events-auto" style={{ borderRadius: 'inherit', overflowY: 'auto', overflowX: 'visible' }}>
           {children}
         </div>
         
@@ -241,6 +242,13 @@ export function CustomResizableDialog({
       </div>
     </div>
   );
+
+  // Render dialog using portal to document.body to avoid z-index issues
+  if (typeof window !== 'undefined') {
+    return createPortal(dialogContent, document.body);
+  }
+  
+  return dialogContent;
 }
 
 export function CustomResizableDialogHeader({ children, className }: { children: React.ReactNode; className?: string }) {
