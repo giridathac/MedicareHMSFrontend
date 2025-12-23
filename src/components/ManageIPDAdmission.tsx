@@ -200,6 +200,30 @@ export function ManageIPDAdmission() {
   // Manage Doctor Visit Dialog State
   const [isCustomizeDoctorVisitDialogOpen, setIsCustomizeDoctorVisitDialogOpen] = useState(false);
   const [customizingDoctorVisit, setCustomizingDoctorVisit] = useState<PatientDoctorVisit | null>(null);
+  const [isCustomizeVisitVitalsDialogOpen, setIsCustomizeVisitVitalsDialogOpen] = useState(false);
+  const [customizingVisitVitals, setCustomizingVisitVitals] = useState<PatientAdmitVisitVitals | null>(null);
+  const [customizeVisitVitalsFormData, setCustomizeVisitVitalsFormData] = useState({
+    patientId: '',
+    nurseId: '',
+    patientStatus: '',
+    recordedDateTime: '',
+    visitRemarks: '',
+    dailyOrHourlyVitals: 'Daily',
+    heartRate: '',
+    bloodPressure: '',
+    temperature: '',
+    o2Saturation: '',
+    respiratoryRate: '',
+    pulseRate: '',
+    vitalsStatus: 'Stable',
+    vitalsRemarks: '',
+    vitalsCreatedBy: '',
+    status: 'Active'
+  });
+  const [customizeVisitVitalsNurseSearchTerm, setCustomizeVisitVitalsNurseSearchTerm] = useState('');
+  const [showCustomizeVisitVitalsNurseList, setShowCustomizeVisitVitalsNurseList] = useState(false);
+  const [customizeVisitVitalsRecordedDateTime, setCustomizeVisitVitalsRecordedDateTime] = useState<Date | null>(null);
+  const [customizeVisitVitalsCreatedAt, setCustomizeVisitVitalsCreatedAt] = useState<Date | null>(null);
   const [customizeDoctorVisitFormData, setCustomizeDoctorVisitFormData] = useState({
     patientId: '',
     doctorId: '',
@@ -215,6 +239,7 @@ export function ManageIPDAdmission() {
   const [customizeDoctorVisitCreatedAt, setCustomizeDoctorVisitCreatedAt] = useState<Date | null>(null);
   const [customizeOrderedDate, setCustomizeOrderedDate] = useState<Date | null>(null);
   const [customizeTestDoneDateTime, setCustomizeTestDoneDateTime] = useState<Date | null>(null);
+  const [addVisitVitalsRecordedDateTime, setAddVisitVitalsRecordedDateTime] = useState<Date | null>(null);
 
   // Doctor Visit Dialog State
   const [isAddDoctorVisitDialogOpen, setIsAddDoctorVisitDialogOpen] = useState(false);
@@ -238,10 +263,6 @@ export function ManageIPDAdmission() {
   const [visitVitalsLoading, setVisitVitalsLoading] = useState(false);
   const [visitVitalsError, setVisitVitalsError] = useState<string | null>(null);
   const [isAddVisitVitalsDialogOpen, setIsAddVisitVitalsDialogOpen] = useState(false);
-  const [isViewVisitVitalsDialogOpen, setIsViewVisitVitalsDialogOpen] = useState(false);
-  const [isEditVisitVitalsDialogOpen, setIsEditVisitVitalsDialogOpen] = useState(false);
-  const [viewingVisitVitals, setViewingVisitVitals] = useState<PatientAdmitVisitVitals | null>(null);
-  const [editingVisitVitalsId, setEditingVisitVitalsId] = useState<string | number | null>(null);
   const [visitVitalsFormData, setVisitVitalsFormData] = useState({
     patientId: '',
     nurseId: '',
@@ -1573,7 +1594,7 @@ export function ManageIPDAdmission() {
         patientId: String(patientIdValue),
         nurseId: '',
         patientStatus: 'Stable',
-        recordedDateTime: new Date().toISOString().slice(0, 16),
+        recordedDateTime: '',
         visitRemarks: '',
         dailyOrHourlyVitals: 'Daily',
         heartRate: '',
@@ -1587,6 +1608,8 @@ export function ManageIPDAdmission() {
         vitalsCreatedBy: '',
         status: 'Active'
       });
+      // Set DatePicker to current IST time
+      setAddVisitVitalsRecordedDateTime(getCurrentIST());
       setNurseSearchTerm('');
       setShowNurseList(false);
       setVisitVitalsSubmitError(null);
@@ -1596,10 +1619,95 @@ export function ManageIPDAdmission() {
     }
   };
 
-  // Handle viewing Visit Vitals
-  const handleViewVisitVitals = (vitals: PatientAdmitVisitVitals) => {
-    setViewingVisitVitals(vitals);
-    setIsViewVisitVitalsDialogOpen(true);
+
+  // Handle opening Manage Visit Vitals dialog
+  const handleOpenCustomizeVisitVitalsDialog = async (vitals: PatientAdmitVisitVitals) => {
+    console.log('Opening Manage Visit Vitals dialog for:', vitals);
+    
+    // First, explicitly close all other dialogs to prevent conflicts
+    setIsAddDoctorVisitDialogOpen(false);
+    setIsAddIPDLabTestDialogOpen(false);
+    setIsEditIPDLabTestDialogOpen(false);
+    setIsViewIPDLabTestDialogOpen(false);
+    setIsCustomizeIPDLabTestDialogOpen(false);
+    setIsAddVisitVitalsDialogOpen(false);
+    
+    // Fetch available nurses
+    let nursesList: any[] = [];
+    try {
+      const staff = await staffApi.getAll();
+      nursesList = staff.filter((member: any) => {
+        const roleName = member.RoleName || member.roleName || '';
+        return roleName.toLowerCase().includes('nurse');
+      });
+      setAvailableNurses(nursesList);
+    } catch (err) {
+      console.error('Error fetching nurses:', err);
+    }
+
+    setCustomizingVisitVitals(vitals);
+
+    // Find the selected nurse to populate the search term
+    const selectedNurse = nursesList.find((nurse: any) => {
+      const nid = nurse.UserId || nurse.id || 0;
+      return String(nid) === String(vitals.nurseId);
+    });
+
+    setCustomizeVisitVitalsFormData({
+      patientId: String(vitals.patientId || admission?.patientId || ''),
+      nurseId: String(vitals.nurseId || ''),
+      patientStatus: vitals.patientStatus || 'Stable',
+      recordedDateTime: vitals.recordedDateTime || '',
+      visitRemarks: vitals.visitRemarks || '',
+      dailyOrHourlyVitals: vitals.dailyOrHourlyVitals || 'Daily',
+      heartRate: vitals.heartRate ? String(vitals.heartRate) : '',
+      bloodPressure: vitals.bloodPressure || '',
+      temperature: vitals.temperature ? String(vitals.temperature) : '',
+      o2Saturation: vitals.o2Saturation ? String(vitals.o2Saturation) : '',
+      respiratoryRate: vitals.respiratoryRate ? String(vitals.respiratoryRate) : '',
+      pulseRate: vitals.pulseRate ? String(vitals.pulseRate) : '',
+      vitalsStatus: vitals.vitalsStatus || 'Stable',
+      vitalsRemarks: vitals.vitalsRemarks || '',
+      vitalsCreatedBy: String(vitals.vitalsCreatedBy || ''),
+      status: vitals.status || 'Active'
+    });
+
+    // Set DatePicker values
+    let recordedDateTimeValue: Date | null = null;
+    if (vitals.recordedDateTime) {
+      try {
+        const dateObj = new Date(vitals.recordedDateTime);
+        if (!isNaN(dateObj.getTime())) {
+          recordedDateTimeValue = convertToIST(dateObj);
+        }
+      } catch {
+        recordedDateTimeValue = getCurrentIST();
+      }
+    } else {
+      recordedDateTimeValue = getCurrentIST();
+    }
+    setCustomizeVisitVitalsRecordedDateTime(recordedDateTimeValue);
+
+    // Set Vitals Created At DatePicker value
+    let createdAtValue: Date | null = null;
+    if (vitals.vitalsCreatedAt) {
+      try {
+        const dateObj = new Date(vitals.vitalsCreatedAt);
+        if (!isNaN(dateObj.getTime())) {
+          createdAtValue = convertToIST(dateObj);
+        }
+      } catch {
+        createdAtValue = null;
+      }
+    }
+    setCustomizeVisitVitalsCreatedAt(createdAtValue);
+
+    setCustomizeVisitVitalsNurseSearchTerm(selectedNurse ? (selectedNurse.UserName || selectedNurse.name || 'Unknown') : '');
+    setShowCustomizeVisitVitalsNurseList(false);
+    
+    // Open the Manage Visit Vitals dialog
+    setIsCustomizeVisitVitalsDialogOpen(true);
+    console.log('Set isCustomizeVisitVitalsDialogOpen to true');
   };
 
   // Handle opening Edit Visit Vitals dialog
@@ -1731,36 +1839,20 @@ export function ManageIPDAdmission() {
 
       console.log('API Payload:', JSON.stringify(payload, null, 2));
 
-      // Call the API to create or update the visit vitals
-      let response;
-      if (editingVisitVitalsId) {
-        // Update existing visit vitals
-        console.log('API Endpoint: PUT /patient-admit-visit-vitals/' + editingVisitVitalsId);
-        response = await apiRequest<any>(`/patient-admit-visit-vitals/${editingVisitVitalsId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-        console.log('Visit vitals updated successfully:', response);
-      } else {
-        // Create new visit vitals
-        console.log('API Endpoint: POST /patient-admit-visit-vitals');
-        response = await apiRequest<any>('/patient-admit-visit-vitals', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-        console.log('Visit vitals created successfully:', response);
-      }
+      // Call the API to create the visit vitals
+      console.log('API Endpoint: POST /patient-admit-visit-vitals');
+      const response = await apiRequest<any>('/patient-admit-visit-vitals', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      console.log('Visit vitals created successfully:', response);
 
       // Close dialog
       setIsAddVisitVitalsDialogOpen(false);
-      setIsEditVisitVitalsDialogOpen(false);
-      setEditingVisitVitalsId(null);
+      setAddVisitVitalsRecordedDateTime(null);
       
       // Refresh the visit vitals list
       if (admission?.roomAdmissionId) {
@@ -2357,11 +2449,15 @@ export function ManageIPDAdmission() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleOpenEditVisitVitalsDialog(vital)}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleOpenCustomizeVisitVitalsDialog(vital);
+                                }}
                                 className="gap-1"
                               >
-                                <Edit className="size-3" />
-                                View & Edit
+                                <Settings className="size-3" />
+                                Manage
                               </Button>
                             </td>
                           </tr>
@@ -3803,16 +3899,15 @@ export function ManageIPDAdmission() {
 
 
       {/* Add/Edit Visit Vitals Dialog */}
-      <Dialog open={isAddVisitVitalsDialogOpen || isEditVisitVitalsDialogOpen} onOpenChange={(open) => {
+      <Dialog open={isAddVisitVitalsDialogOpen} onOpenChange={(open) => {
         if (!open) {
           setIsAddVisitVitalsDialogOpen(false);
-          setIsEditVisitVitalsDialogOpen(false);
-          setEditingVisitVitalsId(null);
+          setAddVisitVitalsRecordedDateTime(null);
         }
       }}>
         <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]" aria-describedby={undefined}>
           <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
-            <DialogTitle>{editingVisitVitalsId ? 'Edit Visit Vitals' : 'Add Visit Vitals'}</DialogTitle>
+            <DialogTitle>Add Visit Vitals</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
             <div className="space-y-4 py-4">
@@ -3903,11 +3998,41 @@ export function ManageIPDAdmission() {
                 </div>
                 <div>
                   <Label htmlFor="visitVitalsRecordedDateTime">Recorded Date & Time *</Label>
-                  <Input
+                  <DatePicker
                     id="visitVitalsRecordedDateTime"
-                    type="datetime-local"
-                    value={visitVitalsFormData.recordedDateTime}
-                    onChange={(e) => setVisitVitalsFormData({ ...visitVitalsFormData, recordedDateTime: e.target.value })}
+                    selected={addVisitVitalsRecordedDateTime}
+                    onChange={(date: Date | null) => {
+                      setAddVisitVitalsRecordedDateTime(date);
+                      if (date) {
+                        // Treat the selected date/time as IST and convert to UTC for API
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const seconds = String(date.getSeconds()).padStart(2, '0');
+                        const istDateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
+                        const dateObj = new Date(istDateTimeStr);
+                        if (!isNaN(dateObj.getTime())) {
+                          setVisitVitalsFormData({ ...visitVitalsFormData, recordedDateTime: dateObj.toISOString().slice(0, 16) });
+                        }
+                      } else {
+                        setVisitVitalsFormData({ ...visitVitalsFormData, recordedDateTime: '' });
+                      }
+                    }}
+                    showTimeSelect
+                    timeIntervals={1}
+                    timeCaption="Time"
+                    timeFormat="hh:mm aa"
+                    dateFormat="dd-MM-yyyy hh:mm aa"
+                    placeholderText="dd-mm-yyyy HH:MM AM/PM"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
                     required
                   />
                 </div>
@@ -4031,8 +4156,7 @@ export function ManageIPDAdmission() {
               variant="outline"
               onClick={() => {
                 setIsAddVisitVitalsDialogOpen(false);
-                setIsEditVisitVitalsDialogOpen(false);
-                setEditingVisitVitalsId(null);
+                setAddVisitVitalsRecordedDateTime(null);
               }}
             >
               Cancel
@@ -4047,184 +4171,376 @@ export function ManageIPDAdmission() {
         </DialogContent>
       </Dialog>
 
-      {/* View Visit Vitals Dialog */}
-      <Dialog open={isViewVisitVitalsDialogOpen} onOpenChange={(open) => {
-        if (!open) {
-          setIsViewVisitVitalsDialogOpen(false);
-          setViewingVisitVitals(null);
-        }
-      }}>
-        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]" aria-describedby={undefined}>
-          <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
-            <DialogTitle>View Visit Vitals Details</DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
-            {viewingVisitVitals && (
-              <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm text-gray-500">Patient Admit Visit Vitals ID</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.patientAdmitVisitVitalsId || viewingVisitVitals.id || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Room Admission ID</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.roomAdmissionId || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Patient ID</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.patientId || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Nurse ID</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.nurseId || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Patient Status</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      <Badge variant={
-                        viewingVisitVitals.patientStatus?.toLowerCase() === 'stable' || viewingVisitVitals.patientStatus?.toLowerCase() === 'good' ? 'default' :
-                        viewingVisitVitals.patientStatus?.toLowerCase() === 'notstable' || viewingVisitVitals.patientStatus?.toLowerCase() === 'critical' || viewingVisitVitals.patientStatus?.toLowerCase() === 'serious' ? 'destructive' :
-                        'outline'
-                      }>
-                        {viewingVisitVitals.patientStatus || 'N/A'}
-                      </Badge>
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Recorded Date & Time</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.recordedDateTime ? new Date(viewingVisitVitals.recordedDateTime).toLocaleString() : 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Daily/Hourly Vitals</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      <Badge variant="outline">{viewingVisitVitals.dailyOrHourlyVitals || 'N/A'}</Badge>
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Heart Rate</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.heartRate || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Blood Pressure</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.bloodPressure || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Temperature</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.temperature || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">O2 Saturation</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.o2Saturation || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Respiratory Rate</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.respiratoryRate || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Pulse Rate</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.pulseRate || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Vitals Status</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      <Badge variant={
-                        viewingVisitVitals.vitalsStatus?.toLowerCase() === 'normal' || viewingVisitVitals.vitalsStatus?.toLowerCase() === 'stable' || viewingVisitVitals.vitalsStatus?.toLowerCase() === 'improving' ? 'default' :
-                        viewingVisitVitals.vitalsStatus?.toLowerCase() === 'critical' ? 'destructive' :
-                        'outline'
-                      }>
-                        {viewingVisitVitals.vitalsStatus || 'N/A'}
-                      </Badge>
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Status</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      <Badge variant={
-                        viewingVisitVitals.status?.toLowerCase() === 'active' ? 'default' :
-                        'outline'
-                      }>
-                        {viewingVisitVitals.status || 'N/A'}
-                      </Badge>
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Vitals Created By</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.vitalsCreatedBy || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Vitals Created At</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.vitalsCreatedAt ? formatDateTimeIST(viewingVisitVitals.vitalsCreatedAt) : 'N/A'}
-                    </p>
-                  </div>
-                  {viewingVisitVitals.visitRemarks && (
-                    <div className="col-span-2">
-                      <Label className="text-sm text-gray-500">Visit Remarks</Label>
-                      <div className="mt-1 p-3 bg-gray-50 rounded-md border border-gray-200">
-                        <p className="text-gray-900 whitespace-pre-wrap">{viewingVisitVitals.visitRemarks}</p>
+
+      {/* Manage Visit Vitals Dialog */}
+      <CustomResizableDialog 
+        open={isCustomizeVisitVitalsDialogOpen} 
+        onOpenChange={(open) => {
+          setIsCustomizeVisitVitalsDialogOpen(open);
+          if (!open) {
+            setCustomizeVisitVitalsRecordedDateTime(null);
+            setCustomizeVisitVitalsCreatedAt(null);
+          }
+        }}
+        className="p-0 gap-0"
+        initialWidth={550}
+        maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
+      >
+        <CustomResizableDialogClose onClick={() => {
+          setIsCustomizeVisitVitalsDialogOpen(false);
+          setCustomizeVisitVitalsRecordedDateTime(null);
+          setCustomizeVisitVitalsCreatedAt(null);
+        }} />
+        <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+          <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+            <CustomResizableDialogTitle className="dialog-title-standard">Manage Visit Vitals</CustomResizableDialogTitle>
+          </CustomResizableDialogHeader>
+          <div className="dialog-body-content-wrapper">
+            <div className="dialog-form-container space-y-4">
+              <div className="dialog-form-field-grid">
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsPatientId" className="dialog-label-standard">Patient ID *</Label>
+                  <Input
+                    id="customizeVisitVitalsPatientId"
+                    value={customizeVisitVitalsFormData.patientId}
+                    disabled
+                    className="dialog-input-disabled"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsRoomAdmissionId" className="dialog-label-standard">Room Admission ID</Label>
+                  <Input
+                    id="customizeVisitVitalsRoomAdmissionId"
+                    value={admission?.roomAdmissionId || ''}
+                    disabled
+                    className="dialog-input-disabled"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsNurseId" className="dialog-label-standard">Nurse *</Label>
+                  <div className="relative">
+                    <Input
+                      id="customizeVisitVitalsNurseId"
+                      value={customizeVisitVitalsNurseSearchTerm}
+                      onChange={(e) => {
+                        setCustomizeVisitVitalsNurseSearchTerm(e.target.value);
+                        setShowCustomizeVisitVitalsNurseList(true);
+                      }}
+                      onFocus={() => setShowCustomizeVisitVitalsNurseList(true)}
+                      placeholder="Search and select nurse..."
+                      className="dialog-input-standard cursor-pointer"
+                      required
+                    />
+                    {showCustomizeVisitVitalsNurseList && (
+                      <div className="absolute z-50 mt-1 border border-gray-200 rounded-md max-h-48 overflow-y-auto bg-white w-full shadow-lg">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Nurse ID</th>
+                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Name</th>
+                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Department</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {availableNurses
+                              .filter((nurse) => {
+                                if (!customizeVisitVitalsNurseSearchTerm) return true;
+                                const searchLower = customizeVisitVitalsNurseSearchTerm.toLowerCase();
+                                const name = (nurse.UserName || nurse.name || '').toLowerCase();
+                                const id = String(nurse.UserId || nurse.id || '').toLowerCase();
+                                return name.includes(searchLower) || id.includes(searchLower);
+                              })
+                              .map((nurse) => {
+                                const nurseId = String(nurse.UserId || nurse.id || '');
+                                const isSelected = customizeVisitVitalsFormData.nurseId === nurseId;
+                                return (
+                                  <tr
+                                    key={nurse.UserId || nurse.id}
+                                    onClick={() => {
+                                      setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, nurseId: nurseId });
+                                      setCustomizeVisitVitalsNurseSearchTerm(nurse.UserName || nurse.name || 'Unknown');
+                                      setShowCustomizeVisitVitalsNurseList(false);
+                                    }}
+                                    className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
+                                  >
+                                    <td className="py-2 px-3 text-sm text-gray-900 font-mono">{nurse.UserId || nurse.id}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{nurse.UserName || nurse.name || 'Unknown'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{nurse.DepartmentName || nurse.department || 'N/A'}</td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                        {availableNurses.filter((nurse) => {
+                          if (!customizeVisitVitalsNurseSearchTerm) return true;
+                          const searchLower = customizeVisitVitalsNurseSearchTerm.toLowerCase();
+                          const name = (nurse.UserName || nurse.name || '').toLowerCase();
+                          const id = String(nurse.UserId || nurse.id || '').toLowerCase();
+                          return name.includes(searchLower) || id.includes(searchLower);
+                        }).length === 0 && (
+                          <div className="text-center py-4 text-gray-500 text-sm">No nurses found</div>
+                        )}
                       </div>
-                    </div>
-                  )}
-                  {viewingVisitVitals.vitalsRemarks && (
-                    <div className="col-span-2">
-                      <Label className="text-sm text-gray-500">Vitals Remarks</Label>
-                      <div className="mt-1 p-3 bg-gray-50 rounded-md border border-gray-200">
-                        <p className="text-gray-900 whitespace-pre-wrap">{viewingVisitVitals.vitalsRemarks}</p>
-                      </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsRecordedDateTime" className="dialog-label-standard">Recorded Date & Time *</Label>
+                  <DatePicker
+                    id="customizeVisitVitalsRecordedDateTime"
+                    selected={customizeVisitVitalsRecordedDateTime}
+                    onChange={(date: Date | null) => {
+                      setCustomizeVisitVitalsRecordedDateTime(date);
+                      if (date) {
+                        // Treat the selected date/time as IST and convert to UTC for API
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const seconds = String(date.getSeconds()).padStart(2, '0');
+                        const istDateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
+                        const dateObj = new Date(istDateTimeStr);
+                        if (!isNaN(dateObj.getTime())) {
+                          setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, recordedDateTime: dateObj.toISOString().slice(0, 16) });
+                        }
+                      } else {
+                        setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, recordedDateTime: '' });
+                      }
+                    }}
+                    showTimeSelect
+                    timeIntervals={1}
+                    timeCaption="Time"
+                    timeFormat="hh:mm aa"
+                    dateFormat="dd-MM-yyyy hh:mm aa"
+                    placeholderText="dd-mm-yyyy HH:MM AM/PM"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsDailyOrHourlyVitals" className="dialog-label-standard">Daily/Hourly Vitals *</Label>
+                  <select
+                    id="customizeVisitVitalsDailyOrHourlyVitals"
+                    className="dialog-select-standard"
+                    value={customizeVisitVitalsFormData.dailyOrHourlyVitals}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, dailyOrHourlyVitals: e.target.value })}
+                    required
+                  >
+                    <option value="Daily">Daily</option>
+                    <option value="Hourly">Hourly</option>
+                  </select>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsPatientStatus" className="dialog-label-standard">Patient Status *</Label>
+                  <select
+                    id="customizeVisitVitalsPatientStatus"
+                    className="dialog-select-standard"
+                    value={customizeVisitVitalsFormData.patientStatus}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, patientStatus: e.target.value })}
+                    required
+                  >
+                    <option value="Stable">Stable</option>
+                    <option value="Notstable">Notstable</option>
+                  </select>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsHeartRate" className="dialog-label-standard">Heart Rate</Label>
+                  <Input
+                    id="customizeVisitVitalsHeartRate"
+                    type="number"
+                    value={customizeVisitVitalsFormData.heartRate}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, heartRate: e.target.value })}
+                    placeholder="Enter heart rate (optional)"
+                    className="dialog-input-standard"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsBloodPressure" className="dialog-label-standard">Blood Pressure</Label>
+                  <Input
+                    id="customizeVisitVitalsBloodPressure"
+                    value={customizeVisitVitalsFormData.bloodPressure}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, bloodPressure: e.target.value })}
+                    placeholder="e.g., 120/80 (optional)"
+                    className="dialog-input-standard"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsTemperature" className="dialog-label-standard">Temperature</Label>
+                  <Input
+                    id="customizeVisitVitalsTemperature"
+                    type="number"
+                    step="0.1"
+                    value={customizeVisitVitalsFormData.temperature}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, temperature: e.target.value })}
+                    placeholder="Enter temperature (optional)"
+                    className="dialog-input-standard"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsO2Saturation" className="dialog-label-standard">O2 Saturation</Label>
+                  <Input
+                    id="customizeVisitVitalsO2Saturation"
+                    type="number"
+                    value={customizeVisitVitalsFormData.o2Saturation}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, o2Saturation: e.target.value })}
+                    placeholder="Enter O2 saturation (optional)"
+                    className="dialog-input-standard"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsRespiratoryRate" className="dialog-label-standard">Respiratory Rate</Label>
+                  <Input
+                    id="customizeVisitVitalsRespiratoryRate"
+                    type="number"
+                    value={customizeVisitVitalsFormData.respiratoryRate}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, respiratoryRate: e.target.value })}
+                    placeholder="Enter respiratory rate (optional)"
+                    className="dialog-input-standard"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsPulseRate" className="dialog-label-standard">Pulse Rate</Label>
+                  <Input
+                    id="customizeVisitVitalsPulseRate"
+                    type="number"
+                    value={customizeVisitVitalsFormData.pulseRate}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, pulseRate: e.target.value })}
+                    placeholder="Enter pulse rate (optional)"
+                    className="dialog-input-standard"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsVitalsStatus" className="dialog-label-standard">Vitals Status</Label>
+                  <select
+                    id="customizeVisitVitalsVitalsStatus"
+                    className="dialog-select-standard"
+                    value={customizeVisitVitalsFormData.vitalsStatus}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, vitalsStatus: e.target.value })}
+                    required
+                  >
+                    <option value="">Select Vitals Status</option>
+                    <option value="Stable">Stable</option>
+                    <option value="Critical">Critical</option>
+                    <option value="Improving">Improving</option>
+                    <option value="Normal">Normal</option>
+                  </select>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsStatus" className="dialog-label-standard">Status *</Label>
+                  <select
+                    id="customizeVisitVitalsStatus"
+                    className="dialog-select-standard"
+                    value={customizeVisitVitalsFormData.status}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, status: e.target.value })}
+                    required
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsCreatedBy" className="dialog-label-standard">Vitals Created By</Label>
+                  <Input
+                    id="customizeVisitVitalsCreatedBy"
+                    value={customizeVisitVitalsFormData.vitalsCreatedBy}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, vitalsCreatedBy: e.target.value })}
+                    placeholder="Enter created by (optional)"
+                    className="dialog-input-standard"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeVisitVitalsCreatedAt" className="dialog-label-standard">Vitals Created At</Label>
+                  <DatePicker
+                    id="customizeVisitVitalsCreatedAt"
+                    selected={customizeVisitVitalsCreatedAt}
+                    onChange={(date: Date | null) => {
+                      setCustomizeVisitVitalsCreatedAt(date);
+                      if (date) {
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const seconds = String(date.getSeconds()).padStart(2, '0');
+                        const istDateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
+                        const dateObj = new Date(istDateTimeStr);
+                        if (!isNaN(dateObj.getTime())) {
+                          // Store in form data if needed
+                        }
+                      }
+                    }}
+                    showTimeSelect
+                    timeIntervals={1}
+                    timeCaption="Time"
+                    timeFormat="hh:mm aa"
+                    dateFormat="dd-MM-yyyy hh:mm aa"
+                    placeholderText="dd-mm-yyyy HH:MM AM/PM"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
+                  />
+                </div>
+                <div className="dialog-form-field col-span-2">
+                  <Label htmlFor="customizeVisitVitalsVisitRemarks" className="dialog-label-standard">Visit Remarks</Label>
+                  <Textarea
+                    id="customizeVisitVitalsVisitRemarks"
+                    value={customizeVisitVitalsFormData.visitRemarks}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, visitRemarks: e.target.value })}
+                    placeholder="Enter visit remarks (optional)"
+                    rows={4}
+                    className="dialog-input-standard"
+                  />
+                </div>
+                <div className="dialog-form-field col-span-2">
+                  <Label htmlFor="customizeVisitVitalsVitalsRemarks" className="dialog-label-standard">Vitals Remarks</Label>
+                  <Textarea
+                    id="customizeVisitVitalsVitalsRemarks"
+                    value={customizeVisitVitalsFormData.vitalsRemarks}
+                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, vitalsRemarks: e.target.value })}
+                    placeholder="Enter vitals remarks (optional)"
+                    rows={4}
+                    className="dialog-input-standard"
+                  />
                 </div>
               </div>
-            )}
+            </div>
           </div>
-          <DialogFooter className="px-6 py-3 flex-shrink-0 border-t">
+          <div className="dialog-footer-buttons px-6 pb-4 flex-shrink-0">
             <Button
               variant="outline"
               onClick={() => {
-                setIsViewVisitVitalsDialogOpen(false);
-                setViewingVisitVitals(null);
+                setIsCustomizeVisitVitalsDialogOpen(false);
+                setCustomizingVisitVitals(null);
+                setCustomizeVisitVitalsRecordedDateTime(null);
+                setCustomizeVisitVitalsCreatedAt(null);
               }}
             >
-              Close
+              Cancel
             </Button>
-            {viewingVisitVitals && (
-              <Button
-                onClick={() => {
-                  setIsViewVisitVitalsDialogOpen(false);
-                  handleOpenEditVisitVitalsDialog(viewingVisitVitals);
-                }}
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <Button
+              onClick={() => {
+                // TODO: Add save functionality for manage visit vitals dialog
+                console.log('Manage visit vitals data:', customizeVisitVitalsFormData);
+                setIsCustomizeVisitVitalsDialogOpen(false);
+                setCustomizeVisitVitalsRecordedDateTime(null);
+                setCustomizeVisitVitalsCreatedAt(null);
+              }}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </CustomResizableDialog>
       </div>
     </div>
   );
