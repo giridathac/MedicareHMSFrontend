@@ -117,7 +117,7 @@ export function CustomResizableDialog({
   const effectiveMaxWidth = Math.min(maxWidth, window.innerWidth - 40);
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-[100]">
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black/50"
@@ -128,7 +128,7 @@ export function CustomResizableDialog({
       <div
         ref={dialogRef}
         className={cn(
-          "fixed z-50",
+          "fixed z-[100]",
           "bg-white shadow-lg flex flex-col",
           className
         )}

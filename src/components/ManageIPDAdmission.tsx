@@ -6,7 +6,7 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { FileText, FlaskConical, Stethoscope, Heart, ArrowLeft, Plus, Search, Eye, Edit, Settings, Sliders } from 'lucide-react';
 import { CustomResizableDialog, CustomResizableDialogHeader, CustomResizableDialogTitle, CustomResizableDialogClose } from './CustomResizableDialog';
@@ -19,10 +19,109 @@ import { doctorsApi } from '../api/doctors';
 import { Doctor } from '../types';
 import { staffApi } from '../api/staff';
 import { PatientAdmitVisitVitals } from '../api/admissions';
-import { convertToIST } from '../utils/timeUtils';
+import { convertToIST, formatDateIST, getTodayIST, formatDateTimeIST } from '../utils/timeUtils';
+import { getCurrentIST } from '../config/timezone';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 import '../styles/dashboard.css';
 
 export function ManageIPDAdmission() {
+  // Helper function to format datetime to dd-mm-yyyy, hh:mm format in IST
+  const formatDateTimeForInput = (dateTime: string | Date | undefined): string => {
+    if (!dateTime) return '';
+    try {
+      // Use convertToIST to properly convert to IST
+      const istDate = convertToIST(dateTime);
+      
+      // Get date components in IST
+      const day = String(istDate.getUTCDate()).padStart(2, '0');
+      const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+      const year = String(istDate.getUTCFullYear());
+      const hours = String(istDate.getUTCHours()).padStart(2, '0');
+      const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+      
+      return `${day}-${month}-${year}, ${hours}:${minutes}`;
+    } catch {
+      return '';
+    }
+  };
+
+  // Helper function to format datetime to dd-mm-yyyy, hh:mm AM/PM format in IST
+  const formatDateTimeForInputWithAMPM = (dateTime: string | Date | undefined): string => {
+    if (!dateTime) return '';
+    try {
+      // Use convertToIST to properly convert to IST
+      const istDate = convertToIST(dateTime);
+      
+      // Get date components in IST
+      const day = String(istDate.getUTCDate()).padStart(2, '0');
+      const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+      const year = String(istDate.getUTCFullYear());
+      const hours24 = istDate.getUTCHours();
+      const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+      
+      // Convert to 12-hour format with AM/PM
+      const period = hours24 >= 12 ? 'PM' : 'AM';
+      const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
+      
+      return `${day}-${month}-${year}, ${String(hours12).padStart(2, '0')}:${minutes} ${period}`;
+    } catch {
+      return '';
+    }
+  };
+
+  // Helper function to parse datetime from dd-mm-yyyy, hh:mm format (assumed to be in IST)
+  const parseDateTimeFromInput = (inputStr: string): string => {
+    if (!inputStr) return '';
+    try {
+      // Match dd-mm-yyyy, hh:mm format (24-hour) or dd-mm-yyyy, hh:mm AM/PM format
+      const match24 = inputStr.match(/^(\d{1,2})-(\d{1,2})-(\d{4}),\s*(\d{1,2}):(\d{2})$/);
+      const match12 = inputStr.match(/^(\d{1,2})-(\d{1,2})-(\d{4}),\s*(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      
+      let day: number, month: number, year: number, hours: number, minutes: number;
+      
+      if (match12) {
+        // 12-hour format with AM/PM
+        day = parseInt(match12[1], 10);
+        month = parseInt(match12[2], 10);
+        year = parseInt(match12[3], 10);
+        let hours12 = parseInt(match12[4], 10);
+        minutes = parseInt(match12[5], 10);
+        const period = match12[6].toUpperCase();
+        
+        // Convert to 24-hour format
+        if (period === 'AM') {
+          hours = hours12 === 12 ? 0 : hours12;
+        } else { // PM
+          hours = hours12 === 12 ? 12 : hours12 + 12;
+        }
+      } else if (match24) {
+        // 24-hour format
+        day = parseInt(match24[1], 10);
+        month = parseInt(match24[2], 10);
+        year = parseInt(match24[3], 10);
+        hours = parseInt(match24[4], 10);
+        minutes = parseInt(match24[5], 10);
+      } else {
+        return '';
+      }
+      
+      if (day < 1 || day > 31 || month < 1 || month > 12) return '';
+      if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return '';
+      
+      // Create date string in IST timezone (UTC+5:30)
+      // Format: YYYY-MM-DDTHH:mm:ss+05:30
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00+05:30`;
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return '';
+      
+      // Return in ISO format (UTC) for API
+      // The date object will automatically convert from IST to UTC
+      return date.toISOString();
+    } catch {
+      return '';
+    }
+  };
   const [admission, setAdmission] = useState<Admission | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,12 +197,27 @@ export function ManageIPDAdmission() {
   const [customizeSelectedFiles, setCustomizeSelectedFiles] = useState<File[]>([]);
   const [customizeUploadedDocumentUrls, setCustomizeUploadedDocumentUrls] = useState<string[]>([]);
 
+  // Manage Doctor Visit Dialog State
+  const [isCustomizeDoctorVisitDialogOpen, setIsCustomizeDoctorVisitDialogOpen] = useState(false);
+  const [customizingDoctorVisit, setCustomizingDoctorVisit] = useState<PatientDoctorVisit | null>(null);
+  const [customizeDoctorVisitFormData, setCustomizeDoctorVisitFormData] = useState({
+    patientId: '',
+    doctorId: '',
+    doctorVisitedDateTime: '',
+    visitsRemarks: '',
+    patientCondition: '',
+    status: 'Active',
+    visitCreatedAt: ''
+  });
+  const [customizeDoctorVisitDoctorSearchTerm, setCustomizeDoctorVisitDoctorSearchTerm] = useState('');
+  const [showCustomizeDoctorVisitDoctorList, setShowCustomizeDoctorVisitDoctorList] = useState(false);
+  const [customizeDoctorVisitDateTime, setCustomizeDoctorVisitDateTime] = useState<Date | null>(null);
+  const [customizeDoctorVisitCreatedAt, setCustomizeDoctorVisitCreatedAt] = useState<Date | null>(null);
+  const [customizeOrderedDate, setCustomizeOrderedDate] = useState<Date | null>(null);
+  const [customizeTestDoneDateTime, setCustomizeTestDoneDateTime] = useState<Date | null>(null);
+
   // Doctor Visit Dialog State
   const [isAddDoctorVisitDialogOpen, setIsAddDoctorVisitDialogOpen] = useState(false);
-  const [isViewDoctorVisitDialogOpen, setIsViewDoctorVisitDialogOpen] = useState(false);
-  const [isEditDoctorVisitDialogOpen, setIsEditDoctorVisitDialogOpen] = useState(false);
-  const [viewingDoctorVisit, setViewingDoctorVisit] = useState<PatientDoctorVisit | null>(null);
-  const [editingDoctorVisitId, setEditingDoctorVisitId] = useState<string | number | null>(null);
   const [doctorVisitFormData, setDoctorVisitFormData] = useState({
     patientId: '',
     doctorId: '',
@@ -606,7 +720,7 @@ export function ManageIPDAdmission() {
       patientId: String(labTest.patientId || admission?.patientId || ''),
       labTestId: String(labTest.labTestId || ''),
       priority: labTest.priority || 'Normal',
-      orderedDate: labTest.orderedDate || new Date().toISOString().split('T')[0],
+      orderedDate: labTest.orderedDate || getTodayIST(),
       orderedBy: labTest.orderedBy || '',
       orderedByDoctorId: String(orderedByDoctorId || ''),
       description: labTest.description || '',
@@ -653,6 +767,14 @@ export function ManageIPDAdmission() {
 
   // Handle opening Manage IPD Lab Test dialog
   const handleOpenCustomizeIPDLabTestDialog = async (labTest: PatientLabTest) => {
+    console.log('Opening Manage IPD Lab Test dialog for:', labTest);
+    
+    // First, explicitly close all other dialogs to prevent conflicts
+    setIsAddDoctorVisitDialogOpen(false);
+    setIsAddIPDLabTestDialogOpen(false);
+    setIsEditIPDLabTestDialogOpen(false);
+    setIsViewIPDLabTestDialogOpen(false);
+    
     // Fetch available lab tests
     let labTestsList: LabTest[] = [];
     try {
@@ -692,12 +814,33 @@ export function ManageIPDAdmission() {
       return String(docId) === String(orderedByDoctorId);
     });
 
+    // Set Ordered Date for DatePicker
+    let orderedDateValue: Date | null = null;
+    if (labTest.orderedDate) {
+      try {
+        // orderedDate is in YYYY-MM-DD format, convert to Date object
+        const dateObj = new Date(labTest.orderedDate + 'T00:00:00');
+        if (!isNaN(dateObj.getTime())) {
+          orderedDateValue = dateObj;
+        }
+      } catch {
+        orderedDateValue = null;
+      }
+    }
+    if (!orderedDateValue) {
+      // Use today's date in IST
+      orderedDateValue = convertToIST(new Date());
+      // Set to midnight for date-only picker
+      orderedDateValue.setUTCHours(0, 0, 0, 0);
+    }
+    setCustomizeOrderedDate(orderedDateValue);
+
     setCustomizeLabTestFormData({
       roomAdmissionId: String(labTest.roomAdmissionId || admission?.roomAdmissionId || admission?.admissionId || ''),
       patientId: String(labTest.patientId || admission?.patientId || ''),
       labTestId: String(labTest.labTestId || ''),
       priority: labTest.priority || 'Normal',
-      orderedDate: labTest.orderedDate || new Date().toISOString().split('T')[0],
+      orderedDate: labTest.orderedDate || getTodayIST(),
       orderedBy: labTest.orderedBy || '',
       orderedByDoctorId: String(orderedByDoctorId || ''),
       description: labTest.description || '',
@@ -710,6 +853,20 @@ export function ManageIPDAdmission() {
       testStatus: labTest.testStatus || 'Pending',
       testDoneDateTime: labTest.testDoneDateTime ? new Date(labTest.testDoneDateTime).toISOString().slice(0, 16) : ''
     });
+
+    // Set Test Done Date & Time for DatePicker
+    let testDoneDateTimeValue: Date | null = null;
+    if (labTest.testDoneDateTime) {
+      try {
+        const dateObj = new Date(labTest.testDoneDateTime);
+        if (!isNaN(dateObj.getTime())) {
+          testDoneDateTimeValue = convertToIST(dateObj);
+        }
+      } catch {
+        testDoneDateTimeValue = null;
+      }
+    }
+    setCustomizeTestDoneDateTime(testDoneDateTimeValue);
 
     // Parse existing documents from reportsUrl field
     let existingDocUrls: string[] = [];
@@ -738,7 +895,108 @@ export function ManageIPDAdmission() {
     setShowCustomizeLabTestList(false);
     setCustomizeDoctorSearchTerm(selectedDoctor ? (selectedDoctor.name || selectedDoctor.doctorName || '') : '');
     setShowCustomizeDoctorList(false);
+    
+    // Open the Manage IPD Lab Test dialog
     setIsCustomizeIPDLabTestDialogOpen(true);
+    console.log('Set isCustomizeIPDLabTestDialogOpen to true');
+    
+    // Double-check other dialogs are closed (defensive)
+    setTimeout(() => {
+      setIsAddDoctorVisitDialogOpen(false);
+      setIsEditDoctorVisitDialogOpen(false);
+      setIsAddIPDLabTestDialogOpen(false);
+      setIsEditIPDLabTestDialogOpen(false);
+      setIsViewIPDLabTestDialogOpen(false);
+      console.log('Ensured all other dialogs are closed');
+    }, 0);
+  };
+
+  // Handle opening Manage Doctor Visit dialog
+  const handleOpenCustomizeDoctorVisitDialog = async (visit: PatientDoctorVisit) => {
+    console.log('Opening Manage Doctor Visit dialog for:', visit);
+    
+    // First, explicitly close all other dialogs to prevent conflicts
+    setIsAddDoctorVisitDialogOpen(false);
+    setIsAddIPDLabTestDialogOpen(false);
+    setIsEditIPDLabTestDialogOpen(false);
+    setIsViewIPDLabTestDialogOpen(false);
+    setIsCustomizeIPDLabTestDialogOpen(false);
+    
+    // Fetch available doctors
+    let doctorsList: Doctor[] = [];
+    try {
+      doctorsList = await doctorsApi.getAll();
+      setAvailableDoctors(doctorsList);
+    } catch (err) {
+      console.error('Error fetching doctors:', err);
+    }
+
+    setCustomizingDoctorVisit(visit);
+
+    // Find the selected doctor to populate the search term (use doctorsList from the fetch, not availableDoctors state)
+    const selectedDoctor = doctorsList.find((doc: Doctor) => {
+      const did = doc.id || 0;
+      return String(did) === String(visit.doctorId);
+    });
+
+    setCustomizeDoctorVisitFormData({
+      patientId: String(visit.patientId || admission?.patientId || ''),
+      doctorId: String(visit.doctorId || ''),
+      doctorVisitedDateTime: visit.doctorVisitedDateTime || '',
+      visitsRemarks: visit.visitsRemarks || '',
+      patientCondition: visit.patientCondition || '',
+      status: visit.status || 'Active',
+      visitCreatedAt: visit.visitCreatedAt || ''
+    });
+
+    // Set DatePicker values
+    let dateTimeValue: Date | null = null;
+    if (visit.doctorVisitedDateTime) {
+      try {
+        const dateObj = new Date(visit.doctorVisitedDateTime);
+        if (!isNaN(dateObj.getTime())) {
+          dateTimeValue = convertToIST(dateObj);
+        }
+      } catch {
+        dateTimeValue = getCurrentIST();
+      }
+    } else {
+      dateTimeValue = getCurrentIST();
+    }
+    setCustomizeDoctorVisitDateTime(dateTimeValue);
+
+    // Set Visit Created At DatePicker value
+    let createdAtValue: Date | null = null;
+    if (visit.visitCreatedAt) {
+      try {
+        const dateObj = new Date(visit.visitCreatedAt);
+        if (!isNaN(dateObj.getTime())) {
+          createdAtValue = convertToIST(dateObj);
+        }
+      } catch {
+        createdAtValue = null;
+      }
+    }
+    setCustomizeDoctorVisitCreatedAt(createdAtValue);
+
+    setCustomizeDoctorVisitDoctorSearchTerm(selectedDoctor ? `${selectedDoctor.name || 'Unknown'} (${selectedDoctor.specialty || 'N/A'})` : String(visit.doctorId || ''));
+    setShowCustomizeDoctorVisitDoctorList(false);
+    
+    // Open the Manage Doctor Visit dialog
+    setIsCustomizeDoctorVisitDialogOpen(true);
+    console.log('Set isCustomizeDoctorVisitDialogOpen to true');
+    
+    // Double-check other dialogs are closed (defensive)
+    setTimeout(() => {
+      setIsAddDoctorVisitDialogOpen(false);
+      setIsEditDoctorVisitDialogOpen(false);
+      setIsAddIPDLabTestDialogOpen(false);
+      setIsEditIPDLabTestDialogOpen(false);
+      setIsViewIPDLabTestDialogOpen(false);
+      setIsViewDoctorVisitDialogOpen(false);
+      setIsCustomizeIPDLabTestDialogOpen(false);
+      console.log('Ensured all other dialogs are closed');
+    }, 0);
   };
 
   // Update documents when editing lab test dialog opens or when form data changes
@@ -816,7 +1074,7 @@ export function ManageIPDAdmission() {
         patientId: String(patientIdValue || admission?.patientId || ''),
         labTestId: '',
         priority: 'Normal',
-        orderedDate: new Date().toISOString().split('T')[0], // Today's date
+        orderedDate: getTodayIST(), // Today's date in IST
         orderedBy: '',
         orderedByDoctorId: '',
         description: '',
@@ -1180,11 +1438,11 @@ export function ManageIPDAdmission() {
       setDoctorVisitFormData({
         patientId: String(patientIdValue),
         doctorId: '',
-        doctorVisitedDateTime: new Date().toISOString().slice(0, 16), // Current date and time
+        doctorVisitedDateTime: getCurrentIST().toISOString().slice(0, 16), // Current date and time in IST
         visitsRemarks: '',
         patientCondition: '',
         status: 'Active',
-        visitCreatedAt: new Date().toISOString()
+        visitCreatedAt: getCurrentIST().toISOString()
       });
       setDoctorSearchTerm('');
       setShowDoctorList(false);
@@ -1195,48 +1453,6 @@ export function ManageIPDAdmission() {
     }
   };
 
-  // Handle viewing Doctor Visit
-  const handleViewDoctorVisit = (visit: PatientDoctorVisit) => {
-    setViewingDoctorVisit(visit);
-    setIsViewDoctorVisitDialogOpen(true);
-  };
-
-  // Handle opening Edit Doctor Visit dialog
-  const handleOpenEditDoctorVisitDialog = async (visit: PatientDoctorVisit) => {
-    // Fetch available doctors first
-    let doctorsList: Doctor[] = [];
-    try {
-      doctorsList = await doctorsApi.getAll();
-      setAvailableDoctors(doctorsList);
-    } catch (err) {
-      console.error('Error fetching doctors:', err);
-    }
-
-    const patientDoctorVisitId = visit.patientDoctorVisitId || visit.id;
-    setEditingDoctorVisitId(patientDoctorVisitId || null);
-
-    // Find the selected doctor to populate the search term (use doctorsList from the fetch, not availableDoctors state)
-    const selectedDoctor = doctorsList.find((doc: Doctor) => {
-      const did = doc.id || 0;
-      return String(did) === String(visit.doctorId);
-    });
-
-    setDoctorVisitFormData({
-      patientId: String(visit.patientId || admission?.patientId || ''),
-      doctorId: String(visit.doctorId || ''),
-      doctorVisitedDateTime: visit.doctorVisitedDateTime ? new Date(visit.doctorVisitedDateTime).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
-      visitsRemarks: visit.visitsRemarks || '',
-      patientCondition: visit.patientCondition || '',
-      status: visit.status || 'Active',
-      visitCreatedAt: visit.visitCreatedAt ? (typeof visit.visitCreatedAt === 'string' ? new Date(visit.visitCreatedAt).toISOString().slice(0, 16) : new Date(visit.visitCreatedAt).toISOString().slice(0, 16)) : ''
-    });
-
-    setDoctorSearchTerm(selectedDoctor ? `${selectedDoctor.name || 'Unknown'} (${selectedDoctor.specialty || 'N/A'})` : String(visit.doctorId || ''));
-    setShowDoctorList(false);
-    setDoctorVisitSubmitError(null);
-    setIsEditDoctorVisitDialogOpen(true);
-    setIsAddDoctorVisitDialogOpen(false); // Ensure add dialog is closed
-  };
 
   // Handle saving Doctor Visit
   const handleSaveDoctorVisit = async () => {
@@ -1291,36 +1507,19 @@ export function ManageIPDAdmission() {
 
       console.log('API Payload:', JSON.stringify(payload, null, 2));
 
-      // Call the API to create or update the doctor visit
-      let response;
-      if (editingDoctorVisitId) {
-        // Update existing doctor visit
-        console.log('API Endpoint: PUT /patient-admit-doctor-visits/' + editingDoctorVisitId);
-        response = await apiRequest<any>(`/patient-admit-doctor-visits/${editingDoctorVisitId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-        console.log('Doctor visit updated successfully:', response);
-      } else {
-        // Create new doctor visit
-        console.log('API Endpoint: POST /patient-admit-doctor-visits');
-        response = await apiRequest<any>('/patient-admit-doctor-visits', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-        console.log('Doctor visit created successfully:', response);
-      }
+      // Call the API to create the doctor visit
+      console.log('API Endpoint: POST /patient-admit-doctor-visits');
+      const response = await apiRequest<any>('/patient-admit-doctor-visits', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      console.log('Doctor visit created successfully:', response);
 
       // Close dialog
       setIsAddDoctorVisitDialogOpen(false);
-      setIsEditDoctorVisitDialogOpen(false);
-      setEditingDoctorVisitId(null);
       
       // Refresh the doctor visits list
       if (admission?.roomAdmissionId) {
@@ -1686,7 +1885,7 @@ export function ManageIPDAdmission() {
               </div>
               <div>
                 <Label className="text-sm text-gray-500">Admission Date</Label>
-                <p className="text-gray-900 font-medium mt-1">{admission.admissionDate || 'N/A'}</p>
+                <p className="text-gray-900 font-medium mt-1">{admission.admissionDate ? formatDateTimeIST(admission.admissionDate) : 'N/A'}</p>
               </div>
               <div>
                 <Label className="text-sm text-gray-500">Admitted By</Label>
@@ -1786,7 +1985,7 @@ export function ManageIPDAdmission() {
                   {admission.createdAt && (
                     <div>
                       <Label className="text-sm text-gray-500">Created At</Label>
-                      <p className="text-gray-900 font-medium mt-1">{new Date(admission.createdAt).toLocaleString()}</p>
+                      <p className="text-gray-900 font-medium mt-1">{formatDateTimeIST(admission.createdAt)}</p>
                     </div>
                   )}
                   {!admission.caseSheetDetails && !admission.caseSheet && (
@@ -1924,13 +2123,17 @@ export function ManageIPDAdmission() {
                                 </Badge>
                               </td>
                               <td className="py-3 px-4 text-gray-600">
-                                {createdDate ? (typeof createdDate === 'string' ? new Date(createdDate).toLocaleString() : String(createdDate)) : 'N/A'}
+                                {createdDate ? formatDateTimeIST(createdDate) : 'N/A'}
                               </td>
                               <td className="py-3 px-4">
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleOpenCustomizeIPDLabTestDialog(labTest)}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleOpenCustomizeIPDLabTestDialog(labTest);
+                                  }}
                                   className="gap-1"
                                 >
                                   <Sliders className="size-3" />
@@ -2000,7 +2203,7 @@ export function ManageIPDAdmission() {
                           <tr key={visit.patientDoctorVisitId || visit.id || index} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="py-3 px-4 text-gray-900 font-medium">{visit.doctorName || 'N/A'}</td>
                             <td className="py-3 px-4 text-gray-600">
-                              {visit.doctorVisitedDateTime ? new Date(visit.doctorVisitedDateTime).toLocaleString() : 'N/A'}
+                              {visit.doctorVisitedDateTime ? formatDateTimeIST(visit.doctorVisitedDateTime) : 'N/A'}
                             </td>
                             <td className="py-3 px-4 text-gray-600">{visit.visitsRemarks || 'N/A'}</td>
                             <td className="py-3 px-4">
@@ -2022,26 +2225,19 @@ export function ManageIPDAdmission() {
                               </Badge>
                             </td>
                             <td className="py-3 px-4">
-                              <div className="flex items-center gap-2">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleOpenEditDoctorVisitDialog(visit)}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleOpenCustomizeDoctorVisitDialog(visit);
+                                }}
                                 className="gap-1"
                               >
-                                <Edit className="size-3" />
-                                View & Edit
+                                <Settings className="size-3" />
+                                Manage
                               </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleOpenEditDoctorVisitDialog(visit)}
-                                  className="gap-1"
-                                >
-                                  <Settings className="size-3" />
-                                  Manage
-                                </Button>
-                              </div>
                             </td>
                           </tr>
                         ))}
@@ -2147,7 +2343,7 @@ export function ManageIPDAdmission() {
                             </td>
                             <td className="py-3 px-4 text-gray-600">{vital.vitalsRemarks || 'N/A'}</td>
                             <td className="py-3 px-4 text-gray-600">
-                              {vital.vitalsCreatedAt ? (typeof vital.vitalsCreatedAt === 'string' ? new Date(vital.vitalsCreatedAt).toLocaleString() : String(vital.vitalsCreatedAt)) : 'N/A'}
+                              {vital.vitalsCreatedAt ? formatDateTimeIST(vital.vitalsCreatedAt) : 'N/A'}
                             </td>
                             <td className="py-3 px-4">
                               <Badge variant={
@@ -2190,7 +2386,7 @@ export function ManageIPDAdmission() {
           setEditUploadedDocumentUrls([]);
         }
       }}>
-        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
+        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]" aria-describedby={undefined}>
           <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
             <DialogTitle>{editingLabTestId ? 'Edit IPD Lab Test' : 'Add New IPD Lab Test'}</DialogTitle>
           </DialogHeader>
@@ -2557,7 +2753,7 @@ export function ManageIPDAdmission() {
           setViewingLabTest(null);
         }
       }}>
-        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
+        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]" aria-describedby={undefined}>
           <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
             <DialogTitle>View IPD Lab Test Details</DialogTitle>
           </DialogHeader>
@@ -2700,7 +2896,7 @@ export function ManageIPDAdmission() {
                   <div>
                     <Label className="text-sm text-gray-500">Created Date</Label>
                     <p className="text-gray-900 font-medium mt-1">
-                      {viewingLabTest.createdDate ? (typeof viewingLabTest.createdDate === 'string' ? new Date(viewingLabTest.createdDate).toLocaleString() : String(viewingLabTest.createdDate)) : 'N/A'}
+                      {viewingLabTest.createdDate ? formatDateTimeIST(viewingLabTest.createdDate) : 'N/A'}
                     </p>
                   </div>
                   <div className="col-span-2">
@@ -2759,14 +2955,24 @@ export function ManageIPDAdmission() {
       </Dialog>
 
       {/* Manage IPD Lab Test Dialog */}
-      <CustomResizableDialog 
+        <CustomResizableDialog
         open={isCustomizeIPDLabTestDialogOpen} 
-        onOpenChange={setIsCustomizeIPDLabTestDialogOpen}
+        onOpenChange={(open) => {
+          setIsCustomizeIPDLabTestDialogOpen(open);
+          if (!open) {
+            setCustomizeOrderedDate(null);
+            setCustomizeTestDoneDateTime(null);
+          }
+        }}
         className="p-0 gap-0"
         initialWidth={550}
         maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
       >
-        <CustomResizableDialogClose onClick={() => setIsCustomizeIPDLabTestDialogOpen(false)} />
+        <CustomResizableDialogClose onClick={() => {
+          setIsCustomizeIPDLabTestDialogOpen(false);
+          setCustomizeOrderedDate(null);
+          setCustomizeTestDoneDateTime(null);
+        }} />
         <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
           <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
             <CustomResizableDialogTitle className="dialog-title-standard">Manage IPD Lab Test</CustomResizableDialogTitle>
@@ -2892,13 +3098,31 @@ export function ManageIPDAdmission() {
                 </div>
                 <div className="dialog-form-field">
                   <Label htmlFor="customizeOrderedDate" className="dialog-label-standard">Ordered Date *</Label>
-                  <Input
+                  <DatePicker
                     id="customizeOrderedDate"
-                    type="date"
-                    value={customizeLabTestFormData.orderedDate}
-                    onChange={(e) => setCustomizeLabTestFormData({ ...customizeLabTestFormData, orderedDate: e.target.value })}
-                    className="dialog-input-standard"
-                    required
+                    selected={customizeOrderedDate}
+                    onChange={(date: Date | null) => {
+                      setCustomizeOrderedDate(date);
+                      if (date) {
+                        // Convert to YYYY-MM-DD format for form data
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const dateStr = `${year}-${month}-${day}`;
+                        setCustomizeLabTestFormData({ ...customizeLabTestFormData, orderedDate: dateStr });
+                      } else {
+                        setCustomizeLabTestFormData({ ...customizeLabTestFormData, orderedDate: '' });
+                      }
+                    }}
+                    dateFormat="dd-MM-yyyy"
+                    placeholderText="dd-mm-yyyy"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
                   />
                 </div>
                 <div className="dialog-form-field">
@@ -3090,13 +3314,43 @@ export function ManageIPDAdmission() {
                 </div>
                 <div className="dialog-form-field">
                   <Label htmlFor="customizeTestDoneDateTime" className="dialog-label-standard">Test Done Date & Time</Label>
-                  <Input
+                  <DatePicker
                     id="customizeTestDoneDateTime"
-                    type="datetime-local"
-                    value={customizeLabTestFormData.testDoneDateTime}
-                    onChange={(e) => setCustomizeLabTestFormData({ ...customizeLabTestFormData, testDoneDateTime: e.target.value })}
-                    placeholder="Enter test done date and time"
-                    className="dialog-input-standard"
+                    selected={customizeTestDoneDateTime}
+                    onChange={(date: Date | null) => {
+                      setCustomizeTestDoneDateTime(date);
+                      if (date) {
+                        // Treat the selected date/time as IST and convert to UTC for API
+                        // Extract date/time components from the selected date (treating as IST)
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const seconds = String(date.getSeconds()).padStart(2, '0');
+                        // Create IST datetime string and convert to UTC
+                        const istDateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
+                        const dateObj = new Date(istDateTimeStr);
+                        if (!isNaN(dateObj.getTime())) {
+                          setCustomizeLabTestFormData({ ...customizeLabTestFormData, testDoneDateTime: dateObj.toISOString().slice(0, 16) });
+                        }
+                      } else {
+                        setCustomizeLabTestFormData({ ...customizeLabTestFormData, testDoneDateTime: '' });
+                      }
+                    }}
+                    showTimeSelect
+                    timeIntervals={1}
+                    timeCaption="Time"
+                    timeFormat="hh:mm aa"
+                    dateFormat="dd-MM-yyyy hh:mm aa"
+                    placeholderText="dd-mm-yyyy HH:MM AM/PM"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
                   />
                 </div>
               </div>
@@ -3109,6 +3363,8 @@ export function ManageIPDAdmission() {
                 setIsCustomizeIPDLabTestDialogOpen(false);
                 setCustomizingLabTest(null);
                 setCustomizeSelectedFiles([]);
+                setCustomizeOrderedDate(null);
+                setCustomizeTestDoneDateTime(null);
               }}
             >
               Cancel
@@ -3118,6 +3374,250 @@ export function ManageIPDAdmission() {
                 // TODO: Add save functionality for manage dialog
                 console.log('Manage lab test data:', customizeLabTestFormData);
                 setIsCustomizeIPDLabTestDialogOpen(false);
+                setCustomizeOrderedDate(null);
+                setCustomizeTestDoneDateTime(null);
+              }}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </CustomResizableDialog>
+
+      {/* Manage Doctor Visit Dialog */}
+      <CustomResizableDialog 
+        open={isCustomizeDoctorVisitDialogOpen} 
+        onOpenChange={setIsCustomizeDoctorVisitDialogOpen}
+        className="p-0 gap-0"
+        initialWidth={550}
+        maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
+      >
+        <CustomResizableDialogClose onClick={() => setIsCustomizeDoctorVisitDialogOpen(false)} />
+        <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+          <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+            <CustomResizableDialogTitle className="dialog-title-standard">Manage New Doctor Visit</CustomResizableDialogTitle>
+          </CustomResizableDialogHeader>
+          <div className="dialog-body-content-wrapper">
+            <div className="dialog-form-container space-y-4">
+              <div className="dialog-form-field-grid">
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeDoctorVisitPatientId" className="dialog-label-standard">Patient ID *</Label>
+                  <Input
+                    id="customizeDoctorVisitPatientId"
+                    value={customizeDoctorVisitFormData.patientId}
+                    disabled
+                    className="dialog-input-disabled"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeDoctorVisitDoctorId" className="dialog-label-standard">Doctor *</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                    <Input
+                      id="customizeDoctorVisitDoctorId"
+                      value={customizeDoctorVisitDoctorSearchTerm}
+                      onChange={(e) => {
+                        setCustomizeDoctorVisitDoctorSearchTerm(e.target.value);
+                        setShowCustomizeDoctorVisitDoctorList(true);
+                      }}
+                      onFocus={() => setShowCustomizeDoctorVisitDoctorList(true)}
+                      placeholder="Search and select doctor..."
+                      className="pl-10 dialog-input-standard"
+                      required
+                    />
+                    {showCustomizeDoctorVisitDoctorList && (
+                      <div className="mt-1 border border-gray-200 rounded-md max-h-48 overflow-y-auto bg-white z-50 relative">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Doctor ID</th>
+                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Name</th>
+                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Specialty</th>
+                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Type</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {availableDoctors
+                              .filter((doctor) => {
+                                if (!customizeDoctorVisitDoctorSearchTerm) return true;
+                                const searchLower = customizeDoctorVisitDoctorSearchTerm.toLowerCase();
+                                const name = (doctor.name || '').toLowerCase();
+                                const id = String(doctor.id || '').toLowerCase();
+                                const specialty = (doctor.specialty || '').toLowerCase();
+                                return name.includes(searchLower) || id.includes(searchLower) || specialty.includes(searchLower);
+                              })
+                              .map((doctor) => {
+                                const doctorId = String(doctor.id || '');
+                                const isSelected = customizeDoctorVisitFormData.doctorId === doctorId;
+                                return (
+                                  <tr
+                                    key={doctor.id}
+                                    onClick={() => {
+                                      setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, doctorId: doctorId });
+                                      setCustomizeDoctorVisitDoctorSearchTerm(`${doctor.name || 'Unknown'} (${doctor.specialty || 'N/A'})`);
+                                      setShowCustomizeDoctorVisitDoctorList(false);
+                                    }}
+                                    className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
+                                  >
+                                    <td className="py-2 px-3 text-sm text-gray-900 font-mono">{doctor.id}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{doctor.name || 'Unknown'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{doctor.specialty || 'N/A'}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-600">{doctor.type || 'N/A'}</td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                        {availableDoctors.filter((doctor) => {
+                          if (!customizeDoctorVisitDoctorSearchTerm) return true;
+                          const searchLower = customizeDoctorVisitDoctorSearchTerm.toLowerCase();
+                          const name = (doctor.name || '').toLowerCase();
+                          const id = String(doctor.id || '').toLowerCase();
+                          const specialty = (doctor.specialty || '').toLowerCase();
+                          return name.includes(searchLower) || id.includes(searchLower) || specialty.includes(searchLower);
+                        }).length === 0 && (
+                          <div className="text-center py-4 text-gray-500 text-sm">No doctors found</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeDoctorVisitDateTime" className="dialog-label-standard">Doctor Visited Date & Time *</Label>
+                  <DatePicker
+                    id="customizeDoctorVisitDateTime"
+                    selected={customizeDoctorVisitDateTime}
+                    onChange={(date: Date | null) => {
+                      setCustomizeDoctorVisitDateTime(date);
+                      if (date) {
+                        // Treat the selected date/time as IST and convert to UTC for API
+                        // Extract date/time components from the selected date (treating as IST)
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const seconds = String(date.getSeconds()).padStart(2, '0');
+                        // Create IST datetime string and convert to UTC
+                        const istDateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
+                        const dateObj = new Date(istDateTimeStr);
+                        if (!isNaN(dateObj.getTime())) {
+                          setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, doctorVisitedDateTime: dateObj.toISOString() });
+                        }
+                      } else {
+                        setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, doctorVisitedDateTime: '' });
+                      }
+                    }}
+                    showTimeSelect
+                    timeIntervals={1}
+                    timeCaption="Time"
+                    timeFormat="hh:mm aa"
+                    dateFormat="dd-MM-yyyy hh:mm aa"
+                    placeholderText="dd-mm-yyyy HH:MM AM/PM"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeDoctorVisitStatus" className="dialog-label-standard">Status *</Label>
+                  <select
+                    id="customizeDoctorVisitStatus"
+                    className="dialog-select-standard"
+                    value={customizeDoctorVisitFormData.status}
+                    onChange={(e) => setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, status: e.target.value })}
+                    required
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeDoctorVisitPatientCondition" className="dialog-label-standard">Patient Condition</Label>
+                  <Input
+                    id="customizeDoctorVisitPatientCondition"
+                    value={customizeDoctorVisitFormData.patientCondition}
+                    onChange={(e) => setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, patientCondition: e.target.value })}
+                    placeholder="Enter patient condition (optional)"
+                    className="dialog-input-standard"
+                  />
+                </div>
+                <div className="dialog-form-field">
+                  <Label htmlFor="customizeDoctorVisitCreatedAt" className="dialog-label-standard">Visit Created At</Label>
+                  <DatePicker
+                    id="customizeDoctorVisitCreatedAt"
+                    selected={customizeDoctorVisitCreatedAt}
+                    onChange={(date: Date | null) => {
+                      setCustomizeDoctorVisitCreatedAt(date);
+                      if (date) {
+                        // Treat the selected date/time as IST and convert to UTC for API
+                        // Extract date/time components from the selected date (treating as IST)
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const seconds = String(date.getSeconds()).padStart(2, '0');
+                        // Create IST datetime string and convert to UTC
+                        const istDateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
+                        const dateObj = new Date(istDateTimeStr);
+                        if (!isNaN(dateObj.getTime())) {
+                          setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, visitCreatedAt: dateObj.toISOString() });
+                        }
+                      } else {
+                        setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, visitCreatedAt: '' });
+                      }
+                    }}
+                    showTimeSelect
+                    timeIntervals={1}
+                    timeCaption="Time"
+                    timeFormat="hh:mm aa"
+                    dateFormat="dd-MM-yyyy hh:mm aa"
+                    placeholderText="dd-mm-yyyy HH:MM AM/PM"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
+                  />
+                </div>
+                <div className="dialog-form-field col-span-2">
+                  <Label htmlFor="customizeDoctorVisitRemarks" className="dialog-label-standard">Visits Remarks</Label>
+                  <Textarea
+                    id="customizeDoctorVisitRemarks"
+                    value={customizeDoctorVisitFormData.visitsRemarks}
+                    onChange={(e) => setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, visitsRemarks: e.target.value })}
+                    placeholder="Enter visit remarks (optional)"
+                    rows={4}
+                    className="dialog-input-standard"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="dialog-footer-buttons px-6 pb-4 flex-shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCustomizeDoctorVisitDialogOpen(false);
+                setCustomizingDoctorVisit(null);
+                setCustomizeDoctorVisitDateTime(null);
+                setCustomizeDoctorVisitCreatedAt(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                // TODO: Add save functionality for manage doctor visit dialog
+                console.log('Manage doctor visit data:', customizeDoctorVisitFormData);
+                setIsCustomizeDoctorVisitDialogOpen(false);
               }}
             >
               Save
@@ -3127,16 +3627,14 @@ export function ManageIPDAdmission() {
       </CustomResizableDialog>
 
       {/* Add/Edit Doctor Visit Dialog */}
-      <Dialog open={isAddDoctorVisitDialogOpen || isEditDoctorVisitDialogOpen} onOpenChange={(open) => {
+      <Dialog open={isAddDoctorVisitDialogOpen} onOpenChange={(open) => {
         if (!open) {
           setIsAddDoctorVisitDialogOpen(false);
-          setIsEditDoctorVisitDialogOpen(false);
-          setEditingDoctorVisitId(null);
         }
       }}>
-        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
+        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]" aria-describedby={undefined}>
           <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
-            <DialogTitle>{editingDoctorVisitId ? 'Edit Doctor Visit' : 'Add New Doctor Visit'}</DialogTitle>
+            <DialogTitle>Add New Doctor Visit</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
             <div className="space-y-4 py-4">
@@ -3289,8 +3787,6 @@ export function ManageIPDAdmission() {
               variant="outline"
               onClick={() => {
                 setIsAddDoctorVisitDialogOpen(false);
-                setIsEditDoctorVisitDialogOpen(false);
-                setEditingDoctorVisitId(null);
               }}
             >
               Cancel
@@ -3305,117 +3801,6 @@ export function ManageIPDAdmission() {
         </DialogContent>
       </Dialog>
 
-      {/* View Doctor Visit Dialog */}
-      <Dialog open={isViewDoctorVisitDialogOpen} onOpenChange={(open) => {
-        if (!open) {
-          setIsViewDoctorVisitDialogOpen(false);
-          setViewingDoctorVisit(null);
-        }
-      }}>
-        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
-          <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
-            <DialogTitle>View Doctor Visit Details</DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
-            {viewingDoctorVisit && (
-              <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm text-gray-500">Patient ID</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingDoctorVisit.patientId || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Doctor ID</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingDoctorVisit.doctorId || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Doctor Name</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingDoctorVisit.doctorName || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Doctor Visited Date & Time</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingDoctorVisit.doctorVisitedDateTime ? new Date(viewingDoctorVisit.doctorVisitedDateTime).toLocaleString() : 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Patient Condition</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      <Badge variant={
-                        viewingDoctorVisit.patientCondition?.toLowerCase() === 'stable' || viewingDoctorVisit.patientCondition?.toLowerCase() === 'good' ? 'default' :
-                        viewingDoctorVisit.patientCondition?.toLowerCase() === 'critical' || viewingDoctorVisit.patientCondition?.toLowerCase() === 'serious' ? 'destructive' :
-                        'outline'
-                      }>
-                        {viewingDoctorVisit.patientCondition || 'N/A'}
-                      </Badge>
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Status</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      <Badge variant={
-                        viewingDoctorVisit.status?.toLowerCase() === 'active' ? 'default' :
-                        viewingDoctorVisit.status?.toLowerCase() === 'completed' ? 'default' :
-                        'outline'
-                      }>
-                        {viewingDoctorVisit.status || 'N/A'}
-                      </Badge>
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Visit Created By</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingDoctorVisit.visitCreatedBy || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-gray-500">Visit Created At</Label>
-                    <p className="text-gray-900 font-medium mt-1">
-                      {viewingDoctorVisit.visitCreatedAt ? (typeof viewingDoctorVisit.visitCreatedAt === 'string' ? new Date(viewingDoctorVisit.visitCreatedAt).toLocaleString() : String(viewingDoctorVisit.visitCreatedAt)) : 'N/A'}
-                    </p>
-                  </div>
-                  {viewingDoctorVisit.visitsRemarks && (
-                    <div className="col-span-2">
-                      <Label className="text-sm text-gray-500">Visits Remarks</Label>
-                      <div className="mt-1 p-3 bg-gray-50 rounded-md border border-gray-200">
-                        <p className="text-gray-900 whitespace-pre-wrap">{viewingDoctorVisit.visitsRemarks}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter className="px-6 py-3 flex-shrink-0 border-t">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsViewDoctorVisitDialogOpen(false);
-                setViewingDoctorVisit(null);
-              }}
-            >
-              Close
-            </Button>
-            {viewingDoctorVisit && (
-              <Button
-                onClick={() => {
-                  setIsViewDoctorVisitDialogOpen(false);
-                  handleOpenEditDoctorVisitDialog(viewingDoctorVisit);
-                }}
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Add/Edit Visit Vitals Dialog */}
       <Dialog open={isAddVisitVitalsDialogOpen || isEditVisitVitalsDialogOpen} onOpenChange={(open) => {
@@ -3425,7 +3810,7 @@ export function ManageIPDAdmission() {
           setEditingVisitVitalsId(null);
         }
       }}>
-        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
+        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]" aria-describedby={undefined}>
           <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
             <DialogTitle>{editingVisitVitalsId ? 'Edit Visit Vitals' : 'Add Visit Vitals'}</DialogTitle>
           </DialogHeader>
@@ -3669,7 +4054,7 @@ export function ManageIPDAdmission() {
           setViewingVisitVitals(null);
         }
       }}>
-        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
+        <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]" aria-describedby={undefined}>
           <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
             <DialogTitle>View Visit Vitals Details</DialogTitle>
           </DialogHeader>
@@ -3793,7 +4178,7 @@ export function ManageIPDAdmission() {
                   <div>
                     <Label className="text-sm text-gray-500">Vitals Created At</Label>
                     <p className="text-gray-900 font-medium mt-1">
-                      {viewingVisitVitals.vitalsCreatedAt ? (typeof viewingVisitVitals.vitalsCreatedAt === 'string' ? new Date(viewingVisitVitals.vitalsCreatedAt).toLocaleString() : String(viewingVisitVitals.vitalsCreatedAt)) : 'N/A'}
+                      {viewingVisitVitals.vitalsCreatedAt ? formatDateTimeIST(viewingVisitVitals.vitalsCreatedAt) : 'N/A'}
                     </p>
                   </div>
                   {viewingVisitVitals.visitRemarks && (

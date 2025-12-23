@@ -55,6 +55,7 @@ export function PatientRegistration() {
     registeredBy: '',
   });
   const [registeredDateDisplay, setRegisteredDateDisplay] = useState('');
+  const [addRegisteredDate, setAddRegisteredDate] = useState<Date | null>(null);
   const [editRegisteredDate, setEditRegisteredDate] = useState<Date | null>(null);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [patientHighlightIndex, setPatientHighlightIndex] = useState(-1);
@@ -65,6 +66,30 @@ export function PatientRegistration() {
       console.error('Error fetching patients in PatientRegistration:', err);
     });
   }, [fetchPatients]);
+
+  // Sync DatePicker with formData.registeredDate for Add dialog
+  useEffect(() => {
+    if (formData.registeredDate) {
+      try {
+        const dateStr = formData.registeredDate;
+        let date: Date;
+        if (dateStr.includes('T')) {
+          date = new Date(dateStr);
+        } else {
+          date = new Date(dateStr + 'T00:00:00');
+        }
+        if (!isNaN(date.getTime())) {
+          setAddRegisteredDate(date);
+        } else {
+          setAddRegisteredDate(null);
+        }
+      } catch {
+        setAddRegisteredDate(null);
+      }
+    } else {
+      setAddRegisteredDate(null);
+    }
+  }, [formData.registeredDate]);
 
   // Helper function to format date to dd-mm-yyyy
   const formatDateToDisplay = (dateStr: string | Date | undefined): string => {
@@ -156,6 +181,7 @@ export function PatientRegistration() {
           registeredBy: '',
         });
         setRegisteredDateDisplay('');
+        setAddRegisteredDate(null);
         setAdhaarError('');
         setIsSubmitted(false);
         setIsAddDialogOpen(false);
@@ -742,29 +768,30 @@ export function PatientRegistration() {
                             </div>
                             <div className="dialog-form-field">
                               <Label htmlFor="registeredDate" className="dialog-label-standard">Registered Date</Label>
-                              <Input
+                              <DatePicker
                                 id="registeredDate"
-                                type="text"
-                                placeholder="dd-mm-yyyy"
-                                value={registeredDateDisplay}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  setRegisteredDateDisplay(value);
-                                  const parsed = parseDateFromDisplay(value);
-                                  if (parsed) {
-                                    setFormData({ ...formData, registeredDate: parsed });
+                                selected={addRegisteredDate}
+                                onChange={(date: Date | null) => {
+                                  setAddRegisteredDate(date);
+                                  if (date) {
+                                    const year = date.getFullYear();
+                                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                                    const day = String(date.getDate()).padStart(2, '0');
+                                    const dateStr = `${year}-${month}-${day}`;
+                                    setFormData({ ...formData, registeredDate: dateStr });
+                                  } else {
+                                    setFormData({ ...formData, registeredDate: '' });
                                   }
                                 }}
-                                onBlur={(e) => {
-                                  const parsed = parseDateFromDisplay(e.target.value);
-                                  if (parsed) {
-                                    setRegisteredDateDisplay(formatDateToDisplay(parsed));
-                                    setFormData({ ...formData, registeredDate: parsed });
-                                  } else if (e.target.value) {
-                                    setRegisteredDateDisplay('');
-                                  }
-                                }}
-                                className="dialog-input-standard"
+                                dateFormat="dd-MM-yyyy"
+                                placeholderText="dd-mm-yyyy"
+                                className="dialog-input-standard w-full"
+                                wrapperClassName="w-full"
+                                showYearDropdown
+                                showMonthDropdown
+                                dropdownMode="select"
+                                yearDropdownItemNumber={100}
+                                scrollableYearDropdown
                               />
                             </div>
                           </div>
@@ -794,6 +821,8 @@ export function PatientRegistration() {
                                 setPatientSearchTerm('');
                                 setSelectedPatientId('');
                                 setPatientHighlightIndex(-1);
+                                setAddRegisteredDate(null);
+                                setRegisteredDateDisplay('');
                               }}
                               className="dialog-footer-button"
                             >

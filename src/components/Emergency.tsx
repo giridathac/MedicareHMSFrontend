@@ -22,8 +22,8 @@ import { useEmergencyBeds } from '../hooks/useEmergencyBeds';
 import { useStaff } from '../hooks/useStaff';
 import { useRoles } from '../hooks/useRoles';
 import { emergencyAdmissionsApi, CreateEmergencyAdmissionDto, UpdateEmergencyAdmissionDto, emergencyAdmissionVitalsApi, CreateEmergencyAdmissionVitalsDto, UpdateEmergencyAdmissionVitalsDto } from '../api/emergencyAdmissions';
-import { formatDateTimeIST, convertToIST } from '../utils/timeUtils';
-import { getCurrentIST } from '../config/timezone';
+import { formatDateTimeIST, convertToIST, getTodayIST } from '../utils/timeUtils';
+import { getCurrentIST, getCurrentDateIST } from '../config/timezone';
 
 interface EmergencyPatient {
   id: number;
@@ -193,6 +193,57 @@ export function Emergency() {
       return getCurrentISTDateTimeLocal();
     }
   };
+
+  // Helper function to format datetime to dd-mm-yyyy, hh:mm format in IST
+  const formatDateTimeForInput = (dateTime: string | Date | undefined): string => {
+    if (!dateTime) return '';
+    try {
+      // Use convertToIST to properly convert to IST
+      const istDate = convertToIST(dateTime);
+      
+      // Get date components in IST
+      const day = String(istDate.getUTCDate()).padStart(2, '0');
+      const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+      const year = String(istDate.getUTCFullYear());
+      const hours = String(istDate.getUTCHours()).padStart(2, '0');
+      const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+      
+      return `${day}-${month}-${year}, ${hours}:${minutes}`;
+    } catch {
+      return '';
+    }
+  };
+
+  // Helper function to parse datetime from dd-mm-yyyy, hh:mm format (assumed to be in IST)
+  const parseDateTimeFromInput = (inputStr: string): string => {
+    if (!inputStr) return '';
+    try {
+      // Match dd-mm-yyyy, hh:mm format
+      const match = inputStr.match(/^(\d{1,2})-(\d{1,2})-(\d{4}),\s*(\d{1,2}):(\d{2})$/);
+      if (!match) return '';
+      
+      const day = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10);
+      const year = parseInt(match[3], 10);
+      const hours = parseInt(match[4], 10);
+      const minutes = parseInt(match[5], 10);
+      
+      if (day < 1 || day > 31 || month < 1 || month > 12) return '';
+      if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return '';
+      
+      // Create date string in IST timezone (UTC+5:30)
+      // Format: YYYY-MM-DDTHH:mm:ss+05:30
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00+05:30`;
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return '';
+      
+      // Return in ISO format (UTC) for API
+      // The date object will automatically convert from IST to UTC
+      return date.toISOString();
+    } catch {
+      return '';
+    }
+  };
   
   const [patients, setPatients] = useState<EmergencyPatient[]>(mockEmergencyPatients);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -209,6 +260,7 @@ export function Emergency() {
   const [addEmergencyAdmissionDate, setAddEmergencyAdmissionDate] = useState<Date | null>(null);
   const [editEmergencyAdmissionDate, setEditEmergencyAdmissionDate] = useState<Date | null>(null);
   const [editEmergencyAdmissionDateTime, setEditEmergencyAdmissionDateTime] = useState<Date | null>(null);
+  const [editEmergencyAdmissionDateTimeDisplay, setEditEmergencyAdmissionDateTimeDisplay] = useState('');
   const [isUnoccupiedBedsExpanded, setIsUnoccupiedBedsExpanded] = useState(false);
   
   // Vitals management state
@@ -326,7 +378,7 @@ export function Emergency() {
     doctorId: '',
     patientId: '',
     emergencyBedId: '',
-    emergencyAdmissionDate: new Date().toISOString().split('T')[0],
+    emergencyAdmissionDate: getCurrentDateIST(),
     emergencyStatus: 'Admitted' as EmergencyAdmission['emergencyStatus'],
     numberOfDays: null as number | null,
     diagnosis: '',
@@ -770,7 +822,7 @@ export function Emergency() {
         doctorId: fullAdmission.doctorId.toString(),
         patientId: fullAdmission.patientId,
         emergencyBedId: bedId ? bedId.toString() : '',
-        emergencyAdmissionDate: formattedDate || new Date().toISOString().split('T')[0],
+        emergencyAdmissionDate: formattedDate || getCurrentDateIST(),
         emergencyStatus: fullAdmission.emergencyStatus,
         numberOfDays: fullAdmission.numberOfDays ?? null,
         diagnosis: fullAdmission.diagnosis || '',
@@ -832,6 +884,8 @@ export function Emergency() {
         dateTimeValue = getCurrentIST();
       }
       setEditEmergencyAdmissionDateTime(dateTimeValue);
+      // Format date/time for display in custom format
+      setEditEmergencyAdmissionDateTimeDisplay(formatDateTimeForInput(dateTimeValue || fullAdmission.emergencyAdmissionDate));
       
       // Fetch vitals for this admission
       fetchVitals(fullAdmission.emergencyAdmissionId);
@@ -1485,7 +1539,7 @@ export function Emergency() {
                               doctorId: '',
                               patientId: '',
                             emergencyBedId: '',
-                            emergencyAdmissionDate: new Date().toISOString().split('T')[0],
+                            emergencyAdmissionDate: getCurrentDateIST(),
                             emergencyStatus: 'Admitted' as EmergencyAdmission['emergencyStatus'],
                             numberOfDays: null,
                             diagnosis: '',
@@ -2071,32 +2125,29 @@ export function Emergency() {
 
                 <div className="dialog-form-field">
                   <Label htmlFor="edit-emergencyAdmissionDate" className="dialog-label-standard">Emergency Admission Date & Time *</Label>
-                  <DatePicker
+                  <Input
                     id="edit-emergencyAdmissionDate"
-                    selected={editEmergencyAdmissionDateTime}
-                    onChange={(date: Date | null) => {
-                      setEditEmergencyAdmissionDateTime(date);
-                      if (date) {
-                        const formattedDate = getDDMMYYYYFromDate(date);
+                    type="text"
+                    value={editEmergencyAdmissionDateTimeDisplay}
+                    onChange={(e) => {
+                      setEditEmergencyAdmissionDateTimeDisplay(e.target.value);
+                      const parsed = parseDateTimeFromInput(e.target.value);
+                      if (parsed) {
+                        const parsedDate = new Date(parsed);
+                        setEditEmergencyAdmissionDateTime(parsedDate);
+                        const formattedDate = getDDMMYYYYFromDate(parsedDate);
                         setEditFormData({ ...editFormData, emergencyAdmissionDate: formattedDate });
-                      } else {
+                      } else if (!e.target.value) {
+                        setEditEmergencyAdmissionDateTime(null);
+                        setEditEmergencyAdmissionDateTimeDisplay('');
                         setEditFormData({ ...editFormData, emergencyAdmissionDate: '' });
                       }
                     }}
-                    showTimeSelect
-                    timeIntervals={1}
-                    timeCaption="Time"
-                    timeFormat="hh:mm aa"
-                    dateFormat="dd-MM-yyyy hh:mm aa"
-                    placeholderText="dd-mm-yyyy HH:MM AM/PM"
-                    className="dialog-input-standard w-full"
-                    wrapperClassName="w-full"
-                    showYearDropdown
-                    showMonthDropdown
-                    dropdownMode="select"
-                    yearDropdownItemNumber={100}
-                    scrollableYearDropdown
+                    placeholder="dd-mm-yyyy, hh:mm"
+                    className="dialog-input-standard"
+                    required
                   />
+                  <p className="text-xs text-gray-500 mt-1">Format: dd-mm-yyyy, hh:mm (24-hour format, IST)</p>
                 </div>
 
                 <div className="dialog-form-field">
@@ -2341,6 +2392,7 @@ export function Emergency() {
                       setEditPatientError('');
                       setEditPatientHighlightIndex(-1);
                       setEditEmergencyAdmissionDateTime(null);
+                      setEditEmergencyAdmissionDateTimeDisplay('');
                       setShowEditPatientDropdown(false);
                       setSelectedAdmissionForEdit(null);
                     }} 
@@ -2362,11 +2414,17 @@ export function Emergency() {
                         return;
                       }
                       // Validate datetime
-                      if (!editEmergencyAdmissionDateTime) {
+                      if (!editEmergencyAdmissionDateTimeDisplay) {
                         setUpdateError('Please enter a valid emergency admission date and time');
                         return;
                       }
-                      if (isNaN(editEmergencyAdmissionDateTime.getTime())) {
+                      const parsedDateTime = parseDateTimeFromInput(editEmergencyAdmissionDateTimeDisplay);
+                      if (!parsedDateTime) {
+                        setUpdateError('Please enter a valid emergency admission date and time in format: dd-mm-yyyy, hh:mm');
+                        return;
+                      }
+                      const dateTimeObj = new Date(parsedDateTime);
+                      if (isNaN(dateTimeObj.getTime())) {
                         setUpdateError('Please enter a valid emergency admission date and time');
                         return;
                       }
@@ -2381,10 +2439,10 @@ export function Emergency() {
                         const transferToOT = editFormData.transferToIPDOTICU && editFormData.transferTo === 'OT' ? 'Yes' : 'No';
                         const transferToICU = editFormData.transferToIPDOTICU && editFormData.transferTo === 'ICU' ? 'Yes' : 'No';
 
-                        // Convert datetime-local format to API format (YYYY-MM-DD HH:MM:SS)
+                        // Convert custom format (dd-mm-yyyy, hh:mm) to API format (YYYY-MM-DD HH:MM:SS)
                         let apiDate = '';
-                        if (editEmergencyAdmissionDateTime) {
-                          const dateTimeObj = new Date(editEmergencyAdmissionDateTime);
+                        if (parsedDateTime) {
+                          const dateTimeObj = new Date(parsedDateTime);
                           if (!isNaN(dateTimeObj.getTime())) {
                             // Convert to IST and format as YYYY-MM-DD HH:MM:SS
                             const istDate = convertToIST(dateTimeObj);
@@ -2457,6 +2515,7 @@ export function Emergency() {
                           setEditPatientError('');
                           setEditPatientHighlightIndex(-1);
                           setEditEmergencyAdmissionDateTime(null);
+                          setEditEmergencyAdmissionDateTimeDisplay('');
                           setShowEditPatientDropdown(false);
                           setSelectedAdmissionForEdit(null);
                           setUpdateError(null);
