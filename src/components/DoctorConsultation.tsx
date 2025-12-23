@@ -451,8 +451,24 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
 
   const filteredAppointments = filteredActiveAppointments;
 
+  // Get all appointments including inactive (for "All Appointments" tab only)
+  const getAllAppointments = () => {
+    if (!searchTerm) {
+      return [...filteredActiveAppointments, ...inactiveAppointments];
+    }
+    return filteredActiveAppointments;
+  };
+
+  // Get count of active appointments by status (for tab labels)
+  const getActiveAppointmentsCountByStatus = (status: PatientAppointment['appointmentStatus']) => {
+    return filteredActiveAppointments.filter(a => a.appointmentStatus === status).length;
+  };
+
   const getAppointmentsByStatus = (status: PatientAppointment['appointmentStatus']) => {
-    return filteredAppointments.filter(a => a.appointmentStatus === status);
+    // Include both active and inactive appointments that match the status
+    const activeStatusAppointments = filteredActiveAppointments.filter(a => a.appointmentStatus === status);
+    const inactiveStatusAppointments = inactiveAppointments.filter(a => a.appointmentStatus === status);
+    return [...activeStatusAppointments, ...inactiveStatusAppointments];
   };
 
   if (loading) {
@@ -525,7 +541,7 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-500 mb-1">Waiting</p>
-                    <h3 className="text-gray-900">{getAppointmentsByStatus('Waiting').length}</h3>
+                    <h3 className="text-gray-900">{getActiveAppointmentsCountByStatus('Waiting')}</h3>
                   </div>
                   <div className="size-8 bg-yellow-100 rounded-full flex items-center justify-center">
                     <span className="text-yellow-700">⏳</span>
@@ -538,7 +554,7 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-500 mb-1">Consulting</p>
-                    <h3 className="text-gray-900">{getAppointmentsByStatus('Consulting').length}</h3>
+                    <h3 className="text-gray-900">{getActiveAppointmentsCountByStatus('Consulting')}</h3>
                   </div>
                   <div className="size-8 bg-blue-100 rounded-full flex items-center justify-center">
                     <span className="text-blue-700">👨‍⚕️</span>
@@ -551,7 +567,7 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-500 mb-1">Completed</p>
-                    <h3 className="text-gray-900">{getAppointmentsByStatus('Completed').length}</h3>
+                    <h3 className="text-gray-900">{getActiveAppointmentsCountByStatus('Completed')}</h3>
                   </div>
                   <div className="size-8 bg-green-100 rounded-full flex items-center justify-center">
                     <span className="text-green-700">✓</span>
@@ -580,14 +596,14 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
           <Tabs defaultValue="all" className="space-y-6">
             <TabsList>
               <TabsTrigger value="all">All Appointments ({filteredAppointments.length})</TabsTrigger>
-              <TabsTrigger value="waiting">Waiting ({getAppointmentsByStatus('Waiting').length})</TabsTrigger>
-              <TabsTrigger value="consulting">Consulting ({getAppointmentsByStatus('Consulting').length})</TabsTrigger>
-              <TabsTrigger value="completed">Completed ({getAppointmentsByStatus('Completed').length})</TabsTrigger>
+              <TabsTrigger value="waiting">Waiting ({getActiveAppointmentsCountByStatus('Waiting')})</TabsTrigger>
+              <TabsTrigger value="consulting">Consulting ({getActiveAppointmentsCountByStatus('Consulting')})</TabsTrigger>
+              <TabsTrigger value="completed">Completed ({getActiveAppointmentsCountByStatus('Completed')})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="all">
               <AppointmentList 
-                appointments={filteredAppointments}
+                appointments={getAllAppointments()}
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
@@ -1912,13 +1928,19 @@ function AppointmentList({
                       ? (patient as any).PatientNo || (patient as any).patientNo || appointment.patientId.substring(0, 8)
                       : appointment.patientId.substring(0, 8);
                     
+                    // Check if appointment is inactive
+                    const statusValue = (appointment as any).Status || (appointment as any).status;
+                    const isInactive = typeof statusValue === 'string' 
+                      ? statusValue !== 'Active' 
+                      : (statusValue !== true && statusValue !== 'true');
+                    
                     return (
-                      <tr key={appointment.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 px-3 text-gray-900 font-mono font-medium whitespace-nowrap">{patientId}</td>
-                        <td className="py-3 px-3 text-gray-600 break-words min-w-0">{patientName}</td>
-                        <td className="py-3 px-3 text-gray-600 whitespace-nowrap">{patientPhone}</td>
-                        <td className="py-3 px-3 text-gray-600 whitespace-nowrap">{doctorName}</td>
-                        <td className="py-3 px-3">{getStatusBadge(appointment.appointmentStatus)}</td>
+                      <tr key={appointment.id} className={`border-b border-gray-100 hover:bg-gray-50 ${isInactive ? 'opacity-50 bg-gray-50' : ''}`}>
+                        <td className={`py-3 px-3 font-mono font-medium whitespace-nowrap ${isInactive ? 'text-gray-400' : 'text-gray-900'}`}>{patientId}</td>
+                        <td className={`py-3 px-3 break-words min-w-0 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{patientName}</td>
+                        <td className={`py-3 px-3 whitespace-nowrap ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{patientPhone}</td>
+                        <td className={`py-3 px-3 whitespace-nowrap ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{doctorName}</td>
+                        <td className={`py-3 px-3 ${isInactive ? 'opacity-50' : ''}`}>{getStatusBadge(appointment.appointmentStatus)}</td>
                         <td className="py-3 px-3">
                           {appointment.toBeAdmitted ? (
                             <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300">

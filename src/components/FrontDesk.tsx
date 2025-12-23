@@ -61,6 +61,11 @@ export function FrontDesk() {
     consultationCharge: 0,
     status: true, // Always active when creating
   });
+  useEffect(() => {
+    if (patients.length > 0) {
+      console.log('FrontDesk patients data:', patients);
+    }
+  }, [patients]);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
   const [patientError, setPatientError] = useState('');
@@ -621,8 +626,16 @@ export function FrontDesk() {
   // For backward compatibility, use filteredActiveAppointments
   const filteredAppointments = filteredActiveAppointments;
 
+  // Get count of active appointments by status (for tab labels)
+  const getActiveAppointmentsCountByStatus = (status: PatientAppointment['appointmentStatus']) => {
+    return filteredAppointments.filter(a => a.appointmentStatus === status).length;
+  };
+
   const getAppointmentsByStatus = (status: PatientAppointment['appointmentStatus']) => {
-    const statusAppointments = filteredAppointments.filter(a => a.appointmentStatus === status);
+    // Include both active and inactive appointments that match the status
+    const activeStatusAppointments = filteredAppointments.filter(a => a.appointmentStatus === status);
+    const inactiveStatusAppointments = inactiveAppointments.filter(a => a.appointmentStatus === status);
+    const statusAppointments = [...activeStatusAppointments, ...inactiveStatusAppointments];
     // Sort by date and time
     return statusAppointments.sort((a, b) => {
       // First sort by appointment date (YYYY-MM-DD format)
@@ -735,6 +748,9 @@ export function FrontDesk() {
     const patientPhone = patient 
       ? (patient as any).PhoneNo || (patient as any).phoneNo || (patient as any).phone || '-'
       : '-';
+    const patientAadhar = patient 
+      ? (patient as any).AdhaarId || (patient as any).aadharId || (patient as any).AadharId || '-'
+      : '-';
     const patientId = patient 
       ? (patient as any).PatientNo || (patient as any).patientNo || appointment.patientId.substring(0, 8)
       : appointment.patientId.substring(0, 8);
@@ -751,6 +767,9 @@ export function FrontDesk() {
         </td>
         <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-900'}`}>
           {patientName}
+        </td>
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'} font-mono text-sm`}>
+          {patientAadhar}
         </td>
         <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>
           {patientPhone}
@@ -779,9 +798,39 @@ export function FrontDesk() {
   };
 
   // Helper function to render appointments table
-  const renderAppointmentsTable = (appointments: PatientAppointment[]) => {
+  const renderAppointmentsTable = (appointments: PatientAppointment[], includeInactive: boolean = false) => {
+    // For "All Appointments" tab, we want to show active first, then inactive separately
+    // For status tabs, appointments already include both active and inactive matching the status
+    let appointmentsToRender: PatientAppointment[] = [];
+    
+    if (includeInactive && !searchTerm) {
+      // "All Appointments" tab: show active appointments first, then inactive at the end
+      const activeInList = appointments.filter(a => {
+        const statusValue = (a as any).Status || (a as any).status;
+        const isActive = typeof statusValue === 'string' 
+          ? statusValue === 'Active' 
+          : (statusValue === true || statusValue === 'true');
+        return isActive;
+      });
+      const inactiveInList = appointments.filter(a => {
+        const statusValue = (a as any).Status || (a as any).status;
+        const isActive = typeof statusValue === 'string' 
+          ? statusValue === 'Active' 
+          : (statusValue === true || statusValue === 'true');
+        return !isActive;
+      });
+      // Also add any inactive appointments not already in the list
+      const inactiveNotInList = inactiveAppointments.filter(ia => 
+        !appointments.some(a => a.id === ia.id)
+      );
+      appointmentsToRender = [...activeInList, ...inactiveInList, ...inactiveNotInList];
+    } else {
+      // Status tabs: appointments already include both active and inactive matching the status
+      appointmentsToRender = appointments;
+    }
+    
     // Sort appointments by date and time
-    const sortedAppointments = [...appointments].sort((a, b) => {
+    const sortedAppointments = [...appointmentsToRender].sort((a, b) => {
       // First sort by appointment date (YYYY-MM-DD format)
       const dateA = a.appointmentDate || '';
       const dateB = b.appointmentDate || '';
@@ -797,11 +846,7 @@ export function FrontDesk() {
       return timeA.localeCompare(timeB);
     });
 
-    // Show inactive appointments at the end only when not searching
-    const showInactive = !searchTerm && inactiveAppointments.length > 0;
-    const allAppointments = showInactive 
-      ? [...sortedAppointments, ...inactiveAppointments]
-      : sortedAppointments;
+    const allAppointments = sortedAppointments;
     
     return (
       <Card>
@@ -812,6 +857,7 @@ export function FrontDesk() {
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-3 px-4 text-gray-700">Token #</th>
                   <th className="text-left py-3 px-4 text-gray-700">Patient Name</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Aadhar Card</th>
                   <th className="text-left py-3 px-4 text-gray-700">Phone</th>
                   <th className="text-left py-3 px-4 text-gray-700">Doctor</th>
                   <th className="text-left py-3 px-4 text-gray-700">Time</th>
@@ -822,18 +868,20 @@ export function FrontDesk() {
               <tbody>
                 {allAppointments.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12 text-gray-500">
+                    <td colSpan={8} className="text-center py-12 text-gray-500">
                       {searchTerm ? 'No appointments found matching your search.' : 'No appointments found.'}
                     </td>
                   </tr>
                 ) : (
                   <>
-                    {appointments.map((appointment) => renderAppointmentRow(appointment, false))}
-                    {showInactive && (
-                      <>
-                        {inactiveAppointments.map((appointment) => renderAppointmentRow(appointment, true))}
-                      </>
-                    )}
+                    {allAppointments.map((appointment) => {
+                      // Check if appointment is inactive
+                      const statusValue = (appointment as any).Status || (appointment as any).status;
+                      const isInactive = typeof statusValue === 'string' 
+                        ? statusValue !== 'Active' 
+                        : (statusValue !== true && statusValue !== 'true');
+                      return renderAppointmentRow(appointment, isInactive);
+                    })}
                   </>
                 )}
               </tbody>
@@ -900,7 +948,7 @@ export function FrontDesk() {
                   </CustomResizableDialogHeader>
                 <div className="dialog-body-content-wrapper">
                   <div className="dialog-form-container space-y-4">
-                  <div>
+                  <div className="relative">
                     <Label htmlFor="add-patient-search">Patient *</Label>
                     <div className="relative mb-2">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
@@ -988,7 +1036,7 @@ export function FrontDesk() {
                       });
                       
                       return filteredPatients.length > 0 ? (
-                        <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto" id="add-patient-dropdown">
+                        <div className="absolute z-[9999] w-full mt-1 border border-gray-200 rounded-md max-h-60 overflow-y-auto bg-white shadow-lg" id="add-patient-dropdown">
                           <table className="w-full">
                             <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                               <tr>
@@ -1034,7 +1082,7 @@ export function FrontDesk() {
                       ) : null;
                     })()}
                   </div>
-                  <div>
+                    <div className="relative">
                     <Label htmlFor="add-doctor-search">Doctor *</Label>
                     <div className="relative mb-2">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
@@ -1101,7 +1149,7 @@ export function FrontDesk() {
                       });
                       
                         return filteredDoctors.length > 0 ? (
-                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto" id="add-doctor-dropdown">
+                          <div className="absolute z-[9999] w-full mt-1 border border-gray-200 rounded-md max-h-60 overflow-y-auto bg-white shadow-lg" id="add-doctor-dropdown">
                             <table className="w-full">
                               <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                                 <tr>
@@ -1446,7 +1494,7 @@ export function FrontDesk() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Total Appointments</p>
-                  <h3 className="text-gray-900">{patientAppointments.length}</h3>
+                  <h3 className="text-gray-900">{filteredAppointments.length}</h3>
                 </div>
                 <Users className="size-8 text-blue-500" />
               </div>
@@ -1457,7 +1505,7 @@ export function FrontDesk() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Waiting</p>
-                  <h3 className="text-gray-900">{getAppointmentsByStatus('Waiting').length}</h3>
+                    <h3 className="text-gray-900">{getActiveAppointmentsCountByStatus('Waiting')}</h3>
                 </div>
                 <div className="size-8 bg-yellow-100 rounded-full flex items-center justify-center">
                   <span className="text-yellow-700">⏳</span>
@@ -1469,8 +1517,8 @@ export function FrontDesk() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Consulting</p>
-                  <h3 className="text-gray-900">{getAppointmentsByStatus('Consulting').length}</h3>
+                    <p className="text-sm text-gray-500 mb-1">Consulting</p>
+                    <h3 className="text-gray-900">{getActiveAppointmentsCountByStatus('Consulting')}</h3>
                 </div>
                 <div className="size-8 bg-blue-100 rounded-full flex items-center justify-center">
                   <span className="text-blue-700">👨‍⚕️</span>
@@ -1483,7 +1531,7 @@ export function FrontDesk() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Completed</p>
-                  <h3 className="text-gray-900">{getAppointmentsByStatus('Completed').length}</h3>
+                    <h3 className="text-gray-900">{getActiveAppointmentsCountByStatus('Completed')}</h3>
                 </div>
                 <div className="size-8 bg-green-100 rounded-full flex items-center justify-center">
                   <span className="text-green-700">✓</span>
@@ -1512,25 +1560,25 @@ export function FrontDesk() {
         <Tabs defaultValue="all" className="space-y-6">
           <TabsList>
             <TabsTrigger value="all">All Appointments ({filteredAppointments.length})</TabsTrigger>
-            <TabsTrigger value="waiting">Waiting ({getAppointmentsByStatus('Waiting').length})</TabsTrigger>
-            <TabsTrigger value="consulting">Consulting ({getAppointmentsByStatus('Consulting').length})</TabsTrigger>
-            <TabsTrigger value="completed">Completed ({getAppointmentsByStatus('Completed').length})</TabsTrigger>
+            <TabsTrigger value="waiting">Waiting ({getActiveAppointmentsCountByStatus('Waiting')})</TabsTrigger>
+            <TabsTrigger value="consulting">Consulting ({getActiveAppointmentsCountByStatus('Consulting')})</TabsTrigger>
+            <TabsTrigger value="completed">Completed ({getActiveAppointmentsCountByStatus('Completed')})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all">
-            {renderAppointmentsTable(filteredAppointments)}
+            {renderAppointmentsTable(filteredAppointments, true)}
           </TabsContent>
 
           <TabsContent value="waiting">
-            {renderAppointmentsTable(getAppointmentsByStatus('Waiting'))}
+            {renderAppointmentsTable(getAppointmentsByStatus('Waiting'), false)}
           </TabsContent>
 
           <TabsContent value="consulting">
-            {renderAppointmentsTable(getAppointmentsByStatus('Consulting'))}
+            {renderAppointmentsTable(getAppointmentsByStatus('Consulting'), false)}
           </TabsContent>
 
           <TabsContent value="completed">
-            {renderAppointmentsTable(getAppointmentsByStatus('Completed'))}
+            {renderAppointmentsTable(getAppointmentsByStatus('Completed'), false)}
           </TabsContent>
         </Tabs>
       </div>
@@ -1671,9 +1719,9 @@ export function FrontDesk() {
                     <p className="text-xs text-gray-500 mt-1">Token No is auto-generated and cannot be changed</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="edit-patient-search">Patient *</Label>
-                      <div className="relative mb-2">
+                  <div className="relative">
+                    <Label htmlFor="edit-patient-search">Patient *</Label>
+                    <div className="relative mb-2">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                         <Input
                           id="edit-patient-search"
@@ -1759,7 +1807,7 @@ export function FrontDesk() {
                         });
                         
                         return filteredPatients.length > 0 ? (
-                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto" id="edit-patient-dropdown">
+                          <div className="absolute z-[110] w-full mt-1 border border-gray-200 rounded-md max-h-60 overflow-y-auto bg-white shadow-lg" id="edit-patient-dropdown">
                             <table className="w-full">
                               <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                                 <tr>
@@ -1805,9 +1853,9 @@ export function FrontDesk() {
                         ) : null;
                       })()}
                     </div>
-                    <div>
-                      <Label htmlFor="edit-doctor-search">Doctor *</Label>
-                      <div className="relative mb-2">
+                  <div className="relative">
+                    <Label htmlFor="edit-doctor-search">Doctor *</Label>
+                    <div className="relative mb-2">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                         <Input
                           id="edit-doctor-search"
@@ -1872,7 +1920,7 @@ export function FrontDesk() {
                         });
                         
                         return filteredDoctors.length > 0 ? (
-                          <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto" id="edit-doctor-dropdown">
+                          <div className="absolute z-[9999] w-full mt-1 border border-gray-200 rounded-md max-h-60 overflow-y-auto bg-white shadow-lg" id="edit-doctor-dropdown">
                             <table className="w-full">
                               <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                                 <tr>
