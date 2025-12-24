@@ -72,6 +72,7 @@ export interface PatientAppointment {
   transferTo?: 'IPD Room Admission' | 'ICU' | 'OT';
   transferDetails?: string;
   billId?: string;
+  aadharId?: string;
 }
 
 export interface Doctor {
