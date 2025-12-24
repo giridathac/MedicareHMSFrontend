@@ -134,6 +134,7 @@ export function ManageIPDAdmission() {
   const [patientNurseVisits, setPatientNurseVisits] = useState<PatientNurseVisit[]>([]);
   const [nurseVisitsLoading, setNurseVisitsLoading] = useState(false);
   const [nurseVisitsError, setNurseVisitsError] = useState<string | null>(null);
+  const [editingVisitVitalsId, setEditingVisitVitalsId] = useState<string | number | null>(null);
 
   // Add IPD Lab Test Dialog State
   const [isAddIPDLabTestDialogOpen, setIsAddIPDLabTestDialogOpen] = useState(false);
@@ -323,7 +324,7 @@ export function ManageIPDAdmission() {
       // Fetch patient lab tests, doctor visits, nurse visits, and visit vitals after admission is loaded
       fetchPatientLabTests(roomAdmissionId);
       fetchPatientDoctorVisits(roomAdmissionId);
-      fetchPatientNurseVisits(roomAdmissionId);
+      //fetchPatientNurseVisits(roomAdmissionId);
       fetchPatientAdmitVisitVitals(roomAdmissionId);
     } catch (err) {
       console.error('Error fetching admission details:', err);
@@ -388,23 +389,7 @@ export function ManageIPDAdmission() {
     }
   };
 
-  const fetchPatientNurseVisits = async (roomAdmissionId: number) => {
-    try {
-      setNurseVisitsLoading(true);
-      setNurseVisitsError(null);
-      console.log('Fetching patient nurse visits for roomAdmissionId:', roomAdmissionId);
-      const nurseVisits = await admissionsApi.getPatientNurseVisits(roomAdmissionId);
-      console.log('Fetched patient nurse visits:', nurseVisits);
-      setPatientNurseVisits(nurseVisits);
-    } catch (err) {
-      console.error('Error fetching patient nurse visits:', err);
-      setNurseVisitsError(err instanceof Error ? err.message : 'Failed to load patient nurse visits');
-      setPatientNurseVisits([]);
-    } finally {
-      setNurseVisitsLoading(false);
-    }
-  };
-
+ 
   // Fetch Patient Admit Visit Vitals
   const fetchPatientAdmitVisitVitals = async (roomAdmissionId: number) => {
     try {
@@ -3642,47 +3627,6 @@ export function ManageIPDAdmission() {
                     className="dialog-input-standard"
                   />
                 </div>
-                <div className="dialog-form-field">
-                  <Label htmlFor="customizeDoctorVisitCreatedAt" className="dialog-label-standard">Visit Created At</Label>
-                  <DatePicker
-                    id="customizeDoctorVisitCreatedAt"
-                    selected={customizeDoctorVisitCreatedAt}
-                    onChange={(date: Date | null) => {
-                      setCustomizeDoctorVisitCreatedAt(date);
-                      if (date) {
-                        // Treat the selected date/time as IST and convert to UTC for API
-                        // Extract date/time components from the selected date (treating as IST)
-                        const year = date.getFullYear();
-                        const month = String(date.getMonth() + 1).padStart(2, '0');
-                        const day = String(date.getDate()).padStart(2, '0');
-                        const hours = String(date.getHours()).padStart(2, '0');
-                        const minutes = String(date.getMinutes()).padStart(2, '0');
-                        const seconds = String(date.getSeconds()).padStart(2, '0');
-                        // Create IST datetime string and convert to UTC
-                        const istDateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
-                        const dateObj = new Date(istDateTimeStr);
-                        if (!isNaN(dateObj.getTime())) {
-                          setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, visitCreatedAt: dateObj.toISOString() });
-                        }
-                      } else {
-                        setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, visitCreatedAt: '' });
-                      }
-                    }}
-                    showTimeSelect
-                    timeIntervals={1}
-                    timeCaption="Time"
-                    timeFormat="hh:mm aa"
-                    dateFormat="dd-MM-yyyy hh:mm aa"
-                    placeholderText="dd-mm-yyyy HH:MM AM/PM"
-                    className="dialog-input-standard w-full"
-                    wrapperClassName="w-full"
-                    showYearDropdown
-                    showMonthDropdown
-                    dropdownMode="select"
-                    yearDropdownItemNumber={100}
-                    scrollableYearDropdown
-                  />
-                </div>
                 <div className="dialog-form-field col-span-2">
                   <Label htmlFor="customizeDoctorVisitRemarks" className="dialog-label-standard">Visits Remarks</Label>
                   <Textarea
@@ -3853,16 +3797,6 @@ export function ManageIPDAdmission() {
                     value={doctorVisitFormData.patientCondition}
                     onChange={(e) => setDoctorVisitFormData({ ...doctorVisitFormData, patientCondition: e.target.value })}
                     placeholder="Enter patient condition (optional)"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="doctorVisitCreatedAt">Visit Created At</Label>
-                  <Input
-                    id="doctorVisitCreatedAt"
-                    type="datetime-local"
-                    value={doctorVisitFormData.visitCreatedAt ? new Date(doctorVisitFormData.visitCreatedAt).toISOString().slice(0, 16) : ''}
-                    onChange={(e) => setDoctorVisitFormData({ ...doctorVisitFormData, visitCreatedAt: e.target.value ? new Date(e.target.value).toISOString() : '' })}
-                    placeholder="Enter creation date (optional)"
                   />
                 </div>
                 <div className="col-span-2">
@@ -4490,17 +4424,7 @@ export function ManageIPDAdmission() {
                     scrollableYearDropdown
                   />
                 </div>
-                <div className="dialog-form-field col-span-2">
-                  <Label htmlFor="customizeVisitVitalsVisitRemarks" className="dialog-label-standard">Visit Remarks</Label>
-                  <Textarea
-                    id="customizeVisitVitalsVisitRemarks"
-                    value={customizeVisitVitalsFormData.visitRemarks}
-                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, visitRemarks: e.target.value })}
-                    placeholder="Enter visit remarks (optional)"
-                    rows={4}
-                    className="dialog-input-standard"
-                  />
-                </div>
+                
                 <div className="dialog-form-field col-span-2">
                   <Label htmlFor="customizeVisitVitalsVitalsRemarks" className="dialog-label-standard">Vitals Remarks</Label>
                   <Textarea

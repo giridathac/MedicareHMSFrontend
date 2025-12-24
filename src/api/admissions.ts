@@ -495,6 +495,10 @@ export const admissionsApi = {
               return normalized;
             })(),
             bedNumber: bedNumber,
+            roomNo: extractField(admission, [
+              'roomNo', 'RoomNo', 'room_no', 'Room_No',
+              'roomNumber', 'RoomNumber', 'room_number', 'Room_Number'
+            ], ''),
             admittedBy: admittedBy,
             admittingDoctorName: admittingDoctorName || undefined,
             diagnosis: extractField(admission, [

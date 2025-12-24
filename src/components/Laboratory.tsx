@@ -144,6 +144,7 @@ export function Laboratory() {
   const [editTestDoneDateTime, setEditTestDoneDateTime] = useState<Date | null>(null);
 
   // New Lab Order Dialog State
+  const [newLabOrderTestDoneDate, setNewLabOrderTestDoneDate] = useState<Date | null>(null);
   const [newLabOrderFormData, setNewLabOrderFormData] = useState({
     patientId: '',
     labTestId: '',
@@ -1458,6 +1459,7 @@ export function Laboratory() {
         reportsUrl: '',
         orderedByDoctorId: ''
       });
+      setNewLabOrderTestDoneDate(null);
       
       setPatientSearchTerm('');
       setLabTestSearchTerm('');
@@ -1842,6 +1844,7 @@ export function Laboratory() {
         reportsUrl: '',
         orderedByDoctorId: ''
       });
+      setNewLabOrderTestDoneDate(null);
       setPatientSearchTerm('');
       setLabTestSearchTerm('');
       setDoctorSearchTerm('');
@@ -2299,13 +2302,31 @@ export function Laboratory() {
 
                   {/* Test Done Date */}
                   <div className="dialog-form-field">
-                    <Label htmlFor="testDoneDate" className="dialog-label-standard">Test Done Date</Label>
-                    <Input
+                    <Label htmlFor="testDoneDate">Test Done Date</Label>
+                    <DatePicker
                       id="testDoneDate"
-                      type="date"
-                      className="dialog-input-standard"
-                      value={newLabOrderFormData.testDoneDate}
-                      onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, testDoneDate: e.target.value })}
+                      selected={newLabOrderTestDoneDate}
+                      onChange={(date: Date | null) => {
+                        setNewLabOrderTestDoneDate(date);
+                        if (date) {
+                          const year = date.getFullYear();
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
+                          const dateStr = `${year}-${month}-${day}`;
+                          setNewLabOrderFormData({ ...newLabOrderFormData, testDoneDate: dateStr });
+                        } else {
+                          setNewLabOrderFormData({ ...newLabOrderFormData, testDoneDate: '' });
+                        }
+                      }}
+                      dateFormat="dd-MM-yyyy"
+                      placeholderText="dd-mm-yyyy"
+                      className="dialog-input-standard w-full"
+                      wrapperClassName="w-full"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={100}
+                      scrollableYearDropdown
                     />
                   </div>
 
@@ -3293,17 +3314,15 @@ function TestsList({
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">TestCategory</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Priority</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">LabTestDone</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">ReportsUrl</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">TestStatus</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">TestDoneDateTime</th>
-                <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Status</th>
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
               {tests.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="text-center py-8 text-gray-500">
+                  <td colSpan={11} className="text-center py-8 text-gray-500">
                     No lab tests found
                   </td>
                 </tr>
@@ -3334,13 +3353,6 @@ function TestsList({
                           {test.labTestDone === 'Yes' || test.labTestDone === true ? 'Yes' : 'No'}
                         </Badge>
                       </td>
-                      <td className="py-4 px-6 text-gray-600 whitespace-nowrap">
-                        {test.reportsUrl ? (
-                          <a href={test.reportsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                            View Report
-                          </a>
-                        ) : 'N/A'}
-                      </td>
                       <td className="py-4 px-6 whitespace-nowrap">
                         <span className={`px-2 py-1 rounded-full text-xs ${
                           test.testStatus === 'Completed' || test.testStatus === 'completed' ? 'bg-green-100 text-green-700' :
@@ -3359,11 +3371,6 @@ function TestsList({
                             return 'N/A';
                           }
                         })() : 'N/A'}
-                      </td>
-                      <td className="py-4 px-6 whitespace-nowrap">
-                        <Badge variant={(test as any).statusValue === 'Active' || (test as any).statusValue === 'active' ? 'default' : 'outline'}>
-                          {(test as any).statusValue || test.status || 'N/A'}
-                        </Badge>
                       </td>
                       <td className="py-4 px-6 whitespace-nowrap">
                         <Button

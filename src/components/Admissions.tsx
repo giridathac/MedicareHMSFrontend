@@ -20,7 +20,6 @@ import { Textarea } from './ui/textarea';
 import { DialogFooter } from './ui/dialog';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
-import { formatDateTimeIST } from '../utils/timeUtils';
 
 // Fallback room capacity data (used when API data is not available)
 const fallbackRoomCapacity: RoomCapacityOverview = {
@@ -409,10 +408,50 @@ export function Admissions() {
       });
       
       if (matchingBed) {
-        foundRoomBedId = String((matchingBed as any).roomBedId || (matchingBed as any).RoomBedsId || (matchingBed as any).id || '');
-        foundRoomBedsId = String((matchingBed as any).RoomBedsId || (matchingBed as any).roomBedsId || (matchingBed as any).roomBedId || (matchingBed as any).id || '');
+        foundRoomBedId = String(
+          (matchingBed as any).roomBedId ||
+          (matchingBed as any).RoomBedsId ||
+          (matchingBed as any).id ||
+          ''
+        );
+        foundRoomBedsId = String(
+          (matchingBed as any).RoomBedsId ||
+          (matchingBed as any).roomBedsId ||
+          (matchingBed as any).roomBedId ||
+          (matchingBed as any).id ||
+          ''
+        );
       }
     }
+
+    // Fallbacks from admission record if we couldn't resolve from roomBeds list
+    if (!foundRoomBedId) {
+      foundRoomBedId = String(
+        (admission as any).roomBedId ||
+        (admission as any).RoomBedId ||
+        (admission as any).RoomBedsId ||
+        (admission as any).roomBedsId ||
+        ''
+      );
+    }
+    if (!foundRoomBedsId) {
+      foundRoomBedsId = String(
+        (admission as any).roomBedsId ||
+        (admission as any).RoomBedsId ||
+        (admission as any).roomBedId ||
+        (admission as any).RoomBedId ||
+        ''
+      );
+    }
+
+    // Resolve doctor ID from admission so validation passes even if user doesn't change it
+    const resolvedDoctorId = String(
+      (admission as any).doctorId ||
+      (admission as any).DoctorId ||
+      (admission as any).admittedByDoctorId ||
+      (admission as any).AdmittedByDoctorId ||
+      ''
+    );
 
     setAddAdmissionForm({
       patientId: admission.patientId || '',
@@ -423,8 +462,8 @@ export function Admissions() {
       roomBedsId: foundRoomBedsId,
       roomType: admission.roomType || '',
       admittedBy: admission.admittedBy || '',
-      admittedByDoctorId: '',
-      doctorId: '',
+      admittedByDoctorId: resolvedDoctorId,
+      doctorId: resolvedDoctorId,
       diagnosis: admission.diagnosis || '',
       roomAllocationDate: admission.admissionDate || new Date().toISOString().split('T')[0],
       admissionStatus: normalizedStatus,
@@ -631,29 +670,29 @@ export function Admissions() {
       setSavingAdmission(true);
       setAdmissionError(null);
 
-      // Validate required fields
-      if (!addAdmissionForm.patientId) {
+      // Validate required fields (stricter for new admissions than for edits)
+      if (!addAdmissionForm.patientId && !editingAdmission) {
         throw new Error('Please select a patient');
       }
-      if (!addAdmissionForm.patientType) {
+      if (!addAdmissionForm.patientType && !editingAdmission) {
         throw new Error('Please select a patient type');
       }
-      if (addAdmissionForm.patientType === 'OPD' && !addAdmissionForm.patientAppointmentId) {
+      if (!editingAdmission && addAdmissionForm.patientType === 'OPD' && !addAdmissionForm.patientAppointmentId) {
         throw new Error('Patient Appointment ID is required for OPD patients');
       }
-      if (addAdmissionForm.patientType === 'IPD' && !addAdmissionForm.roomAdmissionId) {
+      if (!editingAdmission && addAdmissionForm.patientType === 'IPD' && !(addAdmissionForm as any).roomAdmissionId) {
         throw new Error('Patient IPD Admission ID is required for IPD patients');
       }
-      if (addAdmissionForm.patientType === 'Emergency' && !addAdmissionForm.emergencyBedSlotId) {
+      if (!editingAdmission && addAdmissionForm.patientType === 'Emergency' && !addAdmissionForm.emergencyBedSlotId) {
         throw new Error('Emergency Admission Bed No is required for Emergency patients');
       }
-      if (!addAdmissionForm.roomBedId) {
+      if (!addAdmissionForm.roomBedId && !editingAdmission) {
         throw new Error('Please select a room/bed');
       }
-      if (!addAdmissionForm.admittedByDoctorId && !addAdmissionForm.doctorId) {
+      if (!editingAdmission && !addAdmissionForm.admittedByDoctorId && !addAdmissionForm.doctorId) {
         throw new Error('Please select a doctor');
       }
-      if (!addAdmissionForm.roomBedsId) {
+      if (!addAdmissionForm.roomBedsId && !editingAdmission) {
         throw new Error('Room/Bed ID is required');
       }
       if (!addAdmissionForm.roomAllocationDate) {
@@ -693,11 +732,16 @@ export function Admissions() {
       const roomType = (selectedBed as any).roomType || (selectedBed as any).RoomType || addAdmissionForm.roomType || 'Regular Ward';
       const roomBedsId = (selectedBed as any).RoomBedsId || (selectedBed as any).roomBedsId || (selectedBed as any).roomBedId || (selectedBed as any).id || '';
 
-      // Get doctor name and ID
-      const doctorName = addAdmissionForm.admittedBy || '';
+      // Get doctor name and ID.
+      // For new admissions we require a doctor; for edits we allow it to be missing so that
+      // existing backend value is preserved if the API supports partial updates.
+      const doctorName =
+        addAdmissionForm.admittedBy ||
+        (editingAdmission?.admittedBy ?? editingAdmission?.admittingDoctorName) ||
+        '';
       const doctorId = addAdmissionForm.doctorId || addAdmissionForm.admittedByDoctorId || '';
       
-      if (!doctorId) {
+      if (!doctorId && !editingAdmission) {
         throw new Error('Doctor ID is required. Please select a doctor.');
       }
 
@@ -778,15 +822,16 @@ export function Admissions() {
         admittedBy: doctorName,
         diagnosis: addAdmissionForm.diagnosis || '',
         status: addAdmissionForm.status || 'Active' as const,
-        admissionStatus: addAdmissionForm.admissionStatus || 'Active' || 'Discharged' || 'Moved to ICU' || 'Surgery Scheduled',
+        admissionStatus: addAdmissionForm.admissionStatus || 'Active',
+        AdmissionStatus: addAdmissionForm.admissionStatus || 'Active',
         patientType: addAdmissionForm.patientType || '',
-        roomBedsId: String(roomBedsId),
-        doctorId: String(doctorId),
-        admittedByDoctorId: String(doctorId), // Also include as admittedByDoctorId for API
+        roomBedsId: roomBedsId ? String(roomBedsId) : undefined,
+        doctorId: doctorId ? String(doctorId) : undefined,
+        admittedByDoctorId: doctorId ? String(doctorId) : undefined, // Also include as admittedByDoctorId for API
         roomAllocationDate: addAdmissionForm.roomAllocationDate,
         caseSheet: addAdmissionForm.caseSheet || '',
         caseSheetDetails: addAdmissionForm.caseDetails || '',
-        isLinkedToICU: addAdmissionForm.isLinkedToICU === 'Yes',
+        isLinkedToICU: addAdmissionForm.isLinkedToICU || 'No',
       };
 
       // Add conditional fields based on PatientType
@@ -1328,7 +1373,6 @@ export function Admissions() {
                   >
                     <option value="">Select Patient Type</option>
                     <option value="OPD">OPD</option>
-                    <option value="IPD">IPD</option>
                     <option value="Emergency">Emergency</option>
                     <option value="Direct">Direct</option>
                   </select>
@@ -1829,22 +1873,26 @@ export function Admissions() {
                           </table>
                         </div>
                       )}
-      </div>
+                    </div>
 
                     {/* Patient Type */}
                     <div>
                       <Label htmlFor="patientType-edit">Patient Type *</Label>
-                      <p className="mt-1 text-gray-900 font-medium">
-                        {addAdmissionForm.patientType || 'N/A'}
-                      </p>
+                      <Input
+                        id="patientType-edit"
+                        value={addAdmissionForm.patientType || 'N/A'}
+                        readOnly
+                        className="bg-gray-100"
+                      />
                     </div>
 
                     {/* Conditional Fields based on PatientType */}
                     {addAdmissionForm.patientType === 'OPD' && (
                       <div>
                         <Label htmlFor="patientAppointmentId-edit">Patient Appointment ID *</Label>
-                        <p className="mt-1 text-gray-900 font-medium">
-                          {(() => {
+                        <Input
+                          id="patientAppointmentId-edit"
+                          value={(() => {
                             if (!addAdmissionForm.patientAppointmentId) return 'N/A';
                             const appointment = availableAppointments.find((a: any) => {
                               const appointmentId = a.id || a.patientAppointmentId || a.PatientAppointmentId || '';
@@ -1871,15 +1919,18 @@ export function Admissions() {
                             }
                             return addAdmissionForm.patientAppointmentId || 'N/A';
                           })()}
-                        </p>
+                          readOnly
+                          className="bg-gray-100"
+                        />
                       </div>
                     )}
 
                     {addAdmissionForm.patientType === 'Emergency' && (
                       <div>
                         <Label htmlFor="emergencyBedSlotId-edit">Emergency Bed Slot ID *</Label>
-                        <p className="mt-1 text-gray-900 font-medium">
-                          {(() => {
+                        <Input
+                          id="emergencyBedSlotId-edit"
+                          value={(() => {
                             if (!addAdmissionForm.emergencyBedSlotId) return 'N/A';
                             const slot = availableEmergencyBedSlots.find((s: any) => {
                               const slotId = s.id || s.emergencyBedSlotId || s.EmergencyBedSlotId || '';
@@ -1892,15 +1943,18 @@ export function Admissions() {
                             }
                             return addAdmissionForm.emergencyBedSlotId || 'N/A';
                           })()}
-                        </p>
+                          readOnly
+                          className="bg-gray-100"
+                        />
                       </div>
                     )}
 
                     {/* Room/Bed Selection */}
                     <div className="md:col-span-2">
                       <Label htmlFor="room-bed-search-edit">Room/Bed *</Label>
-                      <p className="mt-1 text-gray-900 font-medium">
-                        {(() => {
+                      <Input
+                        id="room-bed-search-edit"
+                        value={(() => {
                           // First try to find by roomBedId
                           let selectedBed = roomBedOptions.find((b: any) => {
                             const bid = (b as any).roomBedId || (b as any).RoomBedsId || (b as any).id || '';
@@ -1946,14 +2000,17 @@ export function Admissions() {
                           }
                           return 'N/A';
                         })()}
-                      </p>
+                        readOnly
+                        className="bg-gray-100"
+                      />
                     </div>
 
                     {/* Doctor Selection */}
                     <div className="md:col-span-2">
                       <Label htmlFor="doctor-search-edit">Admitted By (Doctor) *</Label>
-                      <p className="mt-1 text-gray-900 font-medium">
-                        {(() => {
+                      <Input
+                        id="doctor-search-edit"
+                        value={(() => {
                           const selectedDoctor = doctorOptions.find((d: any) => {
                             const did = String((d as any).id || (d as any).Id || (d as any).UserId || '');
                             return did === addAdmissionForm.admittedByDoctorId;
@@ -1965,7 +2022,9 @@ export function Admissions() {
                           }
                           return addAdmissionForm.admittedBy || addAdmissionForm.admittedByDoctorId || 'N/A';
                         })()}
-                      </p>
+                        readOnly
+                        className="bg-gray-100"
+                      />
                     </div>
 
                     <div>
@@ -2370,10 +2429,9 @@ export function Admissions() {
             <Tabs defaultValue="all" className="dashboard-tabs">
           <TabsList>
             <TabsTrigger value="all">All Admissions ({filteredAdmissions.length})</TabsTrigger>
-            {/*<TabsTrigger value="active">Active ({getAdmissionsByStatus('Active').length})</TabsTrigger>
-            <TabsTrigger value="surgery">Surgery Scheduled ({getAdmissionsByStatus('Surgery Scheduled').length})</TabsTrigger>
-            <TabsTrigger value="icu">Moved to ICU ({getAdmissionsByStatus('Moved to ICU').length})</TabsTrigger> */}
-           {/*<TabsTrigger value="icu">Discharged ({getAdmissionsByStatus('Discharged').length})</TabsTrigger> */}
+            <TabsTrigger value="active">Active ({getAdmissionsByStatus('Active').length})</TabsTrigger>
+            <TabsTrigger value="discharged">Discharged ({getAdmissionsByStatus('Discharged').length})</TabsTrigger>
+            <TabsTrigger value="icu">Moved to ICU ({getAdmissionsByStatus('Moved to ICU').length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all">
@@ -2747,6 +2805,7 @@ function AdmissionsList({
             <thead>
               <tr className="dashboard-table-header-row">
                 <th className="dashboard-table-header-cell">Bed #</th>
+                <th className="dashboard-table-header-cell">Room No</th>
                 <th className="dashboard-table-header-cell">Patient</th>
                 <th className="dashboard-table-header-cell">Age/Gender</th>
                 <th className="dashboard-table-header-cell">Room Type</th>
@@ -2771,12 +2830,13 @@ function AdmissionsList({
                     <td className="dashboard-table-body-cell">
                     <Badge>{admission.bedNumber}</Badge>
                   </td>
+                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">
+                      {admission.roomNo || admission.roomNumber || admission.RoomNo || 'N/A'}
+                    </td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-primary">{admission.patientName}</td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.age}Y / {admission.gender}</td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.roomType}</td>
-                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">
-                      {admission.admissionDate ? formatDateTimeIST(admission.admissionDate) : 'N/A'}
-                    </td>
+                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.admissionDate}</td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">
                       {admission.admittingDoctorName || admission.admittedBy || 'N/A'}
                     </td>
@@ -2831,7 +2891,7 @@ function AdmissionsList({
                             onClick={() => onEdit(admission)}
                           >
                             <Edit className="size-3" />
-                            View & Edit
+                            Edit Admission
                           </Button>
                          
                           <Button 
