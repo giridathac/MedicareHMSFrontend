@@ -465,7 +465,7 @@ export function Admissions() {
       admittedByDoctorId: resolvedDoctorId,
       doctorId: resolvedDoctorId,
       diagnosis: admission.diagnosis || '',
-      roomAllocationDate: admission.admissionDate || new Date().toISOString().split('T')[0],
+      roomAllocationDate: admission.admissionDate ? new Date(admission.admissionDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       admissionStatus: normalizedStatus,
       caseSheet: admission.caseSheet || '',
       caseDetails: admission.caseSheetDetails || '',
@@ -1780,7 +1780,7 @@ export function Admissions() {
         <Dialog open={isViewEditDialogOpen} onOpenChange={setIsViewEditDialogOpen}>
           <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh] bg-white">
             <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
-              <DialogTitle>{editingAdmission ? `View & Edit Admission - ${editingAdmission.patientName}` : 'View & Edit Admission'}</DialogTitle>
+              <DialogTitle>{editingAdmission ? `Manage Admission - ${editingAdmission.patientName}` : 'Manage Admission'}</DialogTitle>
             </DialogHeader>
             <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
               <div className="space-y-4 py-4">

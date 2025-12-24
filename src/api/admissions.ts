@@ -78,6 +78,7 @@ export interface CreateAdmissionDto {
 export interface UpdateAdmissionDto extends Partial<CreateAdmissionDto> {
   roomAdmissionId: number; // Use roomAdmissionId as primary identifier for updates
   scheduleOT?: boolean | string; // ScheduleOT field - can be boolean or "Yes"/"No" string
+  shiftToAnotherRoom?: boolean | string; // ShiftToAnotherRoom field - can be boolean or "Yes"/"No" string
 }
 
 export interface RoomCapacity {

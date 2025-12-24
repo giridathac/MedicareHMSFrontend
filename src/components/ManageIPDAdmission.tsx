@@ -2120,10 +2120,8 @@ export function ManageIPDAdmission() {
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">PatientType</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">Priority</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">LabTestDone</th>
-                          <th className="text-left py-3 px-4 font-semibold text-gray-700">ReportsUrl</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">TestStatus</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">TestDoneDateTime</th>
-                          <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">CreatedDate</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">Action</th>
                         </tr>
@@ -2173,13 +2171,6 @@ export function ManageIPDAdmission() {
                                  labTest.labTestDone === false || String(labTest.labTestDone).toLowerCase() === 'false' || String(labTest.labTestDone).toLowerCase() === 'no' ? 'No' : 'N/A'}
                               </Badge>
                             </td>
-                            <td className="py-3 px-4 text-gray-600">
-                              {labTest.reportsUrl ? (
-                                <a href={labTest.reportsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                  View Report
-                                </a>
-                              ) : 'N/A'}
-                            </td>
                             <td className="py-3 px-4">
                               <Badge variant={
                                 labTest.testStatus?.toLowerCase() === 'completed' || labTest.testStatus?.toLowerCase() === 'done' ? 'default' :
@@ -2190,15 +2181,6 @@ export function ManageIPDAdmission() {
                               </Badge>
                             </td>
                             <td className="py-3 px-4 text-gray-600">{labTest.testDoneDateTime || 'N/A'}</td>
-                              <td className="py-3 px-4">
-                                <Badge variant={
-                                  labTest.status?.toLowerCase() === 'active' || labTest.status?.toLowerCase() === 'completed' ? 'default' :
-                                  labTest.status?.toLowerCase() === 'pending' || labTest.status?.toLowerCase() === 'in progress' ? 'outline' :
-                                  'outline'
-                                }>
-                                  {labTest.status || 'N/A'}
-                                </Badge>
-                              </td>
                               <td className="py-3 px-4 text-gray-600">
                                 {createdDate ? formatDateTimeIST(createdDate) : 'N/A'}
                               </td>

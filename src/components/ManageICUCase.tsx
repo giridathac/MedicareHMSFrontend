@@ -8,13 +8,14 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { FlaskConical, Stethoscope, Heart, ArrowLeft, Activity, FileText, Plus, Eye, Edit } from 'lucide-react';
+import { FlaskConical, Stethoscope, Heart, ArrowLeft, Activity, FileText, Plus, Eye, Edit, Search } from 'lucide-react';
 import { admissionsApi } from '../api/admissions';
 import { PatientLabTest, PatientDoctorVisit, PatientNurseVisit } from '../api/admissions';
 import { apiRequest } from '../api/base';
 import { useStaff } from '../hooks/useStaff';
 import { useRoles } from '../hooks/useRoles';
 import { labTestsApi } from '../api/labTests';
+import { doctorsApi } from '../api/doctors';
 import { LabTest } from '../types';
 
 interface ICUAdmission {
@@ -104,6 +105,7 @@ export function ManageICUCase() {
     oxygenSaturation: '',
     respiratoryRate: '',
     bloodSugar: '',
+    pulseRate: '',
     recordedDateTime: '',
     recordedBy: '',
     dailyOrHourlyVitals: '',
@@ -118,6 +120,9 @@ export function ManageICUCase() {
   const [icuVitalsList, setIcuVitalsList] = useState<any[]>([]);
   const [icuVitalsLoading, setIcuVitalsLoading] = useState(false);
   const [icuVitalsError, setIcuVitalsError] = useState<string | null>(null);
+  const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
+  const [showDoctorList, setShowDoctorList] = useState(false);
+  const [doctorOptions, setDoctorOptions] = useState<any[]>([]);
   const [editingICUVitalsId, setEditingICUVitalsId] = useState<string | number | null>(null);
   
   // Add Patient Lab Test Dialog State
@@ -197,6 +202,19 @@ export function ManageICUCase() {
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [icuAdmission?.patientICUAdmissionId]);
+
+  // Fetch doctors for selection
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const doctorsList = await doctorsApi.getAll();
+        setDoctorOptions(doctorsList || []);
+      } catch (err) {
+        console.error('Error fetching doctors:', err);
+      }
+    };
+    fetchDoctors();
+  }, []);
 
   const fetchICUAdmissionDetails = async (patientICUAdmissionId: string) => {
     try {
@@ -684,17 +702,19 @@ export function ManageICUCase() {
           icuAdmissionId: extract(v, ['icuAdmissionId', 'ICUAdmissionId']),
           patientId: extract(v, ['patientId', 'PatientId']),
           heartRate: extract(v, ['heartRate', 'HeartRate']),
+          pulseRate: extract(v, ['pulseRate', 'PulseRate', 'pulse_rate', 'Pulse_Rate']),
           bloodPressure: extract(v, ['bloodPressure', 'BloodPressure']),
           temperature: extract(v, ['temperature', 'Temperature']),
           oxygenSaturation: extract(v, [
             'oxygenSaturation', 'OxygenSaturation', 'O2Saturation', 'o2Saturation',
             'O2', 'o2', 'O2Sat', 'o2Sat', 'SpO2', 'spo2', 'spO2',
-            'oxygenSaturationLevel', 'OxygenSaturationLevel'
+            'oxygenSaturationLevel', 'OxygenSaturationLevel', 'O2Sat', 'o2sat'
           ]),
           respiratoryRate: extract(v, ['respiratoryRate', 'RespiratoryRate']),
           bloodSugar: extract(v, [
             'bloodSugar', 'BloodSugar', 'bloodGlucose', 'BloodGlucose',
-            'glucose', 'Glucose', 'BS', 'bs', 'bloodSugarLevel', 'BloodSugarLevel'
+            'glucose', 'Glucose', 'BS', 'bs', 'bloodSugarLevel', 'BloodSugarLevel',
+            'BloodSugarLevel', 'blood_sugar', 'blood_glucose'
           ]),
           recordedDateTime: extract(v, ['recordedDateTime', 'RecordedDateTime']),
           recordedBy: extract(v, ['recordedBy', 'RecordedBy']),
@@ -709,6 +729,7 @@ export function ManageICUCase() {
       };
 
       const mapped = vitalsData.map(mapVitals);
+      console.log('Raw vitals data from API:', vitalsData);
       console.log('Mapped ICU visit vitals:', mapped);
       setIcuVitalsList(mapped);
     } catch (err) {
@@ -996,6 +1017,7 @@ export function ManageICUCase() {
         oxygenSaturation: '',
         respiratoryRate: '',
         bloodSugar: '',
+        pulseRate: '',
         recordedDateTime: new Date().toISOString().slice(0, 16), // Current date/time in local format
         recordedBy: '',
         dailyOrHourlyVitals: '',
@@ -1075,6 +1097,9 @@ export function ManageICUCase() {
       if (icuVitalsFormData.heartRate && icuVitalsFormData.heartRate.trim() !== '') {
         payload.HeartRate = Number(icuVitalsFormData.heartRate);
       }
+      if (icuVitalsFormData.pulseRate && icuVitalsFormData.pulseRate.trim() !== '') {
+        payload.PulseRate = Number(icuVitalsFormData.pulseRate);
+      }
       if (icuVitalsFormData.temperature && icuVitalsFormData.temperature.trim() !== '') {
         payload.Temperature = Number(icuVitalsFormData.temperature);
       }
@@ -1083,17 +1108,16 @@ export function ManageICUCase() {
         const o2Val = Number(icuVitalsFormData.oxygenSaturation);
         payload.OxygenSaturation = o2Val;
         payload.O2 = o2Val; // send alias in case backend expects O2
-      } else {
-        payload.OxygenSaturation = null;
-        payload.O2 = null;
+        payload.O2Saturation = o2Val; // additional alias
+        payload.SpO2 = o2Val; // additional alias
       }
       if (icuVitalsFormData.respiratoryRate && icuVitalsFormData.respiratoryRate.trim() !== '') {
         payload.RespiratoryRate = Number(icuVitalsFormData.respiratoryRate);
       }
       if (icuVitalsFormData.bloodSugar && icuVitalsFormData.bloodSugar.trim() !== '') {
         payload.BloodSugar = Number(icuVitalsFormData.bloodSugar);
-      } else {
-        payload.BloodSugar = null;
+        payload.BloodGlucose = Number(icuVitalsFormData.bloodSugar); // additional alias
+        payload.Glucose = Number(icuVitalsFormData.bloodSugar); // additional alias
       }
 
       // Add optional string fields only if they have values
@@ -1119,6 +1143,8 @@ export function ManageICUCase() {
       }
 
       console.log('API Payload (formatted):', JSON.stringify(payload, null, 2));
+      console.log('Oxygen Saturation value:', icuVitalsFormData.oxygenSaturation);
+      console.log('Blood Sugar value:', icuVitalsFormData.bloodSugar);
       console.log('API Endpoint: /icu-visit-vitals');
 
       // Add ID for update
@@ -1146,6 +1172,7 @@ export function ManageICUCase() {
           body: JSON.stringify(payload),
         });
         console.log('ICU visit vitals created successfully:', response);
+        console.log('Response data:', response?.data || response);
       }
 
       // Close dialog
@@ -1168,6 +1195,7 @@ export function ManageICUCase() {
         oxygenSaturation: '',
         respiratoryRate: '',
         bloodSugar: '',
+        pulseRate: '',
         recordedDateTime: '',
         recordedBy: '',
         dailyOrHourlyVitals: '',
@@ -1261,6 +1289,8 @@ export function ManageICUCase() {
         patientCondition: icuAdmission.condition || '',
         status: 'Active'
       });
+      setDoctorSearchTerm('');
+      setShowDoctorList(false);
       setDoctorVisitSubmitError(null);
       setIsAddDoctorVisitDialogOpen(true);
     }
@@ -1335,6 +1365,21 @@ export function ManageICUCase() {
     
     console.log('Setting form data:', formData);
     setDoctorVisitFormData(formData);
+    
+    // Set doctor search term based on selected doctor
+    const selectedDoctor = doctorOptions.find((d: any) => {
+      const doctorId = String((d as any).id || (d as any).Id || (d as any).UserId || '');
+      return doctorId === String(visit.doctorId || visit.doctorName || '');
+    });
+    if (selectedDoctor) {
+      const doctorName = (selectedDoctor as any).name || (selectedDoctor as any).Name || (selectedDoctor as any).UserName || '';
+      const specialty = (selectedDoctor as any).specialty || (selectedDoctor as any).Specialty || (selectedDoctor as any).DoctorDepartmentName || '';
+      setDoctorSearchTerm(`${doctorName} - ${specialty}`);
+    } else {
+      setDoctorSearchTerm(visit.doctorName || String(visit.doctorId || ''));
+    }
+    setShowDoctorList(false);
+    
     setDoctorVisitSubmitError(null);
     
     console.log('Opening dialog...');
@@ -1350,6 +1395,20 @@ export function ManageICUCase() {
 
       console.log('Saving ICU Doctor Visit with data:', doctorVisitFormData);
       console.log('Is editing:', editingDoctorVisitId !== null, 'Visit ID:', editingDoctorVisitId);
+
+      // Validate required fields
+      if (!doctorVisitFormData.doctorId || doctorVisitFormData.doctorId.trim() === '') {
+        throw new Error('Doctor is required. Please select a doctor from the list.');
+      }
+
+      // Validate doctor is selected from the list
+      const selectedDoctor = doctorOptions.find((d: any) => {
+        const doctorId = String((d as any).id || (d as any).Id || (d as any).UserId || '');
+        return doctorId === doctorVisitFormData.doctorId;
+      });
+      if (!selectedDoctor) {
+        throw new Error('Please select a valid doctor from the list.');
+      }
 
       // Prepare the request payload
       // Ensure all UUID fields are sent as strings
@@ -1552,16 +1611,12 @@ export function ManageICUCase() {
           </CardContent>
         </Card>
 
-        {/* Tabs for Diagnosis & Treatment, Lab Tests, Doctor Visits, ICU Nurse Visits */}
+        {/* Tabs for Diagnosis & Treatment, Doctor Visits, ICU Nurse Visits */}
         <Tabs defaultValue="diagnosis-treatment" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="diagnosis-treatment" className="gap-2">
               <FileText className="size-4" />
               Diagnosis & Treatment
-            </TabsTrigger>
-            <TabsTrigger value="lab-tests" className="gap-2">
-              <FlaskConical className="size-4" />
-              Lab Tests
             </TabsTrigger>
             <TabsTrigger value="doctor-visits" className="gap-2">
               <Stethoscope className="size-4" />
@@ -1645,115 +1700,6 @@ export function ManageICUCase() {
                     )}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="lab-tests" className="mt-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Lab Tests</CardTitle>
-                  <Button
-                    onClick={handleOpenAddLabTestDialog}
-                    className="gap-2"
-                  >
-                    <Plus className="size-4" />
-                    Add New Lab Tests Details
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {labTestsLoading ? (
-                  <div className="text-center py-8 text-gray-500">Loading lab tests...</div>
-                ) : labTestsError ? (
-                  <div className="text-center py-8 text-red-500">{labTestsError}</div>
-                ) : patientLabTests.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">No lab tests found</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 text-gray-700">PatientLabTestsId</th>
-                          <th className="text-left py-3 px-4 text-gray-700">PatientType</th>
-                          <th className="text-left py-3 px-4 text-gray-700">PatientId</th>
-                          <th className="text-left py-3 px-4 text-gray-700">LabTestId</th>
-                          <th className="text-left py-3 px-4 text-gray-700">Priority</th>
-                          <th className="text-left py-3 px-4 text-gray-700">LabTestDone</th>
-                          <th className="text-left py-3 px-4 text-gray-700">ReportsUrl</th>
-                          <th className="text-left py-3 px-4 text-gray-700">TestStatus</th>
-                          <th className="text-left py-3 px-4 text-gray-700">TestDoneDateTime</th>
-                          <th className="text-left py-3 px-4 text-gray-700">Status</th>
-                          <th className="text-left py-3 px-4 text-gray-700">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {patientLabTests.map((test) => (
-                          <tr key={test.patientLabTestId || test.id} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-3 px-4 font-mono text-xs">{test.patientLabTestId || test.id || 'N/A'}</td>
-                            <td className="py-3 px-4">{(test as any).patientType || 'N/A'}</td>
-                            <td className="py-3 px-4 font-mono text-xs">{(test as any).patientId || 'N/A'}</td>
-                            <td className="py-3 px-4">{test.labTestId || 'N/A'}</td>
-                            <td className="py-3 px-4">
-                              <Badge variant={test.priority === 'High' ? 'destructive' : test.priority === 'Urgent' ? 'default' : 'outline'}>
-                                {test.priority || 'Normal'}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">
-                              <Badge variant={test.labTestDone === true || test.labTestDone === 'Yes' ? 'default' : 'secondary'}>
-                                {test.labTestDone === true || test.labTestDone === 'Yes' ? 'Yes' : 'No'}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">
-                              {test.reportsUrl ? (
-                                <a href={test.reportsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">
-                                  View Report
-                                </a>
-                              ) : 'N/A'}
-                            </td>
-                            <td className="py-3 px-4">
-                              <Badge variant={test.testStatus === 'Completed' ? 'default' : test.testStatus === 'InProgress' ? 'secondary' : 'outline'}>
-                                {test.testStatus || test.status || 'N/A'}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">{test.testDoneDateTime || 'N/A'}</td>
-                            <td className="py-3 px-4">
-                              <Badge variant={test.status === 'Active' ? 'default' : 'secondary'}>
-                                {test.status || 'N/A'}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4 flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setViewingLabTest(test);
-                                  setIsViewLabTestDialogOpen(true);
-                                }}
-                                className="gap-2"
-                              >
-                                <Eye className="size-4" />
-                                View
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  handleOpenEditLabTestDialog(test);
-                                }}
-                                className="gap-2"
-                              >
-                                <Edit className="size-4" />
-                                Edit
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1858,9 +1804,9 @@ export function ManageICUCase() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 text-gray-700">Vitals ID</th>
                           <th className="text-left py-3 px-4 text-gray-700">Recorded Date & Time</th>
                           <th className="text-left py-3 px-4 text-gray-700">HR</th>
+                          <th className="text-left py-3 px-4 text-gray-700">PR</th>
                           <th className="text-left py-3 px-4 text-gray-700">BP</th>
                           <th className="text-left py-3 px-4 text-gray-700">Temp</th>
                           <th className="text-left py-3 px-4 text-gray-700">SpO₂</th>
@@ -1875,9 +1821,9 @@ export function ManageICUCase() {
                       <tbody>
                         {icuVitalsList.map((vital) => (
                           <tr key={vital.icuVisitVitalsId || vital.id} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-3 px-4">{vital.icuVisitVitalsId || 'N/A'}</td>
                             <td className="py-3 px-4">{vital.recordedDateTime || 'N/A'}</td>
                             <td className="py-3 px-4">{vital.heartRate ? `${vital.heartRate} bpm` : 'N/A'}</td>
+                            <td className="py-3 px-4">{vital.pulseRate || (vital as any).PulseRate || (vital as any).pulse || (vital as any).PR ? `${vital.pulseRate || (vital as any).PulseRate || (vital as any).pulse || (vital as any).PR} bpm` : 'N/A'}</td>
                             <td className="py-3 px-4">{vital.bloodPressure || 'N/A'}</td>
                             <td className="py-3 px-4">{vital.temperature ? `${vital.temperature}°C` : 'N/A'}</td>
                             <td className="py-3 px-4">
@@ -1908,12 +1854,15 @@ export function ManageICUCase() {
                                   const bloodSugarValue = vital.bloodSugar || (vital as any).BloodSugar || (vital as any).bloodGlucose || (vital as any).Glucose;
                                   // Extract PatientCondition/PatientStatus with fallbacks
                                   const patientConditionValue = vital.patientCondition || (vital as any).patientStatus || (vital as any).PatientStatus || (vital as any).PatientCondition || '';
+                                  // Extract PulseRate with fallbacks
+                                  const pulseRateValue = vital.pulseRate || (vital as any).PulseRate || (vital as any).pulse || (vital as any).PR;
                                   
                                   setIcuVitalsFormData({
                                     icuVisitVitalsId: String(vital.icuVisitVitalsId || ''),
                                     icuAdmissionId: String(vital.icuAdmissionId || icuAdmission?.patientICUAdmissionId || ''),
                                     patientId: String(vital.patientId || icuAdmission?.patientId || ''),
                                     heartRate: vital.heartRate ? String(vital.heartRate) : '',
+                                    pulseRate: pulseRateValue ? String(pulseRateValue) : '',
                                     bloodPressure: vital.bloodPressure || '',
                                     temperature: vital.temperature ? String(vital.temperature) : '',
                                     oxygenSaturation: o2Value ? String(o2Value) : '',
@@ -1951,6 +1900,7 @@ export function ManageICUCase() {
                                     oxygenSaturation: vital.oxygenSaturation ? String(vital.oxygenSaturation) : '',
                                     respiratoryRate: vital.respiratoryRate ? String(vital.respiratoryRate) : '',
                                     bloodSugar: vital.bloodSugar ? String(vital.bloodSugar) : '',
+                                    pulseRate: vital.pulseRate ? String(vital.pulseRate) : '',
                                     recordedDateTime: vital.recordedDateTime ? vital.recordedDateTime.slice(0, 16) : '',
                                     recordedBy: vital.recordedBy || '',
                                     dailyOrHourlyVitals: vital.dailyOrHourlyVitals || '',
@@ -2025,14 +1975,92 @@ export function ManageICUCase() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="doctorId">Doctor ID *</Label>
-                  <Input
-                    id="doctorId"
-                    value={doctorVisitFormData.doctorId}
-                    onChange={(e) => setDoctorVisitFormData({ ...doctorVisitFormData, doctorId: e.target.value })}
-                    placeholder="Enter Doctor ID"
-                    required
-                  />
+                  <Label htmlFor="doctor-search">Doctor *</Label>
+                  <div className="relative mb-2">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                    <Input
+                      id="doctor-search"
+                      placeholder="Search by Doctor Name, ID, or Specialty..."
+                      value={doctorSearchTerm}
+                      onChange={(e) => {
+                        setDoctorSearchTerm(e.target.value);
+                        setShowDoctorList(true);
+                      }}
+                      onFocus={() => setShowDoctorList(true)}
+                      className="pl-10"
+                    />
+                  </div>
+                  {showDoctorList && doctorSearchTerm && (
+                    <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
+                      <table className="w-full">
+                        <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Doctor ID</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Specialty</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Type</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {doctorOptions
+                            .filter((doctor: any) => {
+                              if (!doctorSearchTerm) return false;
+                              const searchLower = doctorSearchTerm.toLowerCase();
+                              const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                              const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                              const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                              return (
+                                doctorId.toLowerCase().includes(searchLower) ||
+                                doctorName.toLowerCase().includes(searchLower) ||
+                                specialty.toLowerCase().includes(searchLower)
+                              );
+                            })
+                            .map((doctor: any) => {
+                              const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                              const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                              const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || 'General';
+                              const doctorType = (doctor as any).type || (doctor as any).Type || (doctor as any).DoctorType || '';
+                              const isSelected = doctorVisitFormData.doctorId === doctorId;
+                              return (
+                                <tr
+                                  key={doctorId}
+                                  onClick={() => {
+                                    setDoctorVisitFormData({
+                                      ...doctorVisitFormData,
+                                      doctorId: doctorId
+                                    });
+                                    setDoctorSearchTerm(`${doctorName} - ${specialty}`);
+                                    setShowDoctorList(false);
+                                  }}
+                                  className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
+                                >
+                                  <td className="py-2 px-3 text-sm text-gray-900 font-mono">{doctorId || '-'}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-600">{doctorName || 'Unknown'}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-600">{specialty || 'General'}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-600">{doctorType || 'Doctor'}</td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                      {doctorOptions.filter((doctor: any) => {
+                        if (!doctorSearchTerm) return false;
+                        const searchLower = doctorSearchTerm.toLowerCase();
+                        const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                        const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                        const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                        return (
+                          doctorId.toLowerCase().includes(searchLower) ||
+                          doctorName.toLowerCase().includes(searchLower) ||
+                          specialty.toLowerCase().includes(searchLower)
+                        );
+                      }).length === 0 && doctorSearchTerm && (
+                        <div className="text-center py-4 text-gray-500">
+                          No doctors found matching "{doctorSearchTerm}"
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="doctorVisitedDateTime">Doctor Visited Date & Time *</Label>
@@ -2237,6 +2265,16 @@ export function ManageICUCase() {
                       value={icuVitalsFormData.heartRate}
                       onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, heartRate: e.target.value })}
                       placeholder="Enter heart rate"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="pulseRate">Pulse Rate (bpm)</Label>
+                    <Input
+                      id="pulseRate"
+                      type="number"
+                      value={icuVitalsFormData.pulseRate}
+                      onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, pulseRate: e.target.value })}
+                      placeholder="Enter pulse rate"
                     />
                   </div>
                   <div>
