@@ -89,6 +89,8 @@ export interface DashboardStats {
   otScheduled: number;
   icuOccupied: string;
   totalPatients: number;
+  activeCount: number;
+  icuActiveCount: number;
 }
 
 export interface ChartData {

@@ -13,11 +13,11 @@ import { ChartData, DoctorQueue, EmergencyAdmission, Patient } from '../types';
 import { Department, DepartmentCategory } from '../types/departments';
 
 const statConfig = [
-  { title: 'OPD Patients Today', key: 'opdPatientsToday' as const, change: '+12', icon: Users, color: 'bg-blue-500' },
+  { title: 'OPD Patients Today', key: 'opdPatientsToday' as const, changeType: 'otherPatients', icon: Users, color: 'bg-blue-500' },
   { title: 'Active Tokens', key: 'activeTokens' as const, change: 'Live', icon: ClipboardList, color: 'bg-green-500' },
-  { title: 'IPD Admissions', key: 'ipdAdmissions' as const, change: '15 Available', icon: BedDouble, color: 'bg-purple-500' },
+  { title: 'IPD Admissions', key: 'ipdAdmissions' as const, changeKey: 'ipdAdmissions' as const, changeSuffix: 'Available', icon: BedDouble, color: 'bg-purple-500' },
   { title: 'OT Scheduled', key: 'otScheduled' as const, change: '3 Ongoing', icon: Scissors, color: 'bg-orange-500' },
-  { title: 'ICU Occupied', key: 'icuOccupied' as const, change: '80%', icon: HeartPulse, color: 'bg-red-500' },
+  { title: 'ICU Occupied', key: 'icuOccupied' as const, changeType: 'percentage', icon: HeartPulse, color: 'bg-red-500' },
   { title: 'Total Patients', key: 'totalPatients' as const, change: 'Today', icon: Activity, color: 'bg-teal-500' },
 ];
 
@@ -245,6 +245,22 @@ export function Dashboard() {
         {statConfig.map((config) => {
           const Icon = config.icon;
           const value = stats?.[config.key]?.toString() || '0';
+          let changeText = config.change;
+          
+          if ('changeKey' in config && config.changeKey) {
+            changeText = `${stats?.[config.changeKey]?.toString() || '0'} ${config.changeSuffix || ''}`.trim();
+          } else if ('changeType' in config && config.changeType === 'percentage' && config.key === 'icuOccupied') {
+            const icuValue = stats?.icuOccupied?.toString() || '0/0';
+            const [occupied, total] = icuValue.split('/').map(Number);
+            const percentage = total > 0 ? Math.round((occupied / total) * 100) : 0;
+            changeText = `${percentage}%`;
+          } else if ('changeType' in config && config.changeType === 'otherPatients' && config.key === 'opdPatientsToday') {
+            const opdCount = Number(stats?.opdPatientsToday || 0);
+            const totalCount = Number(stats?.totalPatients || 0);
+            const otherPatients = Math.max(0, totalCount - opdCount);
+            changeText = otherPatients.toString();
+          }
+          
           return (
             <Card key={config.title}>
               <CardContent className="p-6">
@@ -252,7 +268,7 @@ export function Dashboard() {
                   <div className={`${config.color} p-3 rounded-lg`}>
                     <Icon className="size-6 text-white" />
                   </div>
-                  <span className="text-sm text-gray-600">{config.change}</span>
+                  <span className="text-sm text-gray-600">{changeText}</span>
                 </div>
                 <h3 className="text-gray-900 mb-1">{value}</h3>
                 <p className="text-sm text-gray-500">{config.title}</p>

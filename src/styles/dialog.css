@@ -564,11 +564,12 @@
 }
 
 /* Important label badge */
+/* 
 .dialog-label-important {
   font-size: 0.75rem; /* text-xs */
   color: rgb(249, 115, 22); /* text-orange-500 */
 }
-
+*/
 /* Input with error border */
 .dialog-input-error {
   border-color: rgb(252, 165, 165) !important; /* border-red-300 */

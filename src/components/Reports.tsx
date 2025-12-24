@@ -150,6 +150,9 @@ export function Reports() {
   const [loadingIcuStats, setLoadingIcuStats] = useState(false);
   const [icuStatsError, setIcuStatsError] = useState<string | null>(null);
   const [icuOccupancy, setIcuOccupancy] = useState<ICUOccupancyEntry[]>(defaultIcuOccupancy);
+  const [totalOpdPatients, setTotalOpdPatients] = useState<number>(0);
+  const [loadingOpdStats, setLoadingOpdStats] = useState(false);
+  const [opdStatsError, setOpdStatsError] = useState<string | null>(null);
 
   // Calculate week start and end dates for weekly reports
   const getWeekDates = (date: string) => {
@@ -272,6 +275,111 @@ export function Reports() {
     };
 
     fetchDoctorStatistics();
+  }, [reportType, selectedDate]);
+
+  // Fetch total OPD patients
+  useEffect(() => {
+    const fetchTotalOpdPatients = async () => {
+      try {
+        setLoadingOpdStats(true);
+        setOpdStatsError(null);
+
+        let apiUrl = '/reports/total-opd-patients-report';
+        const params = new URLSearchParams();
+
+        if (reportType === 'daily') {
+          params.append('date', selectedDate);
+        } else {
+          const weekDates = getWeekDates(selectedDate);
+          params.append('startDate', weekDates.startDate);
+          params.append('endDate', weekDates.endDate);
+        }
+
+        if (params.toString()) {
+          apiUrl += `?${params.toString()}`;
+        }
+
+        console.log('Fetching total OPD patients from:', apiUrl);
+        const response = await apiRequest<any>(apiUrl, {
+          method: 'GET',
+        });
+
+        console.log('Total OPD patients API response:', JSON.stringify(response, null, 2));
+
+        // Handle different response structures
+        let opdData: any = {};
+        if (response && typeof response === 'object') {
+          if (response.data && typeof response.data === 'object') {
+            opdData = response.data;
+          } else {
+            opdData = response;
+          }
+        }
+
+        console.log('Extracted OPD data:', JSON.stringify(opdData, null, 2));
+
+        // Helper to extract with variations
+        const extractField = (data: any, fieldVariations: string[], defaultValue: any = 0) => {
+          if (!data || typeof data !== 'object') {
+            return defaultValue;
+          }
+
+          // Exact match
+          for (const field of fieldVariations) {
+            const value = data[field];
+            if (value !== undefined && value !== null && value !== '') {
+              return value;
+            }
+          }
+
+          // Case-insensitive
+          const keys = Object.keys(data);
+          for (const field of fieldVariations) {
+            const lower = field.toLowerCase();
+            const matchKey = keys.find(k => k.toLowerCase() === lower);
+            if (matchKey) {
+              const value = data[matchKey];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+          }
+
+          return defaultValue;
+        };
+
+        const safeNumber = (value: any, fallback = 0): number => {
+          if (value === null || value === undefined || value === '') return fallback;
+          const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+          return isNaN(num) ? fallback : num;
+        };
+
+        // Handle direct number response or extract from object
+        let totalOpdCount = 0;
+        if (typeof opdData === 'number') {
+          totalOpdCount = safeNumber(opdData, 0);
+        } else {
+          // Extract total OPD patients count
+          totalOpdCount = safeNumber(extractField(opdData, [
+            'totalOPDPatients', 'TotalOPDPatients', 'totalOpdPatients', 'TotalOpdPatients',
+            'totalAppointments', 'TotalAppointments', 'total_appointments', 'Total_Appointments',
+            'opdPatients', 'OPDPatients', 'totalPatients', 'TotalPatients',
+            'total', 'Total', 'count', 'Count', 'opdCount', 'OPDCount'
+          ], 0));
+        }
+
+        console.log('Extracted total OPD patients count:', totalOpdCount);
+        setTotalOpdPatients(totalOpdCount);
+      } catch (err) {
+        console.error('Error fetching total OPD patients:', err);
+        setOpdStatsError(err instanceof Error ? err.message : 'Failed to load OPD statistics');
+        setTotalOpdPatients(0);
+      } finally {
+        setLoadingOpdStats(false);
+      }
+    };
+
+    fetchTotalOpdPatients();
   }, [reportType, selectedDate]);
 
   // Fetch IPD statistics
@@ -1213,20 +1321,50 @@ export function Reports() {
 
         <TabsContent value="opd" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-gray-500">Total OPD Patients</p>
-                  <FileText className="size-5 text-blue-600" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                  {reportType === 'daily' ? '115' : '729'}
-                </h3>
-                <p className="text-xs text-gray-500">
-                  {reportType === 'daily' ? 'Today' : 'This week'}
-                </p>
-              </CardContent>
-            </Card>
+            {loadingOpdStats ? (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-500">Total OPD Patients</p>
+                    <FileText className="size-5 text-blue-600" />
+                  </div>
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-sm text-gray-500">Loading OPD statistics...</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : opdStatsError ? (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-500">Total OPD Patients</p>
+                    <FileText className="size-5 text-blue-600" />
+                  </div>
+                  <div className="text-center py-4">
+                    <p className="text-sm text-red-600 mb-2">{opdStatsError}</p>
+                    <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+                      Retry
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-500">Total OPD Patients</p>
+                    <FileText className="size-5 text-blue-600" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-1">
+                    {totalOpdPatients}
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    {reportType === 'daily' ? 'Today' : 'This week'}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
           {/*  <Card>
               <CardContent className="p-6">
