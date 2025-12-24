@@ -591,6 +591,13 @@ export function FrontDesk() {
           ? (patient as any).PatientNo || (patient as any).patientNo || appointment.patientId.substring(0, 8)
           : appointment.patientId.substring(0, 8);
         
+        const patientAadhar = appointment.aadharId || (appointment as any).AadharId || (appointment as any).patientAadhar || (appointment as any).PatientAadhar || (appointment as any).aadharId || 
+          (appointment as any).PatientAdhaarId || (appointment as any).patient?.AdhaarId || (appointment as any).patient?.aadharId || (appointment as any).patient?.AadharId ||
+          (appointment as any).adhaarId || (appointment as any).PatientAdhaar ||
+          (patient 
+            ? (patient as any).AdhaarId || (patient as any).aadharId || (patient as any).AadharId || ''
+            : '');
+        
         const searchLower = searchTerm.toLowerCase();
         return (
           appointment.tokenNo?.toLowerCase().includes(searchLower) ||
@@ -598,23 +605,46 @@ export function FrontDesk() {
           doctorName.toLowerCase().includes(searchLower) ||
           patientPhone.includes(searchTerm) ||
           patientId.toLowerCase().includes(searchLower) ||
-          appointment.patientId.toLowerCase().includes(searchLower)
+          appointment.patientId.toLowerCase().includes(searchLower) ||
+          appointment.appointmentDate?.toLowerCase().includes(searchLower) ||
+          patientAadhar.toLowerCase().includes(searchLower)
         );
       });
     }
     
-    // Sort filtered appointments by date and time
+    // Sort filtered appointments by status priority and latest date
     const sortedFiltered = [...filtered].sort((a, b) => {
-      // First sort by appointment date (YYYY-MM-DD format)
-      const dateA = a.appointmentDate || '';
-      const dateB = b.appointmentDate || '';
-      const dateCompare = dateA.localeCompare(dateB);
+      // First, determine status priority
+      const getStatusPriority = (appointment: PatientAppointment) => {
+        const statusValue = (appointment as any).Status || (appointment as any).status;
+        const isActive = typeof statusValue === 'string' 
+          ? statusValue === 'Active' 
+          : (statusValue === true || statusValue === 'true');
+        
+        if (!isActive) return 3; // Inactive records lowest priority
+        
+        // Active records: non-completed first, then completed
+        if (appointment.appointmentStatus === 'Completed') return 2;
+        return 1; // Waiting, Consulting
+      };
       
-      if (dateCompare !== 0) {
-        return dateCompare; // Different dates, sort by date
+      const priorityA = getStatusPriority(a);
+      const priorityB = getStatusPriority(b);
+      
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB; // Lower number = higher priority
       }
       
-      // Same date, sort by appointment time (HH:mm format)
+      // Same priority group, sort by latest appointment date first (descending)
+      const dateA = a.appointmentDate || '';
+      const dateB = b.appointmentDate || '';
+      const dateCompare = dateB.localeCompare(dateA); // Reversed for descending
+      
+      if (dateCompare !== 0) {
+        return dateCompare;
+      }
+      
+      // Same date, sort by appointment time (earliest first)
       const timeA = a.appointmentTime || '';
       const timeB = b.appointmentTime || '';
       return timeA.localeCompare(timeB);
@@ -636,18 +666,18 @@ export function FrontDesk() {
     const activeStatusAppointments = filteredAppointments.filter(a => a.appointmentStatus === status);
     const inactiveStatusAppointments = inactiveAppointments.filter(a => a.appointmentStatus === status);
     const statusAppointments = [...activeStatusAppointments, ...inactiveStatusAppointments];
-    // Sort by date and time
+    // Sort by latest appointment date first
     return statusAppointments.sort((a, b) => {
-      // First sort by appointment date (YYYY-MM-DD format)
+      // First sort by appointment date (latest first, descending)
       const dateA = a.appointmentDate || '';
       const dateB = b.appointmentDate || '';
-      const dateCompare = dateA.localeCompare(dateB);
+      const dateCompare = dateB.localeCompare(dateA); // Reversed for descending
       
       if (dateCompare !== 0) {
-        return dateCompare; // Different dates, sort by date
+        return dateCompare;
       }
       
-      // Same date, sort by appointment time (HH:mm format)
+      // Same date, sort by appointment time (earliest first)
       const timeA = a.appointmentTime || '';
       const timeB = b.appointmentTime || '';
       return timeA.localeCompare(timeB);
@@ -748,12 +778,12 @@ export function FrontDesk() {
     const patientPhone = patient 
       ? (patient as any).PhoneNo || (patient as any).phoneNo || (patient as any).phone || '-'
       : '-';
-    const patientAadhar = patient 
-      ? (patient as any).AdhaarId || (patient as any).aadharId || (patient as any).AadharId || '-'
-      : '-';
-    const patientId = patient 
-      ? (patient as any).PatientNo || (patient as any).patientNo || appointment.patientId.substring(0, 8)
-      : appointment.patientId.substring(0, 8);
+    const patientAadhar = appointment.aadharId || (appointment as any).AadharId || (appointment as any).patientAadhar || (appointment as any).PatientAadhar || (appointment as any).aadharId || 
+      (appointment as any).PatientAdhaarId || (appointment as any).patient?.AdhaarId || (appointment as any).patient?.aadharId || (appointment as any).patient?.AadharId ||
+      (appointment as any).adhaarId || (appointment as any).PatientAdhaar ||
+      (patient 
+        ? (patient as any).AdhaarId || (patient as any).aadharId || (patient as any).AadharId || '-'
+        : '-');
     
     return (
       <tr 
@@ -773,6 +803,13 @@ export function FrontDesk() {
         </td>
         <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>
           {patientPhone}
+        </td>
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>
+          {appointment.appointmentDate ? new Date(appointment.appointmentDate).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+          }) : '-'}
         </td>
         <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>
           {doctorName}
@@ -829,18 +866,39 @@ export function FrontDesk() {
       appointmentsToRender = appointments;
     }
     
-    // Sort appointments by date and time
+    // Sort appointments by status priority and latest date
     const sortedAppointments = [...appointmentsToRender].sort((a, b) => {
-      // First sort by appointment date (YYYY-MM-DD format)
-      const dateA = a.appointmentDate || '';
-      const dateB = b.appointmentDate || '';
-      const dateCompare = dateA.localeCompare(dateB);
+      // First, determine status priority
+      const getStatusPriority = (appointment: PatientAppointment) => {
+        const statusValue = (appointment as any).Status || (appointment as any).status;
+        const isActive = typeof statusValue === 'string' 
+          ? statusValue === 'Active' 
+          : (statusValue === true || statusValue === 'true');
+        
+        if (!isActive) return 3; // Inactive records lowest priority
+        
+        // Active records: non-completed first, then completed
+        if (appointment.appointmentStatus === 'Completed') return 2;
+        return 1; // Waiting, Consulting
+      };
       
-      if (dateCompare !== 0) {
-        return dateCompare; // Different dates, sort by date
+      const priorityA = getStatusPriority(a);
+      const priorityB = getStatusPriority(b);
+      
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB; // Lower number = higher priority
       }
       
-      // Same date, sort by appointment time (HH:mm format)
+      // Same priority group, sort by latest appointment date first (descending)
+      const dateA = a.appointmentDate || '';
+      const dateB = b.appointmentDate || '';
+      const dateCompare = dateB.localeCompare(dateA); // Reversed for descending
+      
+      if (dateCompare !== 0) {
+        return dateCompare;
+      }
+      
+      // Same date, sort by appointment time (earliest first)
       const timeA = a.appointmentTime || '';
       const timeB = b.appointmentTime || '';
       return timeA.localeCompare(timeB);
@@ -859,6 +917,7 @@ export function FrontDesk() {
                   <th className="text-left py-3 px-4 text-gray-700">Patient Name</th>
                   <th className="text-left py-3 px-4 text-gray-700">Aadhar Card</th>
                   <th className="text-left py-3 px-4 text-gray-700">Phone</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Appointment Date</th>
                   <th className="text-left py-3 px-4 text-gray-700">Doctor</th>
                   <th className="text-left py-3 px-4 text-gray-700">Time</th>
                   <th className="text-left py-3 px-4 text-gray-700">Status</th>
@@ -868,7 +927,7 @@ export function FrontDesk() {
               <tbody>
                 {allAppointments.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-12 text-gray-500">
+                    <td colSpan={9} className="text-center py-12 text-gray-500">
                       {searchTerm ? 'No appointments found matching your search.' : 'No appointments found.'}
                     </td>
                   </tr>
@@ -1223,6 +1282,7 @@ export function FrontDesk() {
                       dropdownMode="select"
                       yearDropdownItemNumber={100}
                       scrollableYearDropdown
+                      minDate={new Date()}
                     />
                   </div>
                   <div>
@@ -1547,7 +1607,7 @@ export function FrontDesk() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
               <Input
-                placeholder="Search by patient name or token number..."
+                placeholder="Search by patient name, token number, appointment date, or Aadhar ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"

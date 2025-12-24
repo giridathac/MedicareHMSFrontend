@@ -51,6 +51,7 @@ interface CreatePatientAppointmentResponseDto {
   CreatedDate: Date | string;
   PatientName: string | null;
   PatientNo: string | null;
+  AadharId: string | null;
   DoctorName: string | null;
   CreatedByName: string | null;
 }
@@ -145,6 +146,7 @@ function mapPatientAppointmentFromBackend(backendData: CreatePatientAppointmentR
     transferTo: backendData.TransferTo as 'IPD Room Admission' | 'ICU' | 'OT' | undefined,
     transferDetails: backendData.TransferDetails || undefined,
     billId: backendData.BillId ? backendData.BillId.toString() : undefined,
+    aadharId: backendData.AadharId || undefined,
   };
   // Add status as a property (not in PatientAppointment interface, but needed for UI)
   (appointment as any).status = backendData.Status || 'Active';
