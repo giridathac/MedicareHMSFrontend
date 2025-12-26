@@ -79,6 +79,54 @@ export function ICUManagement() {
   const [availableIPDAdmissions, setAvailableIPDAdmissions] = useState<any[]>([]);
   const [vitalsData, setVitalsData] = useState<any | null>(null);
   const [loadingVitals, setLoadingVitals] = useState(false);
+  const [showManageICUCase, setShowManageICUCase] = useState(false);
+  const [editingICUCase, setEditingICUCase] = useState<ICUPatient | null>(null);
+  const [loadingEditICUCase, setLoadingEditICUCase] = useState(false);
+  const [updatingICUCase, setUpdatingICUCase] = useState(false);
+  const [editICUCaseError, setEditICUCaseError] = useState<string | null>(null);
+  const [editICUCaseForm, setEditICUCaseForm] = useState<{
+    patientICUAdmissionId: string;
+    patientId: string;
+    patientType: string;
+    patientAppointmentId: string;
+    emergencyAdmissionId: string;
+    roomAdmissionId: string;
+    icuId: string;
+    icuBedId: string;
+    icuBedNo: string;
+    icuPatientStatus: string;
+    icuAllocationFromDate: string;
+    icuAllocationToDate: string;
+    diagnosis: string;
+    treatmentDetails: string;
+    patientCondition: string;
+    onVentilator: string;
+    icuAdmissionStatus: string;
+    doctorId: string;
+    admittedBy: string;
+    admittedByDoctorId: string;
+  }>({
+    patientICUAdmissionId: '',
+    patientId: '',
+    patientType: '',
+    patientAppointmentId: '',
+    emergencyAdmissionId: '',
+    roomAdmissionId: '',
+    icuId: '',
+    icuBedId: '',
+    icuBedNo: '',
+    icuPatientStatus: '',
+    icuAllocationFromDate: '',
+    icuAllocationToDate: '',
+    diagnosis: '',
+    treatmentDetails: '',
+    patientCondition: '',
+    onVentilator: 'No',
+    icuAdmissionStatus: 'Occupied',
+    doctorId: '',
+    admittedBy: '',
+    admittedByDoctorId: '',
+  });
   const [addICUAdmissionForm, setAddICUAdmissionForm] = useState<{
     patientId: string;
     patientType: string;
@@ -293,6 +341,7 @@ export function ICUManagement() {
           // Extract attending doctor with enhanced nested object support
           let attendingDoctor = extractField(admission, [
             'attendingDoctor', 'AttendingDoctor', 'attending_doctor', 'Attending_Doctor',
+            'attendingDoctorName', 'AttendingDoctorName', 'attending_doctor_name', 'Attending_Doctor_Name',
             'doctor', 'Doctor', 'doctorName', 'DoctorName', 'admittedBy', 'AdmittedBy',
             'Doctor.DoctorName', 'Doctor.name', 'Doctor.Name', 'Doctor.UserName',
             'doctor.doctorName', 'doctor.name', 'doctor.Name', 'doctor.userName',
@@ -301,7 +350,8 @@ export function ICUManagement() {
             'PatientICUAdmission.AttendingDoctor', 'PatientICUAdmission.attendingDoctor',
             'PatientICUAdmission.Doctor', 'PatientICUAdmission.doctor',
             'PatientICUAdmission.AttendingDoctor.DoctorName', 'PatientICUAdmission.AttendingDoctor.name',
-            'PatientICUAdmission.Doctor.DoctorName', 'PatientICUAdmission.Doctor.name'
+            'PatientICUAdmission.Doctor.DoctorName', 'PatientICUAdmission.Doctor.name',
+            'PatientICUAdmission.attendingDoctorName', 'PatientICUAdmission.AttendingDoctorName'
           ], null);
           
           // If we have doctorId but no name, try to look it up from doctorOptions

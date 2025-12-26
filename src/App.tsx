@@ -46,6 +46,7 @@ const EmergencyBedManagement = lazy(() => import('./components/EmergencyBedManag
 const ManageIPDAdmission = lazy(() => import('./components/ManageIPDAdmission').then(m => ({ default: m.ManageIPDAdmission })));
 const ManageICUCase = lazy(() => import('./components/ManageICUCase').then(m => ({ default: m.ManageICUCase })));
 const ICUNurseVisitVitals = lazy(() => import('./components/ICUNurseVisitVitals').then(m => ({ default: m.ICUNurseVisitVitals })));
+const Login = lazy(() => import('./components/Login').then(m => ({ default: m.Login })));
 
 // Wrapper component to extract route params for ManageConsultation
 function ManageConsultationRoute() {
@@ -206,6 +207,7 @@ export default function App() {
         }>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/frontdesk" element={<FrontDesk />} />
             <Route path="/patient-registration" element={<PatientRegistration />} />

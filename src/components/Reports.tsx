@@ -14,23 +14,9 @@ interface DoctorStatistics {
   total: number;
 }
 
-const weeklyOPD = [
-  { date: 'Nov 08', patients: 98, admissions: 8 },
-  { date: 'Nov 09', patients: 102, admissions: 6 },
-  { date: 'Nov 10', patients: 95, admissions: 10 },
-  { date: 'Nov 11', patients: 124, admissions: 12 },
-  { date: 'Nov 12', patients: 108, admissions: 9 },
-  { date: 'Nov 13', patients: 87, admissions: 7 },
-  { date: 'Nov 14', patients: 115, admissions: 11 },
-];
 
-const dailyAdmissions = [
-  { department: 'Cardiology', count: 3 },
-  { department: 'Orthopedics', count: 5 },
-  { department: 'Neurology', count: 2 },
-  { department: 'General Medicine', count: 1 },
-  { department: 'Gynecology', count: 4 },
-];
+
+
 
 const defaultOtSchedule = [
   { date: 'Nov 11', surgeries: 6, completed: 6 },
@@ -91,6 +77,17 @@ interface ICUOccupancyEntry {
   total: number;
 }
 
+interface WeeklyOPDEntry {
+  date: string;
+  patients: number;
+  admissions: number;
+}
+
+interface DepartmentAdmission {
+  department: string;
+  count: number;
+}
+
 const defaultIpdStats: IPDStatistics = {
   totalAdmissions: 0,
   regularWard: 0,
@@ -116,6 +113,8 @@ const defaultIcuStats: ICUStatistics = {
 };
 
 const defaultIcuOccupancy: ICUOccupancyEntry[] = [];
+
+const defaultWeeklyOPD: WeeklyOPDEntry[] = [];
 
 export function Reports() {
   // Get today's date in YYYY-MM-DD format
@@ -153,6 +152,13 @@ export function Reports() {
   const [totalOpdPatients, setTotalOpdPatients] = useState<number>(0);
   const [loadingOpdStats, setLoadingOpdStats] = useState(false);
   const [opdStatsError, setOpdStatsError] = useState<string | null>(null);
+  const [peakHours, setPeakHours] = useState<string>('10 AM - 1 PM');
+  const [weeklyOPD, setWeeklyOPD] = useState<WeeklyOPDEntry[]>([]);
+  const [loadingWeeklyOPD, setLoadingWeeklyOPD] = useState(false);
+  const [weeklyOPDError, setWeeklyOPDError] = useState<string | null>(null);
+  const [departmentAdmissions, setDepartmentAdmissions] = useState<DepartmentAdmission[]>([]);
+  const [loadingDepartmentAdmissions, setLoadingDepartmentAdmissions] = useState(false);
+  const [departmentAdmissionsError, setDepartmentAdmissionsError] = useState<string | null>(null);
 
   // Calculate week start and end dates for weekly reports
   const getWeekDates = (date: string) => {
@@ -260,7 +266,7 @@ export function Reports() {
             opd,
             ipd,
             total
-          };
+          } as DoctorStatistics;
         });
 
         console.log('Mapped doctor statistics:', mappedStats);
@@ -345,6 +351,52 @@ export function Reports() {
             }
           }
 
+          // Also check nested objects recursively
+          const checkNested = (obj: any, field: string, depth: number = 0): any => {
+            if (depth > 3 || !obj || typeof obj !== 'object' || Array.isArray(obj)) {
+              return undefined;
+            }
+
+            // Check direct property (case-sensitive)
+            if (obj.hasOwnProperty(field)) {
+              const value = obj[field];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+
+            // Check case-insensitive
+            const lowerField = field.toLowerCase();
+            for (const key in obj) {
+              if (obj.hasOwnProperty(key) && key.toLowerCase() === lowerField) {
+                const value = obj[key];
+                if (value !== undefined && value !== null && value !== '') {
+                  return value;
+                }
+              }
+            }
+
+            // Recursively check nested objects
+            for (const key in obj) {
+              if (obj.hasOwnProperty(key) && typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+                const nestedValue = checkNested(obj[key], field, depth + 1);
+                if (nestedValue !== undefined && nestedValue !== null && nestedValue !== '') {
+                  return nestedValue;
+                }
+              }
+            }
+            return undefined;
+          };
+
+          // Try nested search for each field variation
+          for (const field of fieldVariations) {
+            const nestedValue = checkNested(data, field);
+            if (nestedValue !== undefined && nestedValue !== null && nestedValue !== '') {
+              console.log(`OPD - Found nested value for field "${field}":`, nestedValue);
+              return nestedValue;
+            }
+          }
+
           return defaultValue;
         };
 
@@ -359,21 +411,61 @@ export function Reports() {
         if (typeof opdData === 'number') {
           totalOpdCount = safeNumber(opdData, 0);
         } else {
-          // Extract total OPD patients count
-          totalOpdCount = safeNumber(extractField(opdData, [
-            'totalOPDPatients', 'TotalOPDPatients', 'totalOpdPatients', 'TotalOpdPatients',
-            'totalAppointments', 'TotalAppointments', 'total_appointments', 'Total_Appointments',
-            'opdPatients', 'OPDPatients', 'totalPatients', 'TotalPatients',
-            'total', 'Total', 'count', 'Count', 'opdCount', 'OPDCount'
-          ], 0));
+        // Extract total OPD patients count
+        totalOpdCount = safeNumber(extractField(opdData, [
+          'totalOPDPatients', 'TotalOPDPatients', 'totalOpdPatients', 'TotalOpdPatients',
+          'total_opd_patients', 'Total_OPD_Patients', 'totalOPDPatients', 'TotalOPDPatients',
+          'totalAppointments', 'TotalAppointments', 'total_appointments', 'Total_Appointments',
+          'opdPatients', 'OPDPatients', 'opd_patients', 'OPD_Patients',
+          'totalPatients', 'TotalPatients', 'total_patients', 'Total_Patients',
+          'total', 'Total', 'count', 'Count', 'opdCount', 'OPDCount', 'opd_count', 'OPD_Count'
+        ], 0));
         }
 
         console.log('Extracted total OPD patients count:', totalOpdCount);
         setTotalOpdPatients(totalOpdCount);
+
+        // Extract peak hours
+        let extractedPeakHours = '10 AM - 1 PM'; // default
+        if (typeof opdData === 'object' && opdData !== null) {
+          extractedPeakHours = extractField(opdData, [
+            'peakHours', 'PeakHours', 'peak_hours', 'Peak_Hours',
+            'peakTime', 'PeakTime', 'peak_time', 'Peak_Time',
+            'busiestHours', 'BusiestHours', 'busiest_hours', 'Busiest_Hours',
+            'busiestTime', 'BusiestTime', 'busiest_time', 'Busiest_Time',
+            'peakPeriod', 'PeakPeriod', 'peak_period', 'Peak_Period'
+          ], '10 AM - 1 PM');
+        }
+
+        // Handle case where API returns an object or array instead of string
+        if (typeof extractedPeakHours === 'object' && extractedPeakHours !== null) {
+          if (Array.isArray(extractedPeakHours) && extractedPeakHours.length > 0) {
+            // If it's an array, find the peak hour (max patientCount)
+            const peakHour = extractedPeakHours.reduce((max: any, current: any) =>
+              (current.patientCount || 0) > (max.patientCount || 0) ? current : max
+            );
+            extractedPeakHours = peakHour.hourLabel || peakHour.hour || '10 AM - 1 PM';
+          } else if ((extractedPeakHours as any).hourLabel) {
+            // If it's an object with hourLabel
+            extractedPeakHours = (extractedPeakHours as any).hourLabel || '10 AM - 1 PM';
+          } else if ((extractedPeakHours as any).hour) {
+            // Fallback to hour
+            extractedPeakHours = (extractedPeakHours as any).hour || '10 AM - 1 PM';
+          } else {
+            // Unknown object format
+            extractedPeakHours = '10 AM - 1 PM';
+          }
+        } else if (typeof extractedPeakHours !== 'string') {
+          extractedPeakHours = '10 AM - 1 PM';
+        }
+
+        console.log('Extracted peak hours:', extractedPeakHours);
+        setPeakHours(extractedPeakHours);
       } catch (err) {
         console.error('Error fetching total OPD patients:', err);
         setOpdStatsError(err instanceof Error ? err.message : 'Failed to load OPD statistics');
         setTotalOpdPatients(0);
+        setPeakHours('10 AM - 1 PM');
       } finally {
         setLoadingOpdStats(false);
       }
@@ -381,6 +473,90 @@ export function Reports() {
 
     fetchTotalOpdPatients();
   }, [reportType, selectedDate]);
+
+  // Fetch weekly OPD patient flow
+  useEffect(() => {
+    const fetchWeeklyOPD = async () => {
+      try {
+        setLoadingWeeklyOPD(true);
+        setWeeklyOPDError(null);
+
+        let apiUrl = '/reports/opd-patient-flow-weekly-trend';
+        const params = new URLSearchParams();
+
+        // For weekly trend, always use weekly dates
+        const weekDates = getWeekDates(selectedDate);
+        params.append('startDate', weekDates.startDate);
+        params.append('endDate', weekDates.endDate);
+
+        if (params.toString()) {
+          apiUrl += `?${params.toString()}`;
+        }
+
+        console.log('Fetching weekly OPD from:', apiUrl);
+        const response = await apiRequest<any>(apiUrl, {
+          method: 'GET',
+        });
+
+        console.log('Weekly OPD API response:', JSON.stringify(response, null, 2));
+
+        // Handle different response structures
+        let data: any[] = [];
+        if (Array.isArray(response)) {
+          data = response;
+        } else if (response?.data && Array.isArray(response.data)) {
+          data = response.data;
+        } else if (response?.weeklyOPD && Array.isArray(response.weeklyOPD)) {
+          data = response.weeklyOPD;
+        } else if (response?.trend && Array.isArray(response.trend)) {
+          data = response.trend;
+        }
+
+        // Map API response to WeeklyOPDEntry interface
+        const mappedData: WeeklyOPDEntry[] = data.map((item: any): WeeklyOPDEntry => {
+          // Helper to extract field with variations
+          const extractField = (data: any, fieldVariations: string[], defaultValue: any = '') => {
+            for (const field of fieldVariations) {
+              const value = data?.[field];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+            return defaultValue;
+          };
+
+          const date = extractField(item, [
+            'date', 'Date', 'day', 'Day', 'label', 'Label'
+          ], '');
+
+          const patients = Number(extractField(item, [
+            'patients', 'Patients', 'opdPatients', 'OPDPatients', 'opd', 'OPD', 'count', 'Count'
+          ], 0)) || 0;
+
+          const admissions = Number(extractField(item, [
+            'admissions', 'Admissions', 'ipdAdmissions', 'IPDAdmissions', 'ipd', 'IPD', 'admissionCount', 'AdmissionCount'
+          ], 0)) || 0;
+
+          return {
+            date,
+            patients,
+            admissions
+          };
+        });
+
+        console.log('Mapped weekly OPD:', mappedData);
+        setWeeklyOPD(mappedData);
+      } catch (err) {
+        console.error('Error fetching weekly OPD:', err);
+        setWeeklyOPDError(err instanceof Error ? err.message : 'Failed to load weekly OPD data');
+        setWeeklyOPD([]);
+      } finally {
+        setLoadingWeeklyOPD(false);
+      }
+    };
+
+    fetchWeeklyOPD();
+  }, [selectedDate]);
 
   // Fetch IPD statistics
   useEffect(() => {
@@ -586,7 +762,7 @@ export function Reports() {
           }
         }
 
-        console.log('&&&&&&&&&&&&&&&&&&&&&&&&Extracted summaryData:', JSON.stringify(summaryData, null, 2));
+        console.log('Extracted summaryData:', JSON.stringify(summaryData, null, 2));
         console.log('SummaryData keys:', Object.keys(summaryData || {}));
         console.log('SummaryData type:', typeof summaryData);
         console.log('SummaryData is array?', Array.isArray(summaryData));
@@ -731,6 +907,7 @@ export function Reports() {
           'bedOccupancyPct', 'BedOccupancyPct', 'occupancyPct', 'OccupancyPct',
           'bedOccupancyRatePercent', 'BedOccupancyRatePercent', 'occupancyRatePercent', 'OccupancyRatePercent'
         ], 0));
+        console.log('Extracted IPD summary values: dischargedToday =', dischargedToday, ', criticalPatients =', criticalPatients, ', bedOccupancy =', bedOccupancy);
 
         const mappedSummary: IPDSummary = {
           dischargedToday,
@@ -946,6 +1123,7 @@ export function Reports() {
           avgDuration,
         };
 
+        console.log('Mapped OT statistics:', mappedOt);
         setOtStats(mappedOt);
         setOtSchedule(mappedSchedule.length ? mappedSchedule : defaultOtSchedule);
       } catch (err) {
@@ -959,6 +1137,91 @@ export function Reports() {
     };
 
     fetchOTStatistics();
+  }, [reportType, selectedDate]);
+
+  // Fetch department-wise IPD admissions
+  useEffect(() => {
+    const fetchDepartmentAdmissions = async () => {
+      try {
+        setLoadingDepartmentAdmissions(true);
+        setDepartmentAdmissionsError(null);
+
+        let apiUrl = '/reports/department-wise-ipd-admissions';
+        const params = new URLSearchParams();
+
+        if (reportType === 'daily') {
+          params.append('date', selectedDate);
+        } else {
+          const weekDates = getWeekDates(selectedDate);
+          params.append('startDate', weekDates.startDate);
+          params.append('endDate', weekDates.endDate);
+        }
+
+        if (params.toString()) {
+          apiUrl += `?${params.toString()}`;
+        }
+
+        console.log('Fetching department admissions from:', apiUrl);
+        const response = await apiRequest<any>(apiUrl, {
+          method: 'GET',
+        });
+
+        console.log('Department admissions API response:', JSON.stringify(response, null, 2));
+
+        // Handle different response structures
+        let admissionsData: any[] = [];
+
+        if (Array.isArray(response)) {
+          admissionsData = response;
+        } else if (response?.data && Array.isArray(response.data)) {
+          admissionsData = response.data;
+        } else if (response?.admissions && Array.isArray(response.admissions)) {
+          admissionsData = response.admissions;
+        } else if (response?.departmentAdmissions && Array.isArray(response.departmentAdmissions)) {
+          admissionsData = response.departmentAdmissions;
+        }
+
+        // Map API response to DepartmentAdmission interface
+        const mappedAdmissions: DepartmentAdmission[] = admissionsData.map((item: any) => {
+          // Helper function to extract field with multiple variations
+          const extractField = (data: any, fieldVariations: string[], defaultValue: any = '') => {
+            for (const field of fieldVariations) {
+              const value = data?.[field];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+            return defaultValue;
+          };
+
+          const department = extractField(item, [
+            'department', 'Department', 'dept', 'Dept', 'departmentName', 'DepartmentName',
+            'deptName', 'DeptName', 'name', 'Name', 'specialty', 'Specialty'
+          ], 'Unknown Department');
+
+          const count = Number(extractField(item, [
+            'count', 'Count', 'admissions', 'Admissions', 'total', 'Total',
+            'admissionCount', 'AdmissionCount', 'number', 'Number'
+          ], 0)) || 0;
+
+          return {
+            department,
+            count
+          } as DepartmentAdmission;
+        });
+
+        console.log('Mapped department admissions:', mappedAdmissions);
+        setDepartmentAdmissions(mappedAdmissions);
+      } catch (err) {
+        console.error('Error fetching department admissions:', err);
+        setDepartmentAdmissionsError(err instanceof Error ? err.message : 'Failed to load department admissions');
+        setDepartmentAdmissions([]);
+      } finally {
+        setLoadingDepartmentAdmissions(false);
+      }
+    };
+
+    fetchDepartmentAdmissions();
   }, [reportType, selectedDate]);
 
   // Fetch ICU statistics
@@ -992,7 +1255,7 @@ export function Reports() {
 
         // Handle different response structures
         let icuData: any = {};
-        
+
         if (response && typeof response === 'object') {
           if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
             icuData = response.data;
@@ -1109,7 +1372,7 @@ export function Reports() {
               occupied,
               total,
             };
-          }).filter(entry => entry.date);
+          }).filter((entry: ICUOccupancyEntry) => entry.date);
         } else if (occupancyRaw && typeof occupancyRaw === 'object' && !Array.isArray(occupancyRaw)) {
           // If it's an object, try to extract as a single entry or convert to array
           const dateLabel = String(extractField(occupancyRaw, ['date', 'Date'], '')).trim() || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -1146,7 +1409,7 @@ export function Reports() {
 
         console.log('Mapped ICU statistics:', mappedIcu);
         console.log('Mapped ICU occupancy:', mappedOccupancy);
-        
+
         setIcuStats(mappedIcu);
         setIcuOccupancy(mappedOccupancy.length > 0 ? mappedOccupancy : defaultIcuOccupancy);
       } catch (err) {
@@ -1383,7 +1646,7 @@ export function Reports() {
                   <p className="text-sm text-gray-500">Peak Hours</p>
                   <Calendar className="size-5 text-orange-600" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-1">10 AM - 1 PM</h3>
+                <h3 className="text-2xl font-bold text-gray-900 mb-1">{peakHours}</h3>
                 <p className="text-xs text-gray-500">Busiest period</p>
               </CardContent>
             </Card>
@@ -1466,15 +1729,29 @@ export function Reports() {
               <CardTitle>Department-wise Admissions (Today)</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={dailyAdmissions}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="department" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#8b5cf6" />
-                </BarChart>
-              </ResponsiveContainer>
+              {loadingDepartmentAdmissions ? (
+                <div className="text-center py-12 text-gray-500">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  Loading department admissions...
+                </div>
+              ) : departmentAdmissionsError ? (
+                <div className="text-center py-12 text-red-600">
+                  <p className="mb-2">{departmentAdmissionsError}</p>
+                  <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+                    Retry
+                  </Button>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={departmentAdmissions}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="department" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#8b5cf6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 

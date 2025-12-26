@@ -8,14 +8,13 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { FlaskConical, Stethoscope, Heart, ArrowLeft, Activity, FileText, Plus, Eye, Edit, Search } from 'lucide-react';
+import { FlaskConical, Stethoscope, Heart, ArrowLeft, Activity, FileText, Plus, Eye, Edit } from 'lucide-react';
 import { admissionsApi } from '../api/admissions';
 import { PatientLabTest, PatientDoctorVisit, PatientNurseVisit } from '../api/admissions';
 import { apiRequest } from '../api/base';
 import { useStaff } from '../hooks/useStaff';
 import { useRoles } from '../hooks/useRoles';
 import { labTestsApi } from '../api/labTests';
-import { doctorsApi } from '../api/doctors';
 import { LabTest } from '../types';
 
 interface ICUAdmission {
@@ -54,15 +53,11 @@ export function ManageICUCase() {
   const [icuAdmission, setIcuAdmission] = useState<ICUAdmission | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [patientLabTests, setPatientLabTests] = useState<PatientLabTest[]>([]);
-  const [labTestsLoading, setLabTestsLoading] = useState(false);
-  const [labTestsError, setLabTestsError] = useState<string | null>(null);
+ 
   const [patientDoctorVisits, setPatientDoctorVisits] = useState<PatientDoctorVisit[]>([]);
   const [doctorVisitsLoading, setDoctorVisitsLoading] = useState(false);
   const [doctorVisitsError, setDoctorVisitsError] = useState<string | null>(null);
-  const [patientNurseVisits, setPatientNurseVisits] = useState<PatientNurseVisit[]>([]);
-  const [nurseVisitsLoading, setNurseVisitsLoading] = useState(false);
-  const [nurseVisitsError, setNurseVisitsError] = useState<string | null>(null);
+ 
   
   // Add/Edit ICU Doctor Visit Dialog State
   const [isAddDoctorVisitDialogOpen, setIsAddDoctorVisitDialogOpen] = useState(false);
@@ -105,7 +100,6 @@ export function ManageICUCase() {
     oxygenSaturation: '',
     respiratoryRate: '',
     bloodSugar: '',
-    pulseRate: '',
     recordedDateTime: '',
     recordedBy: '',
     dailyOrHourlyVitals: '',
@@ -120,35 +114,8 @@ export function ManageICUCase() {
   const [icuVitalsList, setIcuVitalsList] = useState<any[]>([]);
   const [icuVitalsLoading, setIcuVitalsLoading] = useState(false);
   const [icuVitalsError, setIcuVitalsError] = useState<string | null>(null);
-  const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
-  const [showDoctorList, setShowDoctorList] = useState(false);
-  const [doctorOptions, setDoctorOptions] = useState<any[]>([]);
   const [editingICUVitalsId, setEditingICUVitalsId] = useState<string | number | null>(null);
   
-  // Add Patient Lab Test Dialog State
-  const [isAddLabTestDialogOpen, setIsAddLabTestDialogOpen] = useState(false);
-  const [editingLabTestId, setEditingLabTestId] = useState<string | number | null>(null);
-  const [viewingLabTest, setViewingLabTest] = useState<PatientLabTest | null>(null);
-  const [isViewLabTestDialogOpen, setIsViewLabTestDialogOpen] = useState(false);
-  const [labTestFormData, setLabTestFormData] = useState({
-    icuAdmissionId: '',
-    patientId: '',
-    labTestId: '',
-    priority: 'Normal',
-    orderedDate: '',
-    orderedBy: '',
-    description: '',
-    charges: '',
-    labTestDone: 'No',
-    reportsUrl: '',
-    testStatus: 'Pending',
-    testDoneDateTime: ''
-  });
-  const [labTestSubmitting, setLabTestSubmitting] = useState(false);
-  const [labTestSubmitError, setLabTestSubmitError] = useState<string | null>(null);
-  const [availableLabTests, setAvailableLabTests] = useState<LabTest[]>([]);
-  const [labTestSearchTerm, setLabTestSearchTerm] = useState('');
-  const [showLabTestList, setShowLabTestList] = useState(false);
   
   // Filter nurses from staff
   const nurses = useMemo(() => {
@@ -171,6 +138,7 @@ export function ManageICUCase() {
     const patientICUAdmissionId = searchParams.get('patientICUAdmissionId') || searchParams.get('id');
     
     if (patientICUAdmissionId) {
+      console.log('calling fetchICUAdmissionDetails')
       // Pass as string (UUID) - don't convert to number
       fetchICUAdmissionDetails(patientICUAdmissionId);
     } else {
@@ -203,19 +171,6 @@ export function ManageICUCase() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [icuAdmission?.patientICUAdmissionId]);
 
-  // Fetch doctors for selection
-  useEffect(() => {
-    const fetchDoctors = async () => {
-      try {
-        const doctorsList = await doctorsApi.getAll();
-        setDoctorOptions(doctorsList || []);
-      } catch (err) {
-        console.error('Error fetching doctors:', err);
-      }
-    };
-    fetchDoctors();
-  }, []);
-
   const fetchICUAdmissionDetails = async (patientICUAdmissionId: string) => {
     try {
       setLoading(true);
@@ -238,7 +193,11 @@ export function ManageICUCase() {
         console.log('This should trigger a network request in the browser DevTools');
         console.log('========================================');
         
+        console.log('*******************', apiurl);
+
         const response = await apiRequest<any>(apiUrl);
+
+  
         console.log('API request completed');
         console.log('ICU admission details API response received');
         console.log('Response type:', typeof response);
@@ -246,7 +205,8 @@ export function ManageICUCase() {
         
         // Handle different response structures: { data: {...} } or direct object
         admission = response?.data || response;
-        
+
+        console.log('admissssssssssssssssssion',admission);
         // Log patientId extraction for debugging
         if (admission) {
           console.log('Extracted admission object:', admission);
@@ -307,8 +267,13 @@ export function ManageICUCase() {
       // Helper function to extract value with multiple field name variations
       const extractField = (data: any, fieldVariations: string[], defaultValue: any = '') => {
         for (const field of fieldVariations) {
-          const value = data?.[field];
-          if (value !== undefined && value !== null && value !== '') {
+          let value = data;
+          const keys = field.split('.');
+          for (const key of keys) {
+            value = value?.[key];
+            if (value === undefined || value === null) break;
+          }
+          if (value !== undefined && value !== null && value !== '' && typeof value !== 'object') {
             return value;
           }
         }
@@ -367,7 +332,7 @@ export function ManageICUCase() {
           'status', 'Status', 'patientStatus', 'PatientStatus'
         ], 'Stable'),
         attendingDoctor: extractField(admission, [
-          'attendingDoctor', 'AttendingDoctor', 'attending_doctor', 'Attending_Doctor',
+          'attendingDoctorName','attendingDoctor', 'AttendingDoctor', 'attending_doctor', 'Attending_Doctor',
           'doctor', 'Doctor', 'doctorName', 'DoctorName', 'admittedBy', 'AdmittedBy'
         ], 'Not Assigned'),
         diagnosis: extractField(admission, [
@@ -375,7 +340,7 @@ export function ManageICUCase() {
           'diagnosis_desc', 'Diagnosis_Desc'
         ], 'Not Specified'),
         treatment: extractField(admission, [
-          'treatment', 'Treatment', 'treatmentPlan', 'TreatmentPlan',
+          'treatementDetails','treatment', 'Treatment', 'treatmentPlan', 'TreatmentPlan',
           'treatment_plan', 'Treatment_Plan', 'medications', 'Medications'
         ], 'Not Specified'),
         ventilatorSupport: extractField(admission, [
@@ -397,7 +362,7 @@ export function ManageICUCase() {
             'vitals.temperature', 'vitals.Temperature'
           ], 0)) || 0,
           oxygenSaturation: Number(extractField(admission, [
-            'oxygenSaturation', 'OxygenSaturation', 'oxygen_saturation', 'Oxygen_Saturation',
+            'oxygenSaturation','oxygenSaturation', 'OxygenSaturation', 'oxygen_saturation', 'Oxygen_Saturation',
             'o2Sat', 'O2Sat', 'spo2', 'SpO2', 'vitals.oxygenSaturation', 'vitals.OxygenSaturation'
           ], 0)) || 0,
           respiratoryRate: Number(extractField(admission, [
@@ -418,12 +383,12 @@ export function ManageICUCase() {
         console.log('Fetching doctor visits with patientICUAdmissionId (UUID):', patientICUAdmissionIdForAPI);
         fetchPatientDoctorVisits(String(patientICUAdmissionIdForAPI));
         console.log('Fetching nurse visits with patientICUAdmissionId (UUID):', patientICUAdmissionIdForAPI);
-        fetchPatientNurseVisits(String(patientICUAdmissionIdForAPI));
+        //fetchPatientNurseVisits(String(patientICUAdmissionIdForAPI));
         console.log('Fetching ICU visit vitals with patientICUAdmissionId (UUID):', patientICUAdmissionIdForAPI);
         fetchICUVitalsList(String(patientICUAdmissionIdForAPI));
         
         // Fetch lab tests using ICU admission ID (can be string UUID or number)
-        fetchPatientLabTests(String(patientICUAdmissionIdForAPI));
+        //fetchPatientLabTests(String(patientICUAdmissionIdForAPI));
       }
     } catch (err) {
       console.error('Error fetching ICU admission details:', err);
@@ -433,92 +398,7 @@ export function ManageICUCase() {
     }
   };
 
-  const fetchPatientLabTests = async (patientICUAdmissionId: string | number) => {
-    try {
-      setLabTestsLoading(true);
-      setLabTestsError(null);
-      console.log('Fetching patient lab tests for patientICUAdmissionId:', patientICUAdmissionId);
-      console.log('API Endpoint: /patient-lab-tests');
-      
-      // Call /patient-lab-tests API with ICUAdmissionId as query parameter
-      const response = await apiRequest<any>(`/patient-lab-tests?ICUAdmissionId=${patientICUAdmissionId}`);
-      console.log('Patient lab tests API response (RAW):', JSON.stringify(response, null, 2));
-      
-      // Handle different response structures
-      let labTestsData: any[] = [];
-      
-      if (Array.isArray(response)) {
-        labTestsData = response;
-      } else if (response?.data) {
-        if (Array.isArray(response.data)) {
-          labTestsData = response.data;
-        } else if (response.data.patientLabTests && Array.isArray(response.data.patientLabTests)) {
-          labTestsData = response.data.patientLabTests;
-        } else if (response.data.labTests && Array.isArray(response.data.labTests)) {
-          labTestsData = response.data.labTests;
-        } else if (response.data.PatientLabTests && Array.isArray(response.data.PatientLabTests)) {
-          labTestsData = response.data.PatientLabTests;
-        }
-      } else if (response?.patientLabTests && Array.isArray(response.patientLabTests)) {
-        labTestsData = response.patientLabTests;
-      } else if (response?.labTests && Array.isArray(response.labTests)) {
-        labTestsData = response.labTests;
-      } else if (response?.PatientLabTests && Array.isArray(response.PatientLabTests)) {
-        labTestsData = response.PatientLabTests;
-      }
-      
-      if (!Array.isArray(labTestsData) || labTestsData.length === 0) {
-        console.warn('Patient lab tests response is not an array or is empty:', response);
-        setPatientLabTests([]);
-        return;
-      }
-      
-      // Map the response to PatientLabTest format
-      const extractField = (data: any, fieldVariations: string[], defaultValue: any = '') => {
-        for (const field of fieldVariations) {
-          const value = data?.[field];
-          if (value !== undefined && value !== null && value !== '') {
-            return value;
-          }
-        }
-        return defaultValue;
-      };
-      
-      const mappedLabTests: PatientLabTest[] = labTestsData.map((test: any) => ({
-        id: extractField(test, ['id', 'Id', 'patientLabTestId', 'PatientLabTestId', 'patientLabTestsId', 'PatientLabTestsId'], 0),
-        patientLabTestId: extractField(test, ['patientLabTestId', 'PatientLabTestId', 'patientLabTestsId', 'PatientLabTestsId', 'id', 'Id'], 0),
-        patientId: extractField(test, ['patientId', 'PatientId'], ''),
-        labTestId: extractField(test, ['labTestId', 'LabTestId'], null),
-        patientType: extractField(test, ['patientType', 'PatientType'], ''),
-        priority: extractField(test, ['priority', 'Priority'], 'Normal'),
-        labTestDone: extractField(test, ['labTestDone', 'LabTestDone'], false),
-        reportsUrl: extractField(test, ['reportsUrl', 'ReportsUrl'], ''),
-        testStatus: extractField(test, ['testStatus', 'TestStatus', 'status', 'Status'], 'Pending'),
-        testDoneDateTime: extractField(test, ['testDoneDateTime', 'TestDoneDateTime'], ''),
-        status: extractField(test, ['status', 'Status', 'testStatus', 'TestStatus'], 'Pending'),
-        roomAdmissionId: extractField(test, ['roomAdmissionId', 'RoomAdmissionId'], null),
-        labTestName: extractField(test, ['labTestName', 'LabTestName', 'testName', 'TestName'], ''),
-        testName: extractField(test, ['testName', 'TestName', 'labTestName', 'LabTestName'], ''),
-        testCategory: extractField(test, ['testCategory', 'TestCategory'], ''),
-        displayTestId: extractField(test, ['displayTestId', 'DisplayTestId'], ''),
-        description: extractField(test, ['description', 'Description'], ''),
-        orderedDate: extractField(test, ['orderedDate', 'OrderedDate'], ''),
-        orderedBy: extractField(test, ['orderedBy', 'OrderedBy'], ''),
-        result: extractField(test, ['result', 'Result'], ''),
-        reportedDate: extractField(test, ['reportedDate', 'ReportedDate'], ''),
-        charges: extractField(test, ['charges', 'Charges'], 0),
-      }));
-      
-      console.log('Fetched and mapped patient lab tests:', mappedLabTests);
-      setPatientLabTests(mappedLabTests);
-    } catch (err) {
-      console.error('Error fetching patient lab tests:', err);
-      setLabTestsError(err instanceof Error ? err.message : 'Failed to load patient lab tests');
-      setPatientLabTests([]);
-    } finally {
-      setLabTestsLoading(false);
-    }
-  };
+  
 
   const fetchPatientDoctorVisits = async (patientICUAdmissionId: string) => {
     try {
@@ -599,85 +479,7 @@ export function ManageICUCase() {
     }
   };
 
-  const fetchPatientNurseVisits = async (patientICUAdmissionId: string) => {
-    try {
-      setNurseVisitsLoading(true);
-      setNurseVisitsError(null);
-      console.log('========================================');
-      console.log('Fetching ICU nurse visits for patientICUAdmissionId (UUID):', patientICUAdmissionId);
-      console.log('API Endpoint:', `/icu-nurse-visits/icu-admission/${patientICUAdmissionId}`);
-      console.log('========================================');
-      
-      // Call the new ICU nurse visits API endpoint
-      const response = await apiRequest<any>(`/icu-nurse-visits/icu-admission/${patientICUAdmissionId}`);
-      console.log('ICU nurse visits API response (RAW):', JSON.stringify(response, null, 2));
-      
-      // Handle different response structures
-      let nurseVisitsData: any[] = [];
-      
-      if (Array.isArray(response)) {
-        nurseVisitsData = response;
-      } else if (response?.data) {
-        if (Array.isArray(response.data)) {
-          nurseVisitsData = response.data;
-        } else if (response.data.nurseVisits && Array.isArray(response.data.nurseVisits)) {
-          nurseVisitsData = response.data.nurseVisits;
-        } else if (response.data.icuNurseVisits && Array.isArray(response.data.icuNurseVisits)) {
-          nurseVisitsData = response.data.icuNurseVisits;
-        }
-      } else if (response?.nurseVisits && Array.isArray(response.nurseVisits)) {
-        nurseVisitsData = response.nurseVisits;
-      } else if (response?.icuNurseVisits && Array.isArray(response.icuNurseVisits)) {
-        nurseVisitsData = response.icuNurseVisits;
-      }
-      
-      if (!Array.isArray(nurseVisitsData) || nurseVisitsData.length === 0) {
-        console.warn('ICU nurse visits response is not an array or is empty:', response);
-        setPatientNurseVisits([]);
-        return;
-      }
-      
-      // Map the response to PatientNurseVisit format
-      const mappedNurseVisits: PatientNurseVisit[] = nurseVisitsData.map((visit: any) => {
-        const extractField = (data: any, fieldVariations: string[], defaultValue: any = '') => {
-          for (const field of fieldVariations) {
-            const value = data?.[field];
-            if (value !== undefined && value !== null && value !== '') {
-              return value;
-            }
-          }
-          return defaultValue;
-        };
-        
-        return {
-          patientNurseVisitId: extractField(visit, ['patientNurseVisitId', 'PatientNurseVisitId', 'id', 'Id'], 0),
-          icuNurseVisitsId: extractField(visit, [
-            'icuNurseVisitsId', 'ICUNurseVisitsId', 'icu_nurse_visits_id', 'ICU_Nurse_Visits_Id',
-            'icuNurseVisitId', 'ICUNurseVisitId', 'icu_nurse_visit_id', 'ICU_Nurse_Visit_Id',
-            'id', 'Id', 'ID'
-          ], null),
-          nurseName: extractField(visit, ['nurseName', 'NurseName', 'nurse_name', 'Nurse_Name', 'nurse', 'Nurse'], ''),
-          visitDate: extractField(visit, ['visitDate', 'VisitDate', 'visit_date', 'Visit_Date', 'nurseVisitedDateTime', 'NurseVisitedDateTime'], ''),
-          visitTime: extractField(visit, ['visitTime', 'VisitTime', 'visit_time', 'Visit_Time'], ''),
-          visitType: extractField(visit, ['visitType', 'VisitType', 'visit_type', 'Visit_Type'], ''),
-          vitalSigns: extractField(visit, ['vitalSigns', 'VitalSigns', 'vital_signs', 'Vital_Signs'], ''),
-          notes: extractField(visit, ['notes', 'Notes'], ''),
-          nurseVisitsDetails: extractField(visit, ['nurseVisitsDetails', 'NurseVisitsDetails', 'visitDetails', 'VisitDetails'], ''),
-          medicationsAdministered: extractField(visit, ['medicationsAdministered', 'MedicationsAdministered', 'medications', 'Medications'], ''),
-          patientStatus: extractField(visit, ['patientStatus', 'PatientStatus', 'patientCondition', 'PatientCondition', 'condition', 'Condition'], ''),
-        };
-      });
-      
-      console.log('Fetched and mapped ICU nurse visits:', mappedNurseVisits);
-      setPatientNurseVisits(mappedNurseVisits);
-    } catch (err) {
-      console.error('Error fetching ICU nurse visits:', err);
-      setNurseVisitsError(err instanceof Error ? err.message : 'Failed to load ICU nurse visits');
-      setPatientNurseVisits([]);
-    } finally {
-      setNurseVisitsLoading(false);
-    }
-  };
+  
 
   // Fetch ICU visit vitals for the current ICU admission
   const fetchICUVitalsList = async (patientICUAdmissionId: string) => {
@@ -702,24 +504,23 @@ export function ManageICUCase() {
           icuAdmissionId: extract(v, ['icuAdmissionId', 'ICUAdmissionId']),
           patientId: extract(v, ['patientId', 'PatientId']),
           heartRate: extract(v, ['heartRate', 'HeartRate']),
-          pulseRate: extract(v, ['pulseRate', 'PulseRate', 'pulse_rate', 'Pulse_Rate']),
           bloodPressure: extract(v, ['bloodPressure', 'BloodPressure']),
           temperature: extract(v, ['temperature', 'Temperature']),
           oxygenSaturation: extract(v, [
             'oxygenSaturation', 'OxygenSaturation', 'O2Saturation', 'o2Saturation',
             'O2', 'o2', 'O2Sat', 'o2Sat', 'SpO2', 'spo2', 'spO2',
-            'oxygenSaturationLevel', 'OxygenSaturationLevel', 'O2Sat', 'o2sat'
+            'oxygenSaturationLevel', 'OxygenSaturationLevel'
           ]),
           respiratoryRate: extract(v, ['respiratoryRate', 'RespiratoryRate']),
           bloodSugar: extract(v, [
             'bloodSugar', 'BloodSugar', 'bloodGlucose', 'BloodGlucose',
-            'glucose', 'Glucose', 'BS', 'bs', 'bloodSugarLevel', 'BloodSugarLevel',
-            'BloodSugarLevel', 'blood_sugar', 'blood_glucose'
+            'glucose', 'Glucose', 'BS', 'bs', 'bloodSugarLevel', 'BloodSugarLevel'
           ]),
           recordedDateTime: extract(v, ['recordedDateTime', 'RecordedDateTime']),
           recordedBy: extract(v, ['recordedBy', 'RecordedBy']),
           dailyOrHourlyVitals: extract(v, ['dailyOrHourlyVitals', 'DailyOrHourlyVitals']),
           nurseId: extract(v, ['nurseId', 'NurseId']),
+          nurseName: extract(v,['nurseName', 'NurseName']),
           nurseVisitsDetails: extract(v, ['nurseVisitsDetails', 'NurseVisitsDetails', 'visitsDetails', 'VisitsDetails']),
           patientCondition: extract(v, [
             'patientCondition', 'PatientCondition', 'patientStatus', 'PatientStatus',
@@ -729,7 +530,6 @@ export function ManageICUCase() {
       };
 
       const mapped = vitalsData.map(mapVitals);
-      console.log('Raw vitals data from API:', vitalsData);
       console.log('Mapped ICU visit vitals:', mapped);
       setIcuVitalsList(mapped);
     } catch (err) {
@@ -745,248 +545,12 @@ export function ManageICUCase() {
     navigate('/icu');
   };
 
-  // Handle opening Add Patient Lab Test dialog
-  const handleOpenAddLabTestDialog = async () => {
-    if (icuAdmission) {
-      // Fetch available lab tests
-      try {
-        const labTests = await labTestsApi.getAll();
-        setAvailableLabTests(labTests);
-      } catch (err) {
-        console.error('Error fetching lab tests:', err);
-      }
-      
-      setLabTestFormData({
-        icuAdmissionId: String(icuAdmission.patientICUAdmissionId || icuAdmission.id || ''),
-        patientId: String(icuAdmission.patientId || ''),
-        labTestId: '',
-        priority: 'Normal',
-        orderedDate: new Date().toISOString().split('T')[0], // Today's date
-        orderedBy: '',
-        description: '',
-        charges: '',
-        appointmentId: '',
-        roomAdmissionId: '',
-        emergencyBedSlotId: '',
-        labTestDone: 'No',
-        reportsUrl: '',
-        testStatus: 'Pending',
-        testDoneDateTime: ''
-      });
-      setLabTestSearchTerm('');
-      setShowLabTestList(false);
-      setLabTestSubmitError(null);
-      setIsAddLabTestDialogOpen(true);
-    } else {
-      setLabTestSubmitError('ICU Admission data is not loaded. Please wait and try again.');
-    }
-  };
+ 
+  
 
-  // Handle opening Edit Patient Lab Test dialog
-  const handleOpenEditLabTestDialog = async (test: PatientLabTest) => {
-    if (icuAdmission) {
-      // Fetch available lab tests
-      try {
-        const labTests = await labTestsApi.getAll();
-        setAvailableLabTests(labTests);
-      } catch (err) {
-        console.error('Error fetching lab tests:', err);
-      }
-      
-      const testId = test.patientLabTestId || test.id;
-      setEditingLabTestId(testId);
-      
-      // Find the lab test name for display
-      const selectedLabTest = availableLabTests.find((lt: LabTest) => {
-        const lid = (lt as any).labTestId || (lt as any).id || '';
-        return String(lid) === String(test.labTestId || '');
-      });
-      
-      setLabTestFormData({
-        icuAdmissionId: String(icuAdmission.patientICUAdmissionId || icuAdmission.id || ''),
-        patientId: String((test as any).patientId || icuAdmission.patientId || ''),
-        labTestId: String(test.labTestId || ''),
-        priority: test.priority || 'Normal',
-        orderedDate: test.orderedDate || new Date().toISOString().split('T')[0],
-        orderedBy: test.orderedBy || '',
-        description: test.description || '',
-        charges: test.charges ? String(test.charges) : '',
-        appointmentId: (test as any).appointmentId || '',
-        roomAdmissionId: test.roomAdmissionId ? String(test.roomAdmissionId) : '',
-        emergencyBedSlotId: (test as any).emergencyBedSlotId || '',
-        labTestDone: test.labTestDone === true || test.labTestDone === 'Yes' ? 'Yes' : 'No',
-        reportsUrl: test.reportsUrl || '',
-        testStatus: test.testStatus || test.status || 'Pending',
-        testDoneDateTime: test.testDoneDateTime ? new Date(test.testDoneDateTime).toISOString().slice(0, 16) : ''
-      });
-      setLabTestSearchTerm(selectedLabTest ? `${selectedLabTest.testName || 'Unknown'} (${selectedLabTest.testCategory || 'N/A'})` : '');
-      setShowLabTestList(false);
-      setLabTestSubmitError(null);
-      setIsAddLabTestDialogOpen(true);
-    } else {
-      setLabTestSubmitError('ICU Admission data is not loaded. Please wait and try again.');
-    }
-  };
+  
 
-  // Handle saving Patient Lab Test
-  const handleSaveLabTest = async () => {
-    try {
-      setLabTestSubmitting(true);
-      setLabTestSubmitError(null);
-
-      console.log('Saving Patient Lab Test with data:', labTestFormData);
-
-      // Validate required fields
-      if (!labTestFormData.icuAdmissionId || labTestFormData.icuAdmissionId === 'undefined' || labTestFormData.icuAdmissionId === '') {
-        throw new Error('ICU Admission ID is required');
-      }
-      
-      let patientIdValue = labTestFormData.patientId;
-      if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '') {
-        patientIdValue = icuAdmission?.patientId ? String(icuAdmission.patientId) : '';
-        console.log('PatientId from form was empty, trying from icuAdmission:', patientIdValue);
-      }
-      
-      if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '') {
-        throw new Error('Patient ID is required. Please ensure the ICU admission has a valid patient ID.');
-      }
-      
-      if (!labTestFormData.labTestId || labTestFormData.labTestId === '') {
-        throw new Error('Lab Test is required. Please select a lab test.');
-      }
-      
-      if (!labTestFormData.orderedDate) {
-        throw new Error('Ordered Date is required');
-      }
-
-      // Get selected lab test details
-      const selectedLabTest = availableLabTests.find((lt: LabTest) => {
-        const lid = (lt as any).labTestId || (lt as any).id || '';
-        return String(lid) === labTestFormData.labTestId;
-      });
-      if (!selectedLabTest) {
-        throw new Error('Selected lab test details not found.');
-      }
-
-      // Prepare the request payload
-      const payload: any = {
-        ICUAdmissionId: String(labTestFormData.icuAdmissionId).trim(),
-        PatientId: String(patientIdValue).trim(),
-        LabTestId: Number(labTestFormData.labTestId),
-        Priority: labTestFormData.priority || 'Normal',
-        OrderedDate: labTestFormData.orderedDate,
-        LabTestDone: labTestFormData.labTestDone || 'No',
-        TestStatus: labTestFormData.testStatus || 'Pending',
-      };
-
-      // Add optional fields
-      if (labTestFormData.description && labTestFormData.description.trim() !== '') {
-        payload.Description = labTestFormData.description.trim();
-      }
-      if (selectedLabTest.charges) {
-        payload.Charges = selectedLabTest.charges;
-      }
-      if (labTestFormData.reportsUrl && labTestFormData.reportsUrl.trim() !== '') {
-        payload.ReportsUrl = labTestFormData.reportsUrl.trim();
-      }
-      if (labTestFormData.testDoneDateTime && labTestFormData.testDoneDateTime.trim() !== '') {
-        // Convert datetime-local to ISO 8601 format
-        try {
-          const date = new Date(labTestFormData.testDoneDateTime);
-          if (!isNaN(date.getTime())) {
-            payload.TestDoneDateTime = date.toISOString();
-          } else {
-            payload.TestDoneDateTime = labTestFormData.testDoneDateTime;
-          }
-        } catch (e) {
-          payload.TestDoneDateTime = labTestFormData.testDoneDateTime;
-        }
-      }
-
-      // Add ID for update
-      const isEditing = !!editingLabTestId;
-      if (isEditing && editingLabTestId) {
-        payload.PatientLabTestId = String(editingLabTestId);
-      }
-
-      console.log('API Payload:', JSON.stringify(payload, null, 2));
-      console.log('API Endpoint:', isEditing ? `/patient-lab-tests/${editingLabTestId}` : '/patient-lab-tests');
-
-      // Call the API to create or update the patient lab test
-      let response;
-      if (isEditing && editingLabTestId) {
-        response = await apiRequest<any>(`/patient-lab-tests/${editingLabTestId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-        console.log('Patient lab test updated successfully:', response);
-      } else {
-        response = await apiRequest<any>('/patient-lab-tests', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-        console.log('Patient lab test created successfully:', response);
-      }
-
-      // Close dialog
-      setIsAddLabTestDialogOpen(false);
-      
-      // Refresh the lab tests list
-      if (icuAdmission?.patientICUAdmissionId) {
-        await fetchPatientLabTests(String(icuAdmission.patientICUAdmissionId));
-      }
-
-      // Reset form
-      setLabTestFormData({
-        icuAdmissionId: '',
-        patientId: '',
-        labTestId: '',
-        priority: 'Normal',
-        orderedDate: '',
-        orderedBy: '',
-        description: '',
-        charges: '',
-        appointmentId: '',
-        roomAdmissionId: '',
-        emergencyBedSlotId: '',
-        labTestDone: 'No',
-        reportsUrl: '',
-        testStatus: 'Pending',
-        testDoneDateTime: ''
-      });
-      setLabTestSearchTerm('');
-      setShowLabTestList(false);
-    } catch (err) {
-      console.error('Error saving Patient Lab Test:', err);
-      setLabTestSubmitError(
-        err instanceof Error ? err.message : 'Failed to save Patient Lab Test'
-      );
-    } finally {
-      setLabTestSubmitting(false);
-    }
-  };
-
-  // Handle opening Add ICU Nurse Visit dialog
-  const handleOpenAddNurseVisitDialog = () => {
-    if (icuAdmission) {
-      setNurseVisitFormData({
-        icuAdmissionId: String(icuAdmission.patientICUAdmissionId || icuAdmission.id || ''),
-        patientId: String(icuAdmission.patientId || ''),
-        nurseId: '',
-        nurseVisitedDateTime: new Date().toISOString().slice(0, 16), // Current date/time in local format
-        nurseVisitsDetails: '',
-        patientCondition: icuAdmission.condition || ''
-      });
-      setNurseVisitSubmitError(null);
-      setIsAddNurseVisitDialogOpen(true);
-    }
-  };
+  
 
   // Handle opening Add ICU Vitals dialog
   const handleOpenAddICUVitalsDialog = () => {
@@ -1017,7 +581,6 @@ export function ManageICUCase() {
         oxygenSaturation: '',
         respiratoryRate: '',
         bloodSugar: '',
-        pulseRate: '',
         recordedDateTime: new Date().toISOString().slice(0, 16), // Current date/time in local format
         recordedBy: '',
         dailyOrHourlyVitals: '',
@@ -1097,9 +660,6 @@ export function ManageICUCase() {
       if (icuVitalsFormData.heartRate && icuVitalsFormData.heartRate.trim() !== '') {
         payload.HeartRate = Number(icuVitalsFormData.heartRate);
       }
-      if (icuVitalsFormData.pulseRate && icuVitalsFormData.pulseRate.trim() !== '') {
-        payload.PulseRate = Number(icuVitalsFormData.pulseRate);
-      }
       if (icuVitalsFormData.temperature && icuVitalsFormData.temperature.trim() !== '') {
         payload.Temperature = Number(icuVitalsFormData.temperature);
       }
@@ -1107,17 +667,22 @@ export function ManageICUCase() {
       if (icuVitalsFormData.oxygenSaturation && icuVitalsFormData.oxygenSaturation.trim() !== '') {
         const o2Val = Number(icuVitalsFormData.oxygenSaturation);
         payload.OxygenSaturation = o2Val;
+        payload.O2Saturation = o2Val; // send O2Saturation as backend field
         payload.O2 = o2Val; // send alias in case backend expects O2
-        payload.O2Saturation = o2Val; // additional alias
-        payload.SpO2 = o2Val; // additional alias
+        payload.SpO2 = o2Val; // send SpO2 as another possible alias
+      } else {
+        payload.OxygenSaturation = null;
+        payload.O2Saturation = null;
+        payload.O2 = null;
+        payload.SpO2 = null;
       }
       if (icuVitalsFormData.respiratoryRate && icuVitalsFormData.respiratoryRate.trim() !== '') {
         payload.RespiratoryRate = Number(icuVitalsFormData.respiratoryRate);
       }
       if (icuVitalsFormData.bloodSugar && icuVitalsFormData.bloodSugar.trim() !== '') {
         payload.BloodSugar = Number(icuVitalsFormData.bloodSugar);
-        payload.BloodGlucose = Number(icuVitalsFormData.bloodSugar); // additional alias
-        payload.Glucose = Number(icuVitalsFormData.bloodSugar); // additional alias
+      } else {
+        payload.BloodSugar = null;
       }
 
       // Add optional string fields only if they have values
@@ -1143,8 +708,6 @@ export function ManageICUCase() {
       }
 
       console.log('API Payload (formatted):', JSON.stringify(payload, null, 2));
-      console.log('Oxygen Saturation value:', icuVitalsFormData.oxygenSaturation);
-      console.log('Blood Sugar value:', icuVitalsFormData.bloodSugar);
       console.log('API Endpoint: /icu-visit-vitals');
 
       // Add ID for update
@@ -1172,7 +735,6 @@ export function ManageICUCase() {
           body: JSON.stringify(payload),
         });
         console.log('ICU visit vitals created successfully:', response);
-        console.log('Response data:', response?.data || response);
       }
 
       // Close dialog
@@ -1181,7 +743,7 @@ export function ManageICUCase() {
       // Refresh vitals and nurse visits
       if (icuAdmission?.patientICUAdmissionId) {
         await fetchICUVitalsList(String(icuAdmission.patientICUAdmissionId));
-        await fetchPatientNurseVisits(String(icuAdmission.patientICUAdmissionId));
+        //await fetchPatientNurseVisits(String(icuAdmission.patientICUAdmissionId));
       }
 
       // Reset form
@@ -1195,7 +757,6 @@ export function ManageICUCase() {
         oxygenSaturation: '',
         respiratoryRate: '',
         bloodSugar: '',
-        pulseRate: '',
         recordedDateTime: '',
         recordedBy: '',
         dailyOrHourlyVitals: '',
@@ -1254,7 +815,7 @@ export function ManageICUCase() {
       
       // Refresh the nurse visits list
       if (icuAdmission?.patientICUAdmissionId) {
-        await fetchPatientNurseVisits(String(icuAdmission.patientICUAdmissionId));
+        //await fetchPatientNurseVisits(String(icuAdmission.patientICUAdmissionId));
       }
 
       // Reset form
@@ -1289,8 +850,6 @@ export function ManageICUCase() {
         patientCondition: icuAdmission.condition || '',
         status: 'Active'
       });
-      setDoctorSearchTerm('');
-      setShowDoctorList(false);
       setDoctorVisitSubmitError(null);
       setIsAddDoctorVisitDialogOpen(true);
     }
@@ -1365,21 +924,6 @@ export function ManageICUCase() {
     
     console.log('Setting form data:', formData);
     setDoctorVisitFormData(formData);
-    
-    // Set doctor search term based on selected doctor
-    const selectedDoctor = doctorOptions.find((d: any) => {
-      const doctorId = String((d as any).id || (d as any).Id || (d as any).UserId || '');
-      return doctorId === String(visit.doctorId || visit.doctorName || '');
-    });
-    if (selectedDoctor) {
-      const doctorName = (selectedDoctor as any).name || (selectedDoctor as any).Name || (selectedDoctor as any).UserName || '';
-      const specialty = (selectedDoctor as any).specialty || (selectedDoctor as any).Specialty || (selectedDoctor as any).DoctorDepartmentName || '';
-      setDoctorSearchTerm(`${doctorName} - ${specialty}`);
-    } else {
-      setDoctorSearchTerm(visit.doctorName || String(visit.doctorId || ''));
-    }
-    setShowDoctorList(false);
-    
     setDoctorVisitSubmitError(null);
     
     console.log('Opening dialog...');
@@ -1395,20 +939,6 @@ export function ManageICUCase() {
 
       console.log('Saving ICU Doctor Visit with data:', doctorVisitFormData);
       console.log('Is editing:', editingDoctorVisitId !== null, 'Visit ID:', editingDoctorVisitId);
-
-      // Validate required fields
-      if (!doctorVisitFormData.doctorId || doctorVisitFormData.doctorId.trim() === '') {
-        throw new Error('Doctor is required. Please select a doctor from the list.');
-      }
-
-      // Validate doctor is selected from the list
-      const selectedDoctor = doctorOptions.find((d: any) => {
-        const doctorId = String((d as any).id || (d as any).Id || (d as any).UserId || '');
-        return doctorId === doctorVisitFormData.doctorId;
-      });
-      if (!selectedDoctor) {
-        throw new Error('Please select a valid doctor from the list.');
-      }
 
       // Prepare the request payload
       // Ensure all UUID fields are sent as strings
@@ -1541,7 +1071,7 @@ export function ManageICUCase() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div>
                 <Label className="text-sm text-gray-500">Patient Name</Label>
-                <p className="text-gray-900 font-medium mt-1">{icuAdmission.patientName || 'N/A'}</p>
+                <p className="text-gray-900 font-medium mt-1">{icuAdmission.patientName || 'N/A'} </p>
               </div>
               <div>
                 <Label className="text-sm text-gray-500">Patient ID</Label>
@@ -1600,24 +1130,22 @@ export function ManageICUCase() {
                 <Label className="text-sm text-gray-500">Diagnosis</Label>
                 <p className="text-gray-900 font-medium mt-1">{icuAdmission.diagnosis || 'N/A'}</p>
               </div>
-              
-              {icuAdmission.treatment && (
-                <div className="col-span-2">
-                  <Label className="text-sm text-gray-500">Treatment</Label>
-                  <p className="text-gray-900 font-medium mt-1">{icuAdmission.treatment}</p>
-                </div>
-              )}
+              <div>
+                <Label className="text-sm text-gray-500">Treatment</Label>
+                <p className="text-gray-900 font-medium mt-1">{icuAdmission.treatment || 'N/A'}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Tabs for Diagnosis & Treatment, Doctor Visits, ICU Nurse Visits */}
+        {/* Tabs for Diagnosis & Treatment, Lab Tests, Doctor Visits, ICU Nurse Visits */}
         <Tabs defaultValue="diagnosis-treatment" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="diagnosis-treatment" className="gap-2">
               <FileText className="size-4" />
               Diagnosis & Treatment
             </TabsTrigger>
+           
             <TabsTrigger value="doctor-visits" className="gap-2">
               <Stethoscope className="size-4" />
               Doctor Visits
@@ -1704,6 +1232,7 @@ export function ManageICUCase() {
             </Card>
           </TabsContent>
 
+          
           <TabsContent value="doctor-visits" className="mt-6">
             <Card>
               <CardHeader>
@@ -1804,9 +1333,9 @@ export function ManageICUCase() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-4 text-gray-700">Vitals ID</th>
                           <th className="text-left py-3 px-4 text-gray-700">Recorded Date & Time</th>
                           <th className="text-left py-3 px-4 text-gray-700">HR</th>
-                          <th className="text-left py-3 px-4 text-gray-700">PR</th>
                           <th className="text-left py-3 px-4 text-gray-700">BP</th>
                           <th className="text-left py-3 px-4 text-gray-700">Temp</th>
                           <th className="text-left py-3 px-4 text-gray-700">SpO₂</th>
@@ -1821,9 +1350,9 @@ export function ManageICUCase() {
                       <tbody>
                         {icuVitalsList.map((vital) => (
                           <tr key={vital.icuVisitVitalsId || vital.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-3 px-4">{vital.icuVisitVitalsId || 'N/A'}</td>
                             <td className="py-3 px-4">{vital.recordedDateTime || 'N/A'}</td>
                             <td className="py-3 px-4">{vital.heartRate ? `${vital.heartRate} bpm` : 'N/A'}</td>
-                            <td className="py-3 px-4">{vital.pulseRate || (vital as any).PulseRate || (vital as any).pulse || (vital as any).PR ? `${vital.pulseRate || (vital as any).PulseRate || (vital as any).pulse || (vital as any).PR} bpm` : 'N/A'}</td>
                             <td className="py-3 px-4">{vital.bloodPressure || 'N/A'}</td>
                             <td className="py-3 px-4">{vital.temperature ? `${vital.temperature}°C` : 'N/A'}</td>
                             <td className="py-3 px-4">
@@ -1854,15 +1383,12 @@ export function ManageICUCase() {
                                   const bloodSugarValue = vital.bloodSugar || (vital as any).BloodSugar || (vital as any).bloodGlucose || (vital as any).Glucose;
                                   // Extract PatientCondition/PatientStatus with fallbacks
                                   const patientConditionValue = vital.patientCondition || (vital as any).patientStatus || (vital as any).PatientStatus || (vital as any).PatientCondition || '';
-                                  // Extract PulseRate with fallbacks
-                                  const pulseRateValue = vital.pulseRate || (vital as any).PulseRate || (vital as any).pulse || (vital as any).PR;
                                   
                                   setIcuVitalsFormData({
                                     icuVisitVitalsId: String(vital.icuVisitVitalsId || ''),
                                     icuAdmissionId: String(vital.icuAdmissionId || icuAdmission?.patientICUAdmissionId || ''),
                                     patientId: String(vital.patientId || icuAdmission?.patientId || ''),
                                     heartRate: vital.heartRate ? String(vital.heartRate) : '',
-                                    pulseRate: pulseRateValue ? String(pulseRateValue) : '',
                                     bloodPressure: vital.bloodPressure || '',
                                     temperature: vital.temperature ? String(vital.temperature) : '',
                                     oxygenSaturation: o2Value ? String(o2Value) : '',
@@ -1900,7 +1426,6 @@ export function ManageICUCase() {
                                     oxygenSaturation: vital.oxygenSaturation ? String(vital.oxygenSaturation) : '',
                                     respiratoryRate: vital.respiratoryRate ? String(vital.respiratoryRate) : '',
                                     bloodSugar: vital.bloodSugar ? String(vital.bloodSugar) : '',
-                                    pulseRate: vital.pulseRate ? String(vital.pulseRate) : '',
                                     recordedDateTime: vital.recordedDateTime ? vital.recordedDateTime.slice(0, 16) : '',
                                     recordedBy: vital.recordedBy || '',
                                     dailyOrHourlyVitals: vital.dailyOrHourlyVitals || '',
@@ -1975,92 +1500,14 @@ export function ManageICUCase() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="doctor-search">Doctor *</Label>
-                  <div className="relative mb-2">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                    <Input
-                      id="doctor-search"
-                      placeholder="Search by Doctor Name, ID, or Specialty..."
-                      value={doctorSearchTerm}
-                      onChange={(e) => {
-                        setDoctorSearchTerm(e.target.value);
-                        setShowDoctorList(true);
-                      }}
-                      onFocus={() => setShowDoctorList(true)}
-                      className="pl-10"
-                    />
-                  </div>
-                  {showDoctorList && doctorSearchTerm && (
-                    <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
-                      <table className="w-full">
-                        <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
-                          <tr>
-                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Doctor ID</th>
-                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
-                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Specialty</th>
-                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Type</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {doctorOptions
-                            .filter((doctor: any) => {
-                              if (!doctorSearchTerm) return false;
-                              const searchLower = doctorSearchTerm.toLowerCase();
-                              const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
-                              const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
-                              const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
-                              return (
-                                doctorId.toLowerCase().includes(searchLower) ||
-                                doctorName.toLowerCase().includes(searchLower) ||
-                                specialty.toLowerCase().includes(searchLower)
-                              );
-                            })
-                            .map((doctor: any) => {
-                              const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
-                              const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
-                              const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || 'General';
-                              const doctorType = (doctor as any).type || (doctor as any).Type || (doctor as any).DoctorType || '';
-                              const isSelected = doctorVisitFormData.doctorId === doctorId;
-                              return (
-                                <tr
-                                  key={doctorId}
-                                  onClick={() => {
-                                    setDoctorVisitFormData({
-                                      ...doctorVisitFormData,
-                                      doctorId: doctorId
-                                    });
-                                    setDoctorSearchTerm(`${doctorName} - ${specialty}`);
-                                    setShowDoctorList(false);
-                                  }}
-                                  className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
-                                >
-                                  <td className="py-2 px-3 text-sm text-gray-900 font-mono">{doctorId || '-'}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{doctorName || 'Unknown'}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{specialty || 'General'}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{doctorType || 'Doctor'}</td>
-                                </tr>
-                              );
-                            })}
-                        </tbody>
-                      </table>
-                      {doctorOptions.filter((doctor: any) => {
-                        if (!doctorSearchTerm) return false;
-                        const searchLower = doctorSearchTerm.toLowerCase();
-                        const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
-                        const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
-                        const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
-                        return (
-                          doctorId.toLowerCase().includes(searchLower) ||
-                          doctorName.toLowerCase().includes(searchLower) ||
-                          specialty.toLowerCase().includes(searchLower)
-                        );
-                      }).length === 0 && doctorSearchTerm && (
-                        <div className="text-center py-4 text-gray-500">
-                          No doctors found matching "{doctorSearchTerm}"
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <Label htmlFor="doctorId">Doctor ID *</Label>
+                  <Input
+                    id="doctorId"
+                    value={doctorVisitFormData.doctorId}
+                    onChange={(e) => setDoctorVisitFormData({ ...doctorVisitFormData, doctorId: e.target.value })}
+                    placeholder="Enter Doctor ID"
+                    required
+                  />
                 </div>
                 <div>
                   <Label htmlFor="doctorVisitedDateTime">Doctor Visited Date & Time *</Label>
@@ -2268,16 +1715,6 @@ export function ManageICUCase() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="pulseRate">Pulse Rate (bpm)</Label>
-                    <Input
-                      id="pulseRate"
-                      type="number"
-                      value={icuVitalsFormData.pulseRate}
-                      onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, pulseRate: e.target.value })}
-                      placeholder="Enter pulse rate"
-                    />
-                  </div>
-                  <div>
                     <Label htmlFor="bloodPressure">Blood Pressure</Label>
                     <Input
                       id="bloodPressure"
@@ -2467,312 +1904,7 @@ export function ManageICUCase() {
           </DialogContent>
         </Dialog>
 
-        {/* Add Patient Lab Test Dialog */}
-        <Dialog open={isAddLabTestDialogOpen} onOpenChange={setIsAddLabTestDialogOpen}>
-          <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
-            <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
-              <DialogTitle>{editingLabTestId ? 'Edit Lab Test Details' : 'Add New Lab Tests Details'}</DialogTitle>
-            </DialogHeader>
-            <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
-              <div className="space-y-4 py-4">
-                {labTestSubmitError && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-                    {labTestSubmitError}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  {editingLabTestId && (
-                    <div>
-                      <Label htmlFor="patientLabTestId">Patient Lab Test ID</Label>
-                      <Input
-                        id="patientLabTestId"
-                        value={String(editingLabTestId)}
-                        disabled
-                        className="bg-gray-100"
-                      />
-                    </div>
-                  )}
-                  <div>
-                    <Label htmlFor="labTestIcuAdmissionId">ICU Admission ID</Label>
-                    <Input
-                      id="labTestIcuAdmissionId"
-                      value={labTestFormData.icuAdmissionId}
-                      disabled
-                      className="bg-gray-100"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="labTestPatientId">Patient ID</Label>
-                    <Input
-                      id="labTestPatientId"
-                      value={labTestFormData.patientId}
-                      disabled
-                      className="bg-gray-100"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="labTestId">Lab Test *</Label>
-                    <Input
-                      id="labTestId"
-                      value={labTestSearchTerm}
-                      onChange={(e) => {
-                        setLabTestSearchTerm(e.target.value);
-                        setShowLabTestList(true);
-                      }}
-                      onFocus={() => setShowLabTestList(true)}
-                      placeholder="Search and select lab test..."
-                      className="cursor-pointer"
-                    />
-                    {showLabTestList && (
-                      <div className="mt-1 border border-gray-200 rounded-md max-h-48 overflow-y-auto bg-white z-50 relative">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-50 sticky top-0">
-                            <tr>
-                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Test ID</th>
-                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Test Name</th>
-                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Category</th>
-                              <th className="text-left py-2 px-3 text-gray-700 font-semibold">Charges</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {availableLabTests
-                              .filter((test) => {
-                                if (!labTestSearchTerm) return true;
-                                const searchLower = labTestSearchTerm.toLowerCase();
-                                const name = (test.testName || '').toLowerCase();
-                                const id = String(test.labTestId || test.id || '').toLowerCase();
-                                const category = (test.testCategory || '').toLowerCase();
-                                return name.includes(searchLower) || id.includes(searchLower) || category.includes(searchLower);
-                              })
-                              .map((test) => {
-                                const testId = String(test.labTestId || test.id || '');
-                                const isSelected = labTestFormData.labTestId === testId;
-                                return (
-                                  <tr
-                                    key={test.labTestId || test.id}
-                                    onClick={() => {
-                                      setLabTestFormData({ ...labTestFormData, labTestId: testId });
-                                      setLabTestSearchTerm(`${test.testName || 'Unknown'} (${test.testCategory || 'N/A'})`);
-                                      setShowLabTestList(false);
-                                    }}
-                                    className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
-                                  >
-                                    <td className="py-2 px-3 text-sm text-gray-900 font-mono">{test.displayTestId || testId}</td>
-                                    <td className="py-2 px-3 text-sm text-gray-600">{test.testName || 'Unknown'}</td>
-                                    <td className="py-2 px-3 text-sm text-gray-600">{test.testCategory || 'N/A'}</td>
-                                    <td className="py-2 px-3 text-sm text-gray-600">₹{test.charges || 0}</td>
-                                  </tr>
-                                );
-                              })}
-                          </tbody>
-                        </table>
-                        {availableLabTests.filter((test) => {
-                          if (!labTestSearchTerm) return true;
-                          const searchLower = labTestSearchTerm.toLowerCase();
-                          const name = (test.testName || '').toLowerCase();
-                          const id = String(test.labTestId || test.id || '').toLowerCase();
-                          const category = (test.testCategory || '').toLowerCase();
-                          return name.includes(searchLower) || id.includes(searchLower) || category.includes(searchLower);
-                        }).length === 0 && (
-                          <div className="text-center py-4 text-gray-500 text-sm">No lab tests found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <Label htmlFor="priority">Priority *</Label>
-                    <select
-                      id="priority"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                      value={labTestFormData.priority}
-                      onChange={(e) => setLabTestFormData({ ...labTestFormData, priority: e.target.value })}
-                      required
-                    >
-                      <option value="Normal">Normal</option>
-                      <option value="High">High</option>
-                      <option value="Urgent">Urgent</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="orderedDate">Ordered Date *</Label>
-                    <Input
-                      id="orderedDate"
-                      type="date"
-                      value={labTestFormData.orderedDate}
-                      onChange={(e) => setLabTestFormData({ ...labTestFormData, orderedDate: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      value={labTestFormData.description}
-                      onChange={(e) => setLabTestFormData({ ...labTestFormData, description: e.target.value })}
-                      placeholder="Enter description (optional)"
-                      rows={4}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="labTestDone">Lab Test Done *</Label>
-                    <select
-                      id="labTestDone"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                      value={labTestFormData.labTestDone}
-                      onChange={(e) => setLabTestFormData({ ...labTestFormData, labTestDone: e.target.value })}
-                      required
-                    >
-                      <option value="No">No</option>
-                      <option value="Yes">Yes</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="testStatus">Test Status *</Label>
-                    <select
-                      id="testStatus"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                      value={labTestFormData.testStatus}
-                      onChange={(e) => setLabTestFormData({ ...labTestFormData, testStatus: e.target.value })}
-                      required
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="InProgress">InProgress</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="reportsUrl">Reports URL</Label>
-                    <Input
-                      id="reportsUrl"
-                      value={labTestFormData.reportsUrl}
-                      onChange={(e) => setLabTestFormData({ ...labTestFormData, reportsUrl: e.target.value })}
-                      placeholder="Enter reports URL (optional)"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="testDoneDateTime">Test Done Date & Time</Label>
-                    <Input
-                      id="testDoneDateTime"
-                      type="datetime-local"
-                      value={labTestFormData.testDoneDateTime}
-                      onChange={(e) => setLabTestFormData({ ...labTestFormData, testDoneDateTime: e.target.value })}
-                      placeholder="Enter test done date and time"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <DialogFooter className="px-6 pb-4 flex-shrink-0">
-              <Button
-                variant="outline"
-                onClick={() => setIsAddLabTestDialogOpen(false)}
-                disabled={labTestSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSaveLabTest}
-                disabled={labTestSubmitting}
-              >
-                {labTestSubmitting ? 'Saving...' : 'Save'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* View Patient Lab Test Dialog */}
-        <Dialog open={isViewLabTestDialogOpen} onOpenChange={setIsViewLabTestDialogOpen}>
-          <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
-            <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
-              <DialogTitle>View Lab Test Details</DialogTitle>
-            </DialogHeader>
-            <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
-              <div className="space-y-4 py-4">
-                {viewingLabTest && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-sm text-gray-500">PatientLabTestsId</Label>
-                      <p className="text-gray-900 font-medium mt-1 font-mono">{viewingLabTest.patientLabTestId || viewingLabTest.id || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <Label className="text-sm text-gray-500">PatientType</Label>
-                      <p className="text-gray-900 font-medium mt-1">{(viewingLabTest as any).patientType || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <Label className="text-sm text-gray-500">PatientId</Label>
-                      <p className="text-gray-900 font-medium mt-1 font-mono">{(viewingLabTest as any).patientId || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <Label className="text-sm text-gray-500">LabTestId</Label>
-                      <p className="text-gray-900 font-medium mt-1">{viewingLabTest.labTestId || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <Label className="text-sm text-gray-500">Priority</Label>
-                      <p className="mt-1">
-                        <Badge variant={viewingLabTest.priority === 'High' ? 'destructive' : 'outline'}>
-                          {viewingLabTest.priority || 'Normal'}
-                        </Badge>
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-sm text-gray-500">LabTestDone</Label>
-                      <p className="mt-1">
-                        <Badge variant={viewingLabTest.labTestDone === true || viewingLabTest.labTestDone === 'Yes' ? 'default' : 'secondary'}>
-                          {viewingLabTest.labTestDone === true || viewingLabTest.labTestDone === 'Yes' ? 'Yes' : 'No'}
-                        </Badge>
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-sm text-gray-500">ReportsUrl</Label>
-                      <p className="text-gray-900 font-medium mt-1">
-                        {viewingLabTest.reportsUrl ? (
-                          <a href={viewingLabTest.reportsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                            {viewingLabTest.reportsUrl}
-                          </a>
-                        ) : 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-sm text-gray-500">TestStatus</Label>
-                      <p className="mt-1">
-                        <Badge variant={viewingLabTest.testStatus === 'Completed' ? 'default' : viewingLabTest.testStatus === 'InProgress' ? 'secondary' : 'outline'}>
-                          {viewingLabTest.testStatus || viewingLabTest.status || 'N/A'}
-                        </Badge>
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-sm text-gray-500">TestDoneDateTime</Label>
-                      <p className="text-gray-900 font-medium mt-1">{viewingLabTest.testDoneDateTime || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <Label className="text-sm text-gray-500">Status</Label>
-                      <p className="mt-1">
-                        <Badge variant={viewingLabTest.status === 'Active' ? 'default' : 'secondary'}>
-                          {viewingLabTest.status || 'N/A'}
-                        </Badge>
-                      </p>
-                    </div>
-                    {viewingLabTest.description && (
-                      <div className="col-span-2">
-                        <Label className="text-sm text-gray-500">Description</Label>
-                        <p className="text-gray-900 font-medium mt-1 whitespace-pre-wrap">{viewingLabTest.description}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-            <DialogFooter className="px-6 pb-4 flex-shrink-0">
-              <Button
-                variant="outline"
-                onClick={() => setIsViewLabTestDialogOpen(false)}
-              >
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+       
       </div>
     </div>
   );
