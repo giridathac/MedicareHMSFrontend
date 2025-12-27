@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Calendar, Download, FileText, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { apiRequest } from '../api/base';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface DoctorStatistics {
   doctor: string;
@@ -159,6 +161,62 @@ export function Reports() {
   const [departmentAdmissions, setDepartmentAdmissions] = useState<DepartmentAdmission[]>([]);
   const [loadingDepartmentAdmissions, setLoadingDepartmentAdmissions] = useState(false);
   const [departmentAdmissionsError, setDepartmentAdmissionsError] = useState<string | null>(null);
+
+  // PDF Export function
+  const exportToPDF = async () => {
+    try {
+      // Get the current tab content
+      const reportContent = document.querySelector('.reports-scrollable') as HTMLElement;
+      if (!reportContent) {
+        console.error('Report content not found');
+        return;
+      }
+
+      // Create canvas from the report content
+      const canvas = await html2canvas(reportContent, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: reportContent.scrollWidth,
+        height: reportContent.scrollHeight,
+      });
+
+      // Create PDF
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 295; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add additional pages if content is longer than one page
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Download the PDF
+      const fileName = `Hospital_Report_${reportType}_${selectedDate}.pdf`;
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    }
+  };
 
   // Calculate week start and end dates for weekly reports
   const getWeekDates = (date: string) => {
@@ -1446,7 +1504,7 @@ export function Reports() {
             >
               Weekly Report
             </Button>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={exportToPDF}>
               <Download className="size-4" />
               Export PDF
             </Button>

@@ -1,5 +1,6 @@
 import { Suspense, lazy, useState } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 import { 
   LayoutDashboard, 
   ClipboardList,
@@ -65,7 +66,7 @@ export default function App() {
   const navigate = useNavigate();
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
 
-  const navItems = [
+  const allNavItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/frontdesk', label: 'Front Desk', icon: ClipboardList },
     { path: '/patient-registration', label: 'Patient Registration', icon: UserPlus },
@@ -86,69 +87,149 @@ export default function App() {
     { path: '/reports', label: 'Reports', icon: FileBarChart },
   ];
 
+  // Get user role from JWT token
+  const getUserRoleFromToken = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+
+      const decoded: any = jwtDecode(token);
+      console.log('Decoded token:', decoded);
+
+      // Try different possible field names for role
+      // Check if role is directly on decoded object
+      if (decoded.role) return decoded.role;
+      if (decoded.roleName) return decoded.roleName;
+      if (decoded.RoleName) return decoded.RoleName; // Capital R and N
+      if (decoded.userRole) return decoded.userRole;
+
+      // Check if role is nested in data object
+      if (decoded.data && decoded.data.role) return decoded.data.role;
+      if (decoded.data && decoded.data.roleName) return decoded.data.roleName;
+      if (decoded.data && decoded.data.RoleName) return decoded.data.RoleName;
+      if (decoded.data && decoded.data.userRole) return decoded.data.userRole;
+
+      console.warn('No role found in decoded token');
+      return null;
+    } catch (error) {
+      console.error('Error decoding token:', error);
+      return null;
+    }
+  };
+
+  const userRole = getUserRoleFromToken();
+
+  // Get user info from JWT token
+  const getUserInfoFromToken = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { userName: 'Admin User', roleName: 'Administrator' };
+
+      const decoded: any = jwtDecode(token);
+      return {
+        userName: decoded.userName || 'Admin User',
+        roleName: decoded.RoleName || 'Administrator'
+      };
+    } catch (error) {
+      console.error('Error decoding token for user info:', error);
+      return { userName: 'Admin User', roleName: 'Administrator' };
+    }
+  };
+
+  const userInfo = getUserInfoFromToken();
+
+  // Filter nav items based on user role
+  const navItems = allNavItems.filter(item => {
+    if (userRole === 'LabAdmin') {
+      // Show only laboratory related menus for LabAdmin
+      // return item.path === '/laboratory' || item.path === '/lab-tests';
+      return item.path === '/laboratory';
+    } else if (userRole === 'OTAdmin') {
+      // Show only OT related menus for OTAdmin
+      // return item.path === '/ot' || item.path === '/ot-rooms';
+      return item.path === '/ot';
+    } else if (userRole === 'ICUAdmin') {
+      // Show only ICU related menus for ICUAdmin
+      // return item.path === '/icu' || item.path === '/icu-beds';
+      return item.path === '/icu';
+    } else if (userRole === 'IPDAdmin') {
+      // Show only IPD related menus for IPDAdmin
+      // return item.path === '/admissions' || item.path === '/room-beds' || item.path === '/manage-ipd-admission';
+      return item.path === '/admissions' || item.path === '/manage-ipd-admission';
+    } else {
+      // Show all menus for SuperAdmin and other roles
+      return true;
+    }
+  });
+
+  const isLoginPage = location.pathname === '/login';
+
   return (
     <div className="flex h-screen bg-gray-50 relative">
-      {/* Sidebar */}
-      <aside className={`${isSidebarMinimized ? 'w-0' : 'w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300 relative`} style={{ overflow: 'visible' }}>
-        {!isSidebarMinimized && (
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center gap-2">
-              <Activity className="size-8 text-blue-600 flex-shrink-0" />
-              <div>
-                <h1 className="text-gray-900">MediCare HMS</h1>
-                <p className="text-sm text-gray-500">Hospital Management</p>
+      {/* Sidebar - Hide on login page */}
+      {!isLoginPage && (
+        <aside className={`${isSidebarMinimized ? 'w-0' : 'w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300 relative`} style={{ overflow: 'visible' }}>
+          {!isSidebarMinimized && (
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center gap-2">
+                <Activity className="size-8 text-blue-600 flex-shrink-0" />
+                <div>
+                  <h1 className="text-gray-900">MediCare HMS</h1>
+                  <p className="text-sm text-gray-500">Hospital Management</p>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-        
-        {!isSidebarMinimized && (
-          <nav className="flex-1 p-4 overflow-y-auto relative">
-            {/* Toggle Button - Left of Dashboard, at left edge of window (more visible) - Round circle (large) */}
-            <button
-              onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
-              className="fixed left-0 z-50 hover:scale-110 transition-all cursor-pointer"
-              title="Minimize sidebar"
-              style={{ 
-                left: '0px',
-                transform: 'translateX(-28px)', // Move 70% of 40px to the left, showing 30% (more than quarter)
-                top: 'calc(6rem + 1rem)', // Header height + smaller offset to move it up
-                width: '40px',
-                height: '40px',
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                border: '2px solid #d1d5db',
-                borderRadius: '50%',
-                outline: 'none',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
-              }}
-            />
-            
-            <ul className="space-y-2">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                // Check if current path matches or starts with the item path (for nested routes)
-                const isActive = location.pathname === item.path || 
-                  (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
-                return (
-                  <li key={item.path}>
-                    <button
-                      onClick={() => navigate(item.path)}
-                      title={item.label}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                        isActive
-                          ? 'bg-blue-50 text-blue-700'
-                          : 'text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      <Icon className="size-5 flex-shrink-0" />
-                      <span className="truncate whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
-        )}
+          )}
+
+          {!isSidebarMinimized && (
+            <nav className="flex-1 p-4 overflow-y-auto relative">
+              {/* Toggle Button - Left of Dashboard, at left edge of window (more visible) - Round circle (large) */}
+              <button
+                onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
+                className="fixed left-0 z-50 hover:scale-110 transition-all cursor-pointer"
+                title="Minimize sidebar"
+                style={{
+                  left: '0px',
+                  transform: 'translateX(-28px)',
+                  top: 'calc(6rem + 1rem)',
+                  width: '40px',
+                  height: '40px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                  border: '2px solid #d1d5db',
+                  borderRadius: '50%',
+                  outline: 'none',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+                }}
+              />
+
+              <ul className="space-y-2">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  // Check if current path matches or starts with the item path (for nested routes)
+                  const isActive = location.pathname === item.path ||
+                    (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
+                  return (
+                    <li key={item.path}>
+                      <button
+                        onClick={() => navigate(item.path)}
+                        title={item.label}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className="size-5 flex-shrink-0" />
+                        <span className="truncate whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+          )}
+
+
         
         
 
@@ -156,20 +237,20 @@ export default function App() {
           <div className="p-4 border-t border-gray-200">
             <div className="flex items-center gap-3 px-4 py-3">
               <div className="size-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-blue-700">AD</span>
+                <span className="text-blue-700">{userInfo.userName.charAt(0).toUpperCase()}</span>
               </div>
               <div>
-                <p className="text-sm text-gray-900">Admin User</p>
-                <p className="text-xs text-gray-500">Administrator</p>
+                <p className="text-sm text-gray-900">{userInfo.userName}</p>
+                <p className="text-xs text-gray-500">{userInfo.roleName}</p>
               </div>
             </div>
           </div>
         )}
-        
-      </aside>
+        </aside>
+      )}
 
       {/* Toggle Button - When minimized, show at left edge - Round circle to expand (large, more visible) */}
-      {isSidebarMinimized && (
+      {!isLoginPage && isSidebarMinimized && (
         <button
           onClick={(e) => {
             e.preventDefault();
@@ -206,7 +287,7 @@ export default function App() {
           </div>
         }>
           <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/frontdesk" element={<FrontDesk />} />

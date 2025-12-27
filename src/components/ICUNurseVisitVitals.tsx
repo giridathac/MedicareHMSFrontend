@@ -5,7 +5,8 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { ArrowLeft, Plus, Activity } from 'lucide-react';
-import { admissionsApi, ICUNurseVisitVitals } from '../api/admissions';
+import { admissionsApi } from '../api/admissions';
+import type { ICUNurseVisitVitals } from '../api/admissions';
 import { apiRequest } from '../api/base';
 
 export function ICUNurseVisitVitals() {
@@ -253,7 +254,7 @@ export function ICUNurseVisitVitals() {
                       <th className="text-left py-3 px-4 text-gray-700">O₂ Saturation</th>
                       <th className="text-left py-3 px-4 text-gray-700">Respiratory Rate</th>
                       <th className="text-left py-3 px-4 text-gray-700">Blood Sugar</th>
-                      <th className="text-left py-3 px-4 text-gray-700">Recorded By</th>
+                      <th className="text-left py-3 px-4 text-gray-700">Nurse</th>
                       <th className="text-left py-3 px-4 text-gray-700">Notes</th>
                     </tr>
                   </thead>
@@ -267,7 +268,7 @@ export function ICUNurseVisitVitals() {
                         <td className="py-3 px-4">{vital.oxygenSaturation ? `${vital.oxygenSaturation}%` : 'N/A'}</td>
                         <td className="py-3 px-4">{vital.respiratoryRate ? `${vital.respiratoryRate} /min` : 'N/A'}</td>
                         <td className="py-3 px-4">{vital.bloodSugar ? `${vital.bloodSugar} mg/dL` : 'N/A'}</td>
-                        <td className="py-3 px-4">{vital.recordedBy || 'N/A'}</td>
+                        <td className="py-3 px-4">{vital.nurseName || 'N/A'}</td>
                         <td className="py-3 px-4">{vital.notes || 'N/A'}</td>
                       </tr>
                     ))}

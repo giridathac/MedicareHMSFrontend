@@ -6,6 +6,19 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { apiRequest } from '../api/base';
 
+interface LoginResponse {
+  success: boolean;
+  message: string;
+  data: {
+    token: string;
+    user: {
+      id: string;
+      username: string;
+      role: string;
+    };
+  };
+}
+
 export function Login() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
@@ -18,26 +31,28 @@ export function Login() {
     setError('');
     setLoading(true);
 
+   
+
     try {
-      const response = await apiRequest('/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: username.trim(),
-          password: password,
-        }),
+
+      const response = await apiRequest<LoginResponse>(`/auth/login?username=${encodeURIComponent(username.trim())}&password=${encodeURIComponent(password)}`, {
+        method: 'GET',
       });
 
       // Assuming the API returns a token or user data on success
       console.log('Login successful:', response);
+      console.log('Response keys:', Object.keys(response));
+      console.log('Response data token field:', response.data?.token);
 
-      // Store token if provided
-      if (response.token) {
-        localStorage.setItem('token', response.token);
+      // Store token only - role will be extracted from token in App.tsx
+      if (response.data?.token) {
+        localStorage.setItem('token', response.data.token);
+        
+      } else {
+        console.warn('No token found in login response data');
       }
 
+       
       // Redirect to dashboard
       navigate('/dashboard');
 
@@ -59,7 +74,7 @@ export function Login() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">UserName</Label>
               <Input
                 id="username"
                 type="text"
@@ -92,7 +107,7 @@ export function Login() {
               className="w-full"
               disabled={loading || !username.trim() || !password}
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Logging in...' : 'LOGIN'}
             </Button>
           </form>
         </CardContent>
