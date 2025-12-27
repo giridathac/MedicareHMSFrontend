@@ -20,6 +20,7 @@ import { Textarea } from './ui/textarea';
 import { DialogFooter } from './ui/dialog';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+import { formatDateTimeIST } from '../utils/timeUtils';
 
 // Fallback room capacity data (used when API data is not available)
 const fallbackRoomCapacity: RoomCapacityOverview = {
@@ -191,25 +192,25 @@ export function Admissions() {
       if (!labOrderFormData.roomAdmissionId || labOrderFormData.roomAdmissionId === 'undefined' || labOrderFormData.roomAdmissionId === '') {
         throw new Error('Room Admission ID is required');
       }
-      
+
       let patientIdValue = labOrderFormData.patientId;
       if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '' || patientIdValue === 'null') {
-        patientIdValue = (selectedAdmissionForLabOrder as any)?.patientId || 
-                        (selectedAdmissionForLabOrder as any)?.PatientId || 
-                        (selectedAdmissionForLabOrder as any)?.PatientID || 
-                        (selectedAdmissionForLabOrder as any)?.patient_id || 
-                        (selectedAdmissionForLabOrder as any)?.Patient_ID || 
+        patientIdValue = (selectedAdmissionForLabOrder as any)?.patientId ||
+                        (selectedAdmissionForLabOrder as any)?.PatientId ||
+                        (selectedAdmissionForLabOrder as any)?.PatientID ||
+                        (selectedAdmissionForLabOrder as any)?.patient_id ||
+                        (selectedAdmissionForLabOrder as any)?.Patient_ID ||
                         '';
       }
-      
+
       if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '' || patientIdValue === 'null') {
         throw new Error('Patient ID is required');
       }
-      
+
       if (!labOrderFormData.labTestId || labOrderFormData.labTestId === '') {
         throw new Error('Lab Test is required. Please select a lab test.');
       }
-      
+
       if (!labOrderFormData.orderedDate) {
         throw new Error('Ordered Date is required');
       }
@@ -265,8 +266,8 @@ export function Admissions() {
       }
       if (labOrderFormData.charges && labOrderFormData.charges.trim() !== '') {
         payload.Charges = Number(labOrderFormData.charges);
-      } else if (selectedLabTest.charges) {
-        payload.Charges = selectedLabTest.charges;
+      } else if ((selectedLabTest as any).charges) {
+        payload.Charges = Number((selectedLabTest as any).charges);
       }
       if (labOrderFormData.reportsUrl && labOrderFormData.reportsUrl.trim() !== '') {
         payload.ReportsUrl = labOrderFormData.reportsUrl.trim();
@@ -301,7 +302,7 @@ export function Admissions() {
       // Close dialog
       setIsNewLabOrderDialogOpen(false);
       setSelectedAdmissionForLabOrder(null);
-      
+
       // Reset form
       setLabOrderFormData({
         patientId: '',
@@ -322,7 +323,7 @@ export function Admissions() {
       });
       setLabTestSearchTerm('');
       setShowLabTestList(false);
-      
+
       alert('Lab order created successfully!');
     } catch (err) {
       console.error('Error saving lab order:', err);
@@ -1689,7 +1690,8 @@ export function Admissions() {
                         const year = date.getFullYear();
                         const month = String(date.getMonth() + 1).padStart(2, '0');
                         const day = String(date.getDate()).padStart(2, '0');
-                        const dateStr = `${year}-${month}-${day}`;
+                        /* const dateStr = `${year}-${month}-${day}`; */
+                        const dateStr = `${day}-${month}-${year}`;
                         setAddAdmissionForm({ ...addAdmissionForm, roomAllocationDate: dateStr });
                       } else {
                         setAddAdmissionForm({ ...addAdmissionForm, roomAllocationDate: '' });
@@ -2873,12 +2875,12 @@ function AdmissionsList({
                     <div className="dashboard-actions-container">
                       {admission.status === 'Active' && (
                         <>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
+                          <Button
+                            variant="outline"
+                            size="sm"
                             className="gap-1"
                             onClick={() => onScheduleOT(admission)}
-                            disabled={schedulingOT === (admission.roomAdmissionId || admission.admissionId)}
+                            disabled={String(schedulingOT) === String(admission.roomAdmissionId || admission.admissionId)}
                           >
                             <Scissors className="size-3" />
                             {schedulingOT === (admission.roomAdmissionId || admission.admissionId) ? 'Scheduling...' : 'Schedule OT'}

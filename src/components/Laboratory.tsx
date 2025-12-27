@@ -22,7 +22,7 @@ import { LabTest as LabTestType, Doctor } from '../types';
 import { Textarea } from './ui/textarea';
 import { DialogFooter } from './ui/dialog';
 import { Switch } from './ui/switch';
-import { convertToIST } from '../utils/timeUtils';
+import { convertToIST, formatDateTimeIST } from '../utils/timeUtils';
 import { getCurrentIST } from '../config/timezone';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
@@ -3363,14 +3363,7 @@ function TestsList({
                         </span>
                       </td>
                       <td className="py-4 px-6 text-gray-600 whitespace-nowrap">
-                        {test.testDoneDateTime ? (() => {
-                          try {
-                            const date = new Date(test.testDoneDateTime);
-                            return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
-                          } catch (e) {
-                            return 'N/A';
-                          }
-                        })() : 'N/A'}
+                        {test.testDoneDateTime ? formatDateTimeIST(test.testDoneDateTime) : 'N/A'}
                       </td>
                       <td className="py-4 px-6 whitespace-nowrap">
                         <Button

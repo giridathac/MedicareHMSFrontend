@@ -8,14 +8,11 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { FlaskConical, Stethoscope, Heart, ArrowLeft, Activity, FileText, Plus, Eye, Edit } from 'lucide-react';
-import { admissionsApi } from '../api/admissions';
-import { PatientLabTest, PatientDoctorVisit, PatientNurseVisit } from '../api/admissions';
+import { Stethoscope, Heart, ArrowLeft, FileText, Plus, Eye, Edit } from 'lucide-react';
+import { PatientDoctorVisit } from '../api/admissions';
 import { apiRequest } from '../api/base';
 import { useStaff } from '../hooks/useStaff';
 import { useRoles } from '../hooks/useRoles';
-import { labTestsApi } from '../api/labTests';
-import { LabTest } from '../types';
 
 interface ICUAdmission {
   id?: number | string;
@@ -49,6 +46,32 @@ export function ManageICUCase() {
   const navigate = useNavigate();
   const { staff } = useStaff();
   const { roles } = useRoles();
+
+  // Helper function to format date and time in dd-mm-yyyy hh:mm AM/PM format
+  const formatDateTime = (dateString: string | undefined | null): string => {
+    if (!dateString || dateString === 'N/A') return 'N/A';
+
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+
+      let hours = date.getHours();
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+
+      hours = hours % 12;
+      hours = hours ? hours : 12; // the hour '0' should be '12'
+      const hoursStr = String(hours).padStart(2, '0');
+
+      return `${day}-${month}-${year} ${hoursStr}:${minutes} ${ampm}`;
+    } catch (error) {
+      return 'N/A';
+    }
+  };
   
   const [icuAdmission, setIcuAdmission] = useState<ICUAdmission | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,9 +159,8 @@ export function ManageICUCase() {
   useEffect(() => {
     // Get patientICUAdmissionId from URL search parameters (should be a UUID string)
     const patientICUAdmissionId = searchParams.get('patientICUAdmissionId') || searchParams.get('id');
-    
+
     if (patientICUAdmissionId) {
-      console.log('calling fetchICUAdmissionDetails')
       // Pass as string (UUID) - don't convert to number
       fetchICUAdmissionDetails(patientICUAdmissionId);
     } else {
@@ -150,21 +172,13 @@ export function ManageICUCase() {
   // Also listen for hash changes in case the component is already mounted
   useEffect(() => {
     const handleHashChange = () => {
-      console.log('========================================');
-      console.log('ManageICUCase: Hash change detected');
-      console.log('New window.location.hash:', window.location.hash);
-      
       const hash = window.location.hash.slice(1);
       const params = new URLSearchParams(hash.split('?')[1] || '');
       const patientICUAdmissionId = params.get('patientICUAdmissionId') || params.get('id');
       
-      console.log('Extracted patientICUAdmissionId from hash change:', patientICUAdmissionId);
-      
       if (patientICUAdmissionId && patientICUAdmissionId !== icuAdmission?.patientICUAdmissionId) {
-        console.log('Hash change: Calling fetchICUAdmissionDetails with ID:', patientICUAdmissionId);
         fetchICUAdmissionDetails(patientICUAdmissionId);
       }
-      console.log('========================================');
     };
     
     window.addEventListener('hashchange', handleHashChange);
@@ -175,12 +189,6 @@ export function ManageICUCase() {
     try {
       setLoading(true);
       setError(null);
-      console.log('========================================');
-      console.log('ManageICUCase: fetchICUAdmissionDetails called');
-      console.log('Patient ICU Admission ID (UUID):', patientICUAdmissionId);
-      console.log('API Endpoint:', `/patient-icu-admissions/icu-management/${patientICUAdmissionId}`);
-      console.log('========================================');
-      
       let admission: any = null;
       
       // Try to fetch from the specific endpoint first
@@ -193,7 +201,7 @@ export function ManageICUCase() {
         console.log('This should trigger a network request in the browser DevTools');
         console.log('========================================');
         
-        console.log('*******************', apiurl);
+        //console.log('*******************', apiurl);
 
         const response = await apiRequest<any>(apiUrl);
 
@@ -220,6 +228,24 @@ export function ManageICUCase() {
             patient: admission.patient,
             Patient: admission.Patient
           });
+
+          // Log all keys in the admission object to see what fields are actually present
+          console.log('All keys in admission object:', Object.keys(admission));
+          console.log('Full admission object structure:', JSON.stringify(admission, null, 2));
+
+          // Check for bed number fields
+          console.log('Bed number fields in response:', {
+            bedNumber: admission.bedNumber,
+            BedNumber: admission.BedNumber,
+            bed_number: admission.bed_number,
+            Bed_Number: admission.Bed_Number,
+            bed: admission.bed,
+            Bed: admission.Bed,
+            icuBedNo: admission.icuBedNo,
+            ICUBedNo: admission.ICUBedNo,
+            icuBedNumber: admission.icuBedNumber,
+            ICUBedNumber: admission.ICUBedNumber
+          });
         }
         
         if (!admission) {
@@ -230,9 +256,7 @@ export function ManageICUCase() {
         
         // Fallback: Fetch all ICU admissions and find the matching one
         try {
-          console.log('Fallback: Fetching all ICU admissions from /patient-icu-admissions/icu-management');
           const allAdmissionsResponse = await apiRequest<any>('/patient-icu-admissions/icu-management');
-          console.log('Fallback API response:', allAdmissionsResponse);
           const allAdmissions = allAdmissionsResponse?.data || allAdmissionsResponse || [];
           
           if (Array.isArray(allAdmissions)) {
@@ -261,8 +285,6 @@ export function ManageICUCase() {
       if (!admission) {
         throw new Error('ICU admission not found');
       }
-      
-      console.log('ICU admission data extracted:', admission);
 
       // Helper function to extract value with multiple field name variations
       const extractField = (data: any, fieldVariations: string[], defaultValue: any = '') => {
@@ -286,66 +308,80 @@ export function ManageICUCase() {
           'patientICUAdmissionId', 'PatientICUAdmissionId', 'patient_icu_admission_id', 'Patient_ICU_Admission_Id',
           'id', 'Id', 'admissionId', 'AdmissionId'
         ], patientICUAdmissionId),
-        patientId: extractField(admission, [
-          'patientId', 'PatientId', 'patient_id', 'Patient_ID', 
+        patientId: String(extractField(admission, [
+          'patientId', 'PatientId', 'patient_id', 'Patient_ID',
           'PatientID', 'patientID', 'patientID', 'PATIENT_ID',
-          'patient.id', 'Patient.Id', 'patient', 'Patient'
-        ], ''),
-        patientName: extractField(admission, [
+          'patient.id', 'Patient.Id', 'patient', 'Patient',
+          'id', 'Id', 'admission.patientId', 'admission.PatientId',
+          'admission.patient_id', 'admission.Patient_ID'
+        ], '')) || '',
+        patientName: String(extractField(admission, [
           'patientName', 'PatientName', 'patient_name', 'Patient_Name',
-          'name', 'Name', 'fullName', 'FullName'
-        ], 'Unknown Patient'),
+          'name', 'Name', 'fullName', 'FullName',
+          'patient.name', 'Patient.Name', 'patient.fullName', 'Patient.FullName',
+          'patient.patientName', 'Patient.PatientName',
+          'patient.patientName', 'Patient.patientName'
+        ], 'Unknown Patient')) || 'Unknown Patient',
         age: Number(extractField(admission, [
-          'age', 'Age', 'patientAge', 'PatientAge', 'patient_age', 'Patient_Age'
+          'age', 'Age', 'patientAge', 'PatientAge', 'patient_age', 'Patient_Age',
+          'patient.age', 'Patient.age', 'patient_age', 'Patient_Age'
         ], 0)) || 0,
-        gender: extractField(admission, [
-          'gender', 'Gender', 'sex', 'Sex', 'patientGender', 'PatientGender'
-        ], 'Unknown'),
-        bedNumber: extractField(admission, [
-          'bedNumber', 'BedNumber', 'bed_number', 'Bed_Number',
-          'bed', 'Bed', 'icuBedNo', 'ICUBedNo', 'icuBedNumber', 'ICUBedNumber'
-        ], ''),
-        admissionDate: extractField(admission, [
+        gender: String(extractField(admission, [
+          'gender', 'Gender', 'sex', 'Sex', 'patientGender', 'PatientGender',
+          'patient.gender', 'Patient.gender', 'patient_gender', 'Patient_Gender'
+        ], 'Unknown')) || 'Unknown',
+        bedNumber: String(extractField(admission, [
+          'icu.icuBedNo','icuBedNo','bedNumber', 'BedNumber', 'bed_number', 'Bed_Number',
+          'bed', 'Bed', 'icuBedNo', 'ICUBedNo', 'icuBedNumber', 'ICUBedNumber',
+          'bedNo', 'BedNo', 'bed_no', 'Bed_No', 'icu_bed_no', 'ICU_Bed_No',
+          'icuBed', 'ICUBed', 'bedId', 'BedId', 'bed_id', 'Bed_Id',
+          'icuBedId', 'ICUBedId', 'icu_bed_id', 'ICU_Bed_Id',
+          'bed.number', 'Bed.Number', 'bed_number', 'Bed_Number',
+          'icu.bedNo', 'ICU.BedNo', 'icu.bedNumber', 'ICU.BedNumber',
+          'bedInfo.number', 'bedInfo.Number', 'bedInfo.bedNumber', 'bedInfo.BedNumber',
+          'allocation.bedNumber', 'allocation.BedNumber', 'allocation.bed', 'allocation.Bed'
+        ], '')) || '',
+        admissionDate: String(extractField(admission, [
           'admissionDate', 'AdmissionDate', 'admission_date', 'Admission_Date',
           'admitDate', 'AdmitDate', 'admit_date', 'Admit_Date'
-        ], ''),
-        admissionTime: extractField(admission, [
+        ], '')) || '',
+        admissionTime: String(extractField(admission, [
           'admissionTime', 'AdmissionTime', 'admission_time', 'Admission_Time',
           'admitTime', 'AdmitTime', 'admit_time', 'Admit_Time',
           'time', 'Time'
-        ], ''),
-        icuAllocationFromDate: extractField(admission, [
-          'icuAllocationFromDate', 'ICUAllocationFromDate', 'icu_allocation_from_date', 'ICU_Allocation_From_Date',
+        ], '')) || '',
+        icuAllocationFromDate: String(extractField(admission, [
+          'admission.icuAllocationFromDate', 'ICUAllocationFromDate', 'icu_allocation_from_date', 'ICU_Allocation_From_Date',
           'allocationFromDate', 'AllocationFromDate', 'allocation_from_date', 'Allocation_From_Date'
-        ], ''),
-        icuAllocationToDate: extractField(admission, [
-          'icuAllocationToDate', 'ICUAllocationToDate', 'icu_allocation_to_date', 'ICU_Allocation_To_Date',
+        ], '')) || '',
+        icuAllocationToDate: String(extractField(admission, [
+          'admission.icuAllocationToDate', 'ICUAllocationToDate', 'icu_allocation_to_date', 'ICU_Allocation_To_Date',
           'allocationToDate', 'AllocationToDate', 'allocation_to_date', 'Allocation_To_Date'
-        ], ''),
-        condition: extractField(admission, [
+        ], '')) || '',
+        condition: String(extractField(admission, [
           'condition', 'Condition', 'patientCondition', 'PatientCondition',
           'diagnosis', 'Diagnosis', 'diagnosisDescription', 'DiagnosisDescription'
-        ], 'Not Specified'),
-        severity: extractField(admission, [
+        ], 'Not Specified')) || 'Not Specified',
+        severity: String(extractField(admission, [
           'severity', 'Severity', 'patientSeverity', 'PatientSeverity',
-          'icuPatientStatus', 'ICUPatientStatus', 'icu_patient_status', 'ICU_Patient_Status',
+          'admission.icuPatientStatus', 'ICUPatientStatus', 'icu_patient_status', 'ICU_Patient_Status',
           'status', 'Status', 'patientStatus', 'PatientStatus'
-        ], 'Stable'),
-        attendingDoctor: extractField(admission, [
-          'attendingDoctorName','attendingDoctor', 'AttendingDoctor', 'attending_doctor', 'Attending_Doctor',
+        ], 'Stable')) || 'Stable',
+        attendingDoctor: String(extractField(admission, [
+          'attendingDoctorName','attendingDoctor.userName', 'AttendingDoctor', 'attending_doctor', 'Attending_Doctor',
           'doctor', 'Doctor', 'doctorName', 'DoctorName', 'admittedBy', 'AdmittedBy'
-        ], 'Not Assigned'),
-        diagnosis: extractField(admission, [
-          'diagnosis', 'Diagnosis', 'diagnosisDescription', 'DiagnosisDescription',
+        ], 'Not Assigned')) || 'Not Assigned',
+        diagnosis: String(extractField(admission, [
+          'admission.diagnosis', 'Diagnosis', 'diagnosisDescription', 'DiagnosisDescription',
           'diagnosis_desc', 'Diagnosis_Desc'
-        ], 'Not Specified'),
-        treatment: extractField(admission, [
-          'treatementDetails','treatment', 'Treatment', 'treatmentPlan', 'TreatmentPlan',
+        ], 'Not Specified')) || 'Not Specified',
+        treatment: String(extractField(admission, [
+          'admission.treatementDetails','treatment', 'Treatment', 'treatmentPlan', 'TreatmentPlan',
           'treatment_plan', 'Treatment_Plan', 'medications', 'Medications'
-        ], 'Not Specified'),
+        ], 'Not Specified')) || 'Not Specified',
         ventilatorSupport: extractField(admission, [
           'ventilatorSupport', 'VentilatorSupport', 'ventilator_support', 'Ventilator_Support',
-          'onVentilator', 'OnVentilator', 'isVentilatorAttached', 'IsVentilatorAttached',
+          'admission.onVentilator', 'OnVentilator', 'isVentilatorAttached', 'IsVentilatorAttached',
           'ventilator', 'Ventilator'
         ], false),
         vitals: {
@@ -353,10 +389,10 @@ export function ManageICUCase() {
             'heartRate', 'HeartRate', 'heart_rate', 'Heart_Rate',
             'vitals.heartRate', 'vitals.HeartRate'
           ], 0)) || 0,
-          bloodPressure: extractField(admission, [
+          bloodPressure: String(extractField(admission, [
             'bloodPressure', 'BloodPressure', 'blood_pressure', 'Blood_Pressure',
             'bp', 'BP', 'vitals.bloodPressure', 'vitals.BloodPressure'
-          ], '0/0'),
+          ], '0/0')) || '0/0',
           temperature: Number(extractField(admission, [
             'temperature', 'Temperature', 'temp', 'Temp',
             'vitals.temperature', 'vitals.Temperature'
@@ -372,7 +408,6 @@ export function ManageICUCase() {
         },
       };
 
-      console.log('Fetched ICU admission data:', mappedAdmission);
       setIcuAdmission(mappedAdmission);
       
       // Fetch patient lab tests, doctor visits, and nurse visits after admission is loaded
@@ -380,11 +415,8 @@ export function ManageICUCase() {
       const patientICUAdmissionIdForAPI = mappedAdmission.patientICUAdmissionId || patientICUAdmissionId;
       if (patientICUAdmissionIdForAPI) {
         // Use the UUID string directly for doctor visits and nurse visits APIs
-        console.log('Fetching doctor visits with patientICUAdmissionId (UUID):', patientICUAdmissionIdForAPI);
         fetchPatientDoctorVisits(String(patientICUAdmissionIdForAPI));
-        console.log('Fetching nurse visits with patientICUAdmissionId (UUID):', patientICUAdmissionIdForAPI);
         //fetchPatientNurseVisits(String(patientICUAdmissionIdForAPI));
-        console.log('Fetching ICU visit vitals with patientICUAdmissionId (UUID):', patientICUAdmissionIdForAPI);
         fetchICUVitalsList(String(patientICUAdmissionIdForAPI));
         
         // Fetch lab tests using ICU admission ID (can be string UUID or number)
@@ -404,15 +436,8 @@ export function ManageICUCase() {
     try {
       setDoctorVisitsLoading(true);
       setDoctorVisitsError(null);
-      console.log('========================================');
-      console.log('Fetching ICU doctor visits for patientICUAdmissionId (UUID):', patientICUAdmissionId);
-      console.log('API Endpoint:', `/icu-doctor-visits/${patientICUAdmissionId}`);
-      console.log('========================================');
-      
       // Call the new ICU doctor visits API endpoint
       const response = await apiRequest<any>(`/icu-doctor-visits/icu-admission/${patientICUAdmissionId}`);
-      
-      console.log('ICU doctor visits API response (RAW):', JSON.stringify(response, null, 2));
       
       // Handle different response structures
       let doctorVisitsData: any[] = [];
@@ -468,7 +493,6 @@ export function ManageICUCase() {
         };
       });
       
-      console.log('Fetched and mapped ICU doctor visits:', mappedDoctorVisits);
       setPatientDoctorVisits(mappedDoctorVisits);
     } catch (err) {
       console.error('Error fetching ICU doctor visits:', err);
@@ -486,8 +510,6 @@ export function ManageICUCase() {
     try {
       setIcuVitalsLoading(true);
       setIcuVitalsError(null);
-
-      console.log('Fetching ICU visit vitals for ICU Admission:', patientICUAdmissionId);
       const endpoint = `/icu-visit-vitals${patientICUAdmissionId ? `?ICUAdmissionId=${encodeURIComponent(patientICUAdmissionId)}` : ''}`;
       const response = await apiRequest<any>(endpoint);
       const vitalsData = Array.isArray(response?.data) ? response.data : Array.isArray(response) ? response : [];
@@ -530,7 +552,6 @@ export function ManageICUCase() {
       };
 
       const mapped = vitalsData.map(mapVitals);
-      console.log('Mapped ICU visit vitals:', mapped);
       setIcuVitalsList(mapped);
     } catch (err) {
       console.error('Error fetching ICU visit vitals:', err);
@@ -558,14 +579,7 @@ export function ManageICUCase() {
       const patientId = String(icuAdmission.patientId || '');
       const icuAdmissionId = String(icuAdmission.patientICUAdmissionId || icuAdmission.id || '');
       
-      console.log('Opening Add ICU Vitals Dialog');
-      console.log('ICU Admission:', icuAdmission);
-      console.log('Extracted patientId:', patientId);
-      console.log('Extracted icuAdmissionId:', icuAdmissionId);
-      
       if (!patientId || patientId === 'undefined' || patientId === '') {
-        console.error('PatientId is missing or empty!');
-        console.error('ICU Admission object:', JSON.stringify(icuAdmission, null, 2));
         setIcuVitalsSubmitError('Patient ID is missing. Please ensure the ICU admission has a valid patient ID.');
         return;
       }
@@ -602,11 +616,6 @@ export function ManageICUCase() {
     try {
       setIcuVitalsSubmitting(true);
       setIcuVitalsSubmitError(null);
-
-      console.log('Saving ICU Visit Vitals with data:', icuVitalsFormData);
-      console.log('ICU Admission:', icuAdmission);
-      console.log('Form patientId:', icuVitalsFormData.patientId);
-      console.log('Form icuAdmissionId:', icuVitalsFormData.icuAdmissionId);
 
       // Validate required fields
       if (!icuVitalsFormData.icuAdmissionId || icuVitalsFormData.icuAdmissionId === 'undefined' || icuVitalsFormData.icuAdmissionId === '') {
@@ -707,9 +716,6 @@ export function ManageICUCase() {
         payload.PatientCondition = null;
       }
 
-      console.log('API Payload (formatted):', JSON.stringify(payload, null, 2));
-      console.log('API Endpoint: /icu-visit-vitals');
-
       // Add ID for update
       const isEditing = !!editingICUVitalsId;
       if (isEditing && editingICUVitalsId) {
@@ -725,7 +731,6 @@ export function ManageICUCase() {
           },
           body: JSON.stringify(payload),
         });
-        console.log('ICU visit vitals updated successfully:', response);
       } else {
         const response = await apiRequest<any>('/icu-visit-vitals', {
           method: 'POST',
@@ -734,7 +739,6 @@ export function ManageICUCase() {
           },
           body: JSON.stringify(payload),
         });
-        console.log('ICU visit vitals created successfully:', response);
       }
 
       // Close dialog
@@ -783,8 +787,6 @@ export function ManageICUCase() {
       setNurseVisitSubmitting(true);
       setNurseVisitSubmitError(null);
 
-      console.log('Saving ICU Nurse Visit with data:', nurseVisitFormData);
-
       // Prepare the request payload
       // Ensure all UUID fields are sent as strings
       const payload = {
@@ -796,9 +798,6 @@ export function ManageICUCase() {
         PatientCondition: nurseVisitFormData.patientCondition
       };
 
-      console.log('API Payload:', payload);
-      console.log('API Endpoint: /icu-nurse-visits');
-
       // Call the API to create the ICU nurse visit
       const response = await apiRequest<any>('/icu-nurse-visits', {
         method: 'POST',
@@ -807,8 +806,6 @@ export function ManageICUCase() {
         },
         body: JSON.stringify(payload),
       });
-
-      console.log('ICU nurse visit created successfully:', response);
 
       // Close dialog and refresh nurse visits list
       setIsAddNurseVisitDialogOpen(false);
@@ -842,6 +839,7 @@ export function ManageICUCase() {
     if (icuAdmission) {
       setEditingDoctorVisitId(null);
       setDoctorVisitFormData({
+        icuDoctorVisitId: '',
         icuAdmissionId: String(icuAdmission.patientICUAdmissionId || icuAdmission.id || ''),
         patientId: String(icuAdmission.patientId || ''),
         doctorId: '', // Will need to be set from attendingDoctor or fetched
@@ -857,40 +855,27 @@ export function ManageICUCase() {
 
   // Handle opening Edit ICU Doctor Visit dialog
   const handleOpenEditDoctorVisitDialog = (visit: PatientDoctorVisit) => {
-    console.log('========================================');
-    console.log('Opening edit dialog for doctor visit');
-    console.log('Visit object:', visit);
-    console.log('Visit ID (patientDoctorVisitId):', visit.patientDoctorVisitId);
-    console.log('Visit ID (id):', visit.id);
-    console.log('ICU Admission:', icuAdmission);
-    console.log('========================================');
-    
     // Extract ICU Doctor Visit ID (primary key for ICU Doctor Visits)
     // Prioritize icuDoctorVisitsId (plural) as the primary key
-    const icuDoctorVisitsId = visit.icuDoctorVisitsId || (visit as any).icuDoctorVisitsId || 
-                              (visit as any).ICUDoctorVisitsId || (visit as any).iCUDoctorVisitsId || 
-                              (visit as any).icuDoctorVisitId || (visit as any).ICUDoctorVisitId || 
+    const icuDoctorVisitsId = visit.icuDoctorVisitsId || (visit as any).icuDoctorVisitsId ||
+                              (visit as any).ICUDoctorVisitsId || (visit as any).iCUDoctorVisitsId ||
+                              (visit as any).icuDoctorVisitId || (visit as any).ICUDoctorVisitId ||
                               (visit as any).iCUDoctorVisitId || visit.patientDoctorVisitId || visit.id;
     const visitId = visit.patientDoctorVisitId || visit.id;
-    console.log('Extracted icuDoctorVisitsId (primary key):', icuDoctorVisitsId);
-    console.log('Extracted visitId (fallback):', visitId);
-    
+
     if (!icuDoctorVisitsId && !visitId) {
-      console.error('No visit ID found! Visit object:', visit);
       alert('Error: Cannot edit visit - Visit ID not found');
       return;
     }
-    
+
     if (!icuAdmission) {
-      console.error('ICU Admission not loaded!');
       alert('Error: ICU Admission details not loaded. Please wait and try again.');
       return;
     }
-    
+
     const finalVisitId = icuDoctorVisitsId || visitId;
-    console.log('Setting editingDoctorVisitId to:', finalVisitId);
     setEditingDoctorVisitId(finalVisitId);
-    
+
     // Format datetime for datetime-local input (YYYY-MM-DDTHH:mm)
     let formattedDateTime = '';
     if (visit.visitDate) {
@@ -904,13 +889,12 @@ export function ManageICUCase() {
           const hours = String(date.getHours()).padStart(2, '0');
           const minutes = String(date.getMinutes()).padStart(2, '0');
           formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
-          console.log('Formatted datetime:', formattedDateTime);
         }
       } catch (e) {
         console.warn('Error formatting date:', e);
       }
     }
-    
+
     const formData = {
       icuDoctorVisitId: String(icuDoctorVisitsId || visitId || ''),
       icuAdmissionId: String(icuAdmission.patientICUAdmissionId || icuAdmission.id || ''),
@@ -921,14 +905,11 @@ export function ManageICUCase() {
       patientCondition: visit.patientCondition || '',
       status: visit.status || 'Active' // Map Status to Status
     };
-    
-    console.log('Setting form data:', formData);
+
     setDoctorVisitFormData(formData);
     setDoctorVisitSubmitError(null);
-    
-    console.log('Opening dialog...');
+
     setIsAddDoctorVisitDialogOpen(true);
-    console.log('Dialog should now be open. isAddDoctorVisitDialogOpen state will be updated.');
   };
 
   // Handle saving ICU Doctor Visit (both create and update)
@@ -936,9 +917,6 @@ export function ManageICUCase() {
     try {
       setDoctorVisitSubmitting(true);
       setDoctorVisitSubmitError(null);
-
-      console.log('Saving ICU Doctor Visit with data:', doctorVisitFormData);
-      console.log('Is editing:', editingDoctorVisitId !== null, 'Visit ID:', editingDoctorVisitId);
 
       // Prepare the request payload
       // Ensure all UUID fields are sent as strings
@@ -958,12 +936,9 @@ export function ManageICUCase() {
         console.log('Including ICUDoctorVisitId in payload:', payload.ICUDoctorVisitId);
       }
 
-      console.log('API Payload:', payload);
-
       let response;
       if (editingDoctorVisitId) {
         // Update existing visit
-        console.log('API Endpoint: PUT /icu-doctor-visits/' + editingDoctorVisitId);
         response = await apiRequest<any>(`/icu-doctor-visits/${editingDoctorVisitId}`, {
           method: 'PUT',
           headers: {
@@ -971,10 +946,8 @@ export function ManageICUCase() {
           },
           body: JSON.stringify(payload),
         });
-        console.log('Doctor visit updated successfully:', response);
       } else {
         // Create new visit
-        console.log('API Endpoint: POST /icu-doctor-visits');
         response = await apiRequest<any>('/icu-doctor-visits', {
           method: 'POST',
           headers: {
@@ -982,7 +955,6 @@ export function ManageICUCase() {
           },
           body: JSON.stringify(payload),
         });
-        console.log('Doctor visit created successfully:', response);
       }
 
       // Close dialog and refresh doctor visits list
@@ -1055,7 +1027,12 @@ export function ManageICUCase() {
             </Button>
             <div>
               <h1 className="text-gray-900 mb-0 text-xl">Manage ICU Case</h1>
-              <p className="text-gray-500 text-sm">Patient ICU Admission ID: {icuAdmission.patientICUAdmissionId || icuAdmission.id}</p>
+              <div className="text-gray-500 text-sm space-y-1">
+                <p>Patient ICU Admission ID: {icuAdmission.patientICUAdmissionId || icuAdmission.id}</p>
+               
+                
+               
+              </div>
             </div>
           </div>
         </div>
@@ -1079,9 +1056,7 @@ export function ManageICUCase() {
               </div>
               <div>
                 <Label className="text-sm text-gray-500">Bed Number</Label>
-                <p className="text-gray-900 font-medium mt-1">
-                  <Badge variant="outline">{icuAdmission.bedNumber || 'N/A'}</Badge>
-                </p>
+                <p className="text-gray-900 font-medium mt-1">{icuAdmission.bedNumber || 'N/A'}</p>
               </div>
               <div>
                 <Label className="text-sm text-gray-500">Age</Label>
@@ -1093,11 +1068,11 @@ export function ManageICUCase() {
               </div>
               <div>
                 <Label className="text-sm text-gray-500">ICU Allocation From Date</Label>
-                <p className="text-gray-900 font-medium mt-1">{icuAdmission.icuAllocationFromDate || 'N/A'}</p>
+                <p className="text-gray-900 font-medium mt-1">{formatDateTime(icuAdmission.icuAllocationFromDate)}</p>
               </div>
               <div>
                 <Label className="text-sm text-gray-500">ICU Allocation To Date</Label>
-                <p className="text-gray-900 font-medium mt-1">{icuAdmission.icuAllocationToDate || 'N/A'}</p>
+                <p className="text-gray-900 font-medium mt-1">{formatDateTime(icuAdmission.icuAllocationToDate)}</p>
               </div>
               <div>
                 <Label className="text-sm text-gray-500">Attending Doctor</Label>
@@ -1140,12 +1115,12 @@ export function ManageICUCase() {
 
         {/* Tabs for Diagnosis & Treatment, Lab Tests, Doctor Visits, ICU Nurse Visits */}
         <Tabs defaultValue="diagnosis-treatment" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="diagnosis-treatment" className="gap-2">
               <FileText className="size-4" />
               Diagnosis & Treatment
             </TabsTrigger>
-           
+
             <TabsTrigger value="doctor-visits" className="gap-2">
               <Stethoscope className="size-4" />
               Doctor Visits
@@ -1285,7 +1260,7 @@ export function ManageICUCase() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={(e) => {
+                                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   console.log('Edit button clicked for visit:', visit);
@@ -1367,7 +1342,7 @@ export function ManageICUCase() {
                                 : 'N/A'}
                             </td>
                             <td className="py-3 px-4">{vital.dailyOrHourlyVitals || 'N/A'}</td>
-                            <td className="py-3 px-4">{vital.nurseId || 'N/A'}</td>
+                            <td className="py-3 px-4">{vital.nurseName || 'N/A'}</td>
                             <td className="py-3 px-4">
                               {vital.patientCondition || (vital as any).patientStatus || (vital as any).PatientStatus || (vital as any).PatientCondition || 'N/A'}
                             </td>
@@ -1880,7 +1855,7 @@ export function ManageICUCase() {
                     >
                       <option value="">Select...</option>
                       <option value="Stable">Stable</option>
-                      <option value="Notstable">Notstable</option>
+                      <option value="Unstable">Unstable</option>
                     </select>
                   </div>
                 </div>

@@ -28,6 +28,7 @@ interface ICUPatient {
   gender: string;
   admissionDate: string;
   admissionTime: string;
+  icuAllocationFromDate: string; // ICU Allocation From Date
   condition: string;
   patientCondition?: string | null; // Patient Condition
   icuPatientStatus?: string | null; // ICU Patient Status
@@ -44,6 +45,25 @@ interface ICUPatient {
   diagnosis: string;
   treatment: string;
   ventilatorSupport: boolean;
+}
+
+interface ICUBed {
+  bedNumber: string;
+  icuBedId: string | number | null;
+  id: string | number | null;
+  status: 'Occupied' | 'Available';
+  icuPatientStatus: 'Critical' | 'Green';
+  icuAdmissionStatus: string;
+  patient?: ICUPatient;
+  _rawBedData?: any;
+}
+
+interface Vitals {
+  heartRate?: number;
+  bloodPressure?: string;
+  temperature?: number;
+  oxygenSaturation?: number;
+  respiratoryRate?: number;
 }
 
 const mockICUPatients: ICUPatient[] = [
@@ -459,6 +479,12 @@ export function ICUManagement() {
             'PatientICUAdmission.patient_type', 'PatientICUAdmission.Patient_Type'
           ], null);
 
+          // Extract ICU Allocation From Date
+          const icuAllocationFromDate = extractField(admission, [
+            'icuAllocationFromDate', 'ICUAllocationFromDate', 'icu_allocation_from_date', 'ICU_Allocation_From_Date',
+            'allocationFromDate', 'AllocationFromDate', 'allocation_from_date', 'Allocation_From_Date'
+          ], admissionDate); // Default to admissionDate if not found
+
           return {
             id: patientICUAdmissionId || admission.id || admission.Id || admission.roomAdmissionId || admission.RoomAdmissionId || (index + 1),
             patientICUAdmissionId: patientICUAdmissionId, // Store the UUID separately
@@ -470,6 +496,7 @@ export function ICUManagement() {
             gender,
             admissionDate,
             admissionTime,
+            icuAllocationFromDate,
             condition,
             icuPatientStatus: icuPatientStatus,
             icuAdmissionStatus: icuAdmissionStatus,
