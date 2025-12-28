@@ -317,7 +317,7 @@ export const admissionsApi = {
         console.log(`Processing ${admissionsData.length} admissions from API`);
         // Map and normalize the data to ensure all fields are present
 
-        apiData = admissionsData.map((admission: any) => {
+        apiData = admissionsData.map((admission: any, index: number) => {
           // Extract roomAdmissionId first (primary identifier), then fallback to admissionId
           const roomAdmissionId = Number(admission.roomAdmissionId || admission.RoomAdmissionId || admission.room_admission_id || admission.Room_Admission_Id || admission.roomAdmissionID || admission.RoomAdmissionID || null);
           const admissionId = Number(admission.admissionId || admission.AdmissionId || admission.id || admission.Id || admission.AdmissionID || (1000000 + index));

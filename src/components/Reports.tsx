@@ -1392,18 +1392,18 @@ export function Reports() {
 
         // Extract total ICU beds
         const totalBeds = safeNumber(extractField(bedsData, [
-          'activeICUBedsCount','totalBeds', 'TotalBeds', 'total_beds', 'Total_Beds',
+          'count','activeICUBedsCount','totalBeds', 'TotalBeds', 'total_beds', 'Total_Beds',
           'totalICUBeds', 'TotalICUBeds', 'total_icu_beds', 'Total_ICU_Beds',
           'icuBeds', 'ICUBeds', 'icu_beds', 'ICU_Beds',
           'beds', 'Beds', 'capacity', 'Capacity', 'total', 'Total'
-        ], 15));
+        ], 0));
 
         console.log('Extracted total ICU beds:', totalBeds);
         setTotalICUBeds(totalBeds);
       } catch (err) {
         console.error('Error fetching total ICU beds:', err);
         setIcuBedsError(err instanceof Error ? err.message : 'Failed to load ICU beds data');
-        setTotalICUBeds(15); // fallback to default
+        setTotalICUBeds(0); // fallback to default
       } finally {
         setLoadingICUBeds(false);
       }
@@ -1419,13 +1419,13 @@ export function Reports() {
         setLoadingActiveICUBeds(true);
         setActiveICUBedsError(null);
 
-        const apiUrl = '/reports/active-icu-beds';
+        const apiUrl = '/icu/active-count';
         console.log('Fetching active ICU beds from:', apiUrl);
         const response = await apiRequest<any>(apiUrl, {
           method: 'GET',
         });
 
-        console.log('Active ICU beds API response:', JSON.stringify(response, null, 2));
+        console.log('@@@@@@@@@@@@@@@@@@@@@@@@Active ICU beds API response:', JSON.stringify(response, null, 2));
 
         // Handle different response structures
         let bedsData: any = {};
@@ -1475,7 +1475,7 @@ export function Reports() {
 
         // Extract active ICU beds
         const activeBeds = safeNumber(extractField(bedsData, [
-          'activeBeds', 'ActiveBeds', 'active_beds', 'Active_Beds',
+          'count','activeBeds', 'ActiveBeds', 'active_beds', 'Active_Beds',
           'activeICUBeds', 'ActiveICUBeds', 'active_icu_beds', 'Active_ICU_Beds',
           'availableBeds', 'AvailableBeds', 'available_beds', 'Available_Beds',
           'operationalBeds', 'OperationalBeds', 'operational_beds', 'Operational_Beds',
@@ -1643,31 +1643,31 @@ export function Reports() {
 
         // Extract ICU statistics
         const totalPatients = safeNumber(extractField(icuData, [
-          'totalPatients', 'TotalPatients', 'total_patients', 'Total_Patients',
+          'totalICUPatients','totalPatients', 'TotalPatients', 'total_patients', 'Total_Patients',
           'total', 'Total', 'totalIcuPatients', 'TotalIcuPatients',
           'icuPatients', 'IcuPatients', 'patientCount', 'PatientCount'
         ], 0));
 
         const critical = safeNumber(extractField(icuData, [
-          'critical', 'Critical', 'criticalPatients', 'CriticalPatients',
+          'totalCriticalPatients','critical', 'Critical', 'criticalPatients', 'CriticalPatients',
           'critical_patients', 'Critical_Patients', 'criticalCount', 'CriticalCount'
         ], 0));
 
         const onVentilator = safeNumber(extractField(icuData, [
-          'onVentilator', 'OnVentilator', 'on_ventilator', 'On_Ventilator',
+          'totalOnVentilator','onVentilator', 'OnVentilator', 'on_ventilator', 'On_Ventilator',
           'ventilator', 'Ventilator', 'ventilatorPatients', 'VentilatorPatients',
           'ventilator_patients', 'Ventilator_Patients', 'ventilatorCount', 'VentilatorCount'
         ], 0));
 
         const avgStayDuration = safeNumber(extractField(icuData, [
-          'avgStayDuration', 'AvgStayDuration', 'avg_stay_duration', 'Avg_Stay_Duration',
+          'averageStayDays','avgStayDuration', 'AvgStayDuration', 'avg_stay_duration', 'Avg_Stay_Duration',
           'averageStayDuration', 'AverageStayDuration', 'avgStay', 'AvgStay',
           'averageStay', 'AverageStay', 'avgDuration', 'AvgDuration'
         ], 0));
 
         // Extract occupancy trend data
         const occupancyRaw = extractField(icuData, [
-          'occupancy', 'Occupancy', 'occupancyTrend', 'OccupancyTrend',
+          'periodCount','occupancy', 'Occupancy', 'occupancyTrend', 'OccupancyTrend',
           'trend', 'Trend', 'dailyOccupancy', 'DailyOccupancy',
           'occupancyData', 'OccupancyData', 'icuOccupancy', 'IcuOccupancy',
           'icu_occupancy', 'Icu_Occupancy', 'data', 'Data'
@@ -1717,7 +1717,10 @@ export function Reports() {
         } else if (response?.data && Array.isArray(response.data)) {
           mappedOccupancy = response.data.map((item: any) => {
             const dateLabel = String(extractField(item, ['date', 'Date', 'day', 'Day'], '')).trim() || '';
-            const occupied = safeNumber(extractField(item, ['occupied', 'Occupied', 'count', 'Count'], 0), 0);
+            const occupied = safeNumber(extractField(item, [
+              'occupied', 'Occupied', 'count', 'Count', 'totalICUPatients', 'totalICUPatients',
+              'totalIcuPatients', 'total_icu_patients', 'icuPatients', 'icu_patients'
+            ], 0), 0);
             const total = safeNumber(extractField(item, ['total', 'Total', 'capacity', 'Capacity'], totalICUBeds), totalICUBeds);
             return { date: dateLabel, occupied, total };
           }).filter(entry => entry.date);
