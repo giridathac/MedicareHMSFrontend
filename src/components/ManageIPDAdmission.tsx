@@ -2180,7 +2180,7 @@ export function ManageIPDAdmission() {
                                 {labTest.testStatus || labTest.status || 'N/A'}
                               </Badge>
                             </td>
-                            <td className="py-3 px-4 text-gray-600">{labTest.testDoneDateTime || 'N/A'}</td>
+                            <td className="py-3 px-4 text-gray-600">{labTest.testDoneDateTime ? formatDateTimeForInputWithAMPM(labTest.testDoneDateTime) : 'N/A'}</td>
                               <td className="py-3 px-4 text-gray-600">
                                 {createdDate ? formatDateTimeIST(createdDate) : 'N/A'}
                               </td>
@@ -2349,7 +2349,7 @@ export function ManageIPDAdmission() {
                         <tr className="border-b border-gray-200">
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">PatientStatus</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">Nurse Name</th>
-                          <th className="text-left py-3 px-4 font-semibold text-gray-700">RecordedDateTime</th>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-700">Recorded Date & Time</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">DailyOrHourlyVitals</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">HeartRate</th>
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">BloodPressure</th>

@@ -6,15 +6,15 @@ Remove version numbers from all imports in `src/components/ui/` files to match p
 ## Steps
 - [x] Fix imports in accordion.tsx
 - [x] Fix imports in alert-dialog.tsx
-- [ ] Fix imports in alert.tsx
-- [ ] Fix imports in aspect-ratio.tsx
-- [ ] Fix imports in avatar.tsx
-- [ ] Fix imports in badge.tsx
-- [ ] Fix imports in breadcrumb.tsx
-- [ ] Fix imports in button.tsx
-- [ ] Fix imports in calendar.tsx
-- [ ] Fix imports in carousel.tsx
-- [ ] Fix imports in chart.tsx
+- [x] Fix imports in alert.tsx
+- [x] Fix imports in aspect-ratio.tsx
+- [x] Fix imports in avatar.tsx
+- [x] Fix imports in badge.tsx
+- [x] Fix imports in breadcrumb.tsx
+- [x] Fix imports in button.tsx
+- [x] Fix imports in calendar.tsx
+- [x] Fix imports in carousel.tsx
+- [x] Fix imports in chart.tsx
 - [ ] Fix imports in checkbox.tsx
 - [ ] Fix imports in collapsible.tsx
 - [ ] Fix imports in command.tsx

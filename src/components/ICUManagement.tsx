@@ -13,6 +13,7 @@ import { HeartPulse, Activity, Thermometer, Wind, Droplet, Brain, Plus, Edit, Ch
 import { admissionsApi } from '../api/admissions';
 import { apiRequest } from '../api/base';
 import { doctorsApi } from '../api/doctors';
+import { formatDateTimeIST } from '../utils/timeUtils';
 
 interface ICUPatient {
   id: number | string;
@@ -1716,9 +1717,9 @@ export function ICUManagement() {
 
     try {
       setLoadingVitals(true);
-      console.log('Fetching ICU visit vitals for ICU admission:', icuAdmissionId);
-      const response = await apiRequest<any>(`/icu-visit-vitals/icu-admission/${icuAdmissionId}`);
-      console.log('%%%%%%%%%%%%%%%%%%%%%ICU visit vitals API response:', response);
+      console.log('Fetching LATEST ICU visit vitals for ICU admission:', icuAdmissionId);
+      const response = await apiRequest<any>(`/icu-visit-vitals/icu-admission/${icuAdmissionId}/latest`);
+      console.log('LATEST ICU visit vitals API response:', response);
       
       // Handle different response structures: { data: [...] } or direct array or single object
       let vitals = null;
@@ -2621,7 +2622,7 @@ export function ICUManagement() {
                               <p className="text-xs text-gray-500">Heart Rate</p>
                             </div>
                             <p className="text-lg text-gray-900">
-                              {vitalsData.heartRate || vitalsData.HeartRate || vitalsData.hr || vitalsData.HR || vitalsData.heart_rate || 'N/A'} bpm
+                              {vitalsData?.heartRate || vitalsData?.HeartRate || vitalsData?.hr || vitalsData?.HR || vitalsData?.heart_rate || 'N/A'} bpm
                             </p>
                           </div>
                           <div className="p-3 bg-gray-50 rounded-lg">
@@ -2630,7 +2631,7 @@ export function ICUManagement() {
                               <p className="text-xs text-gray-500">Blood Pressure</p>
                             </div>
                             <p className="text-lg text-gray-900">
-                              {vitalsData.bloodPressure || vitalsData.BloodPressure || vitalsData.bp || vitalsData.BP || vitalsData.blood_pressure || 'N/A'}
+                              {vitalsData?.bloodPressure || vitalsData?.BloodPressure || vitalsData?.bp || vitalsData?.BP || vitalsData?.blood_pressure || 'N/A'}
                             </p>
                           </div>
                           <div className="p-3 bg-gray-50 rounded-lg">
@@ -2639,7 +2640,7 @@ export function ICUManagement() {
                               <p className="text-xs text-gray-500">Temperature</p>
                             </div>
                             <p className="text-lg text-gray-900">
-                              {vitalsData.temperature || vitalsData.Temperature || vitalsData.temp || vitalsData.Temp || vitalsData.temperature_c || 'N/A'}°C
+                              {vitalsData?.temperature || vitalsData?.Temperature || vitalsData?.temp || vitalsData?.Temp || vitalsData?.temperature_c || 'N/A'}°C
                             </p>
                           </div>
                           <div className="p-3 bg-gray-50 rounded-lg">
@@ -2648,7 +2649,7 @@ export function ICUManagement() {
                               <p className="text-xs text-gray-500">O₂ Saturation</p>
                             </div>
                             <p className="text-lg text-gray-900">
-                              {vitalsData.oxygenSaturation || vitalsData.OxygenSaturation || vitalsData.spo2 || vitalsData.SpO2 || vitalsData.o2Sat || vitalsData.oxygen_saturation || 'N/A'}%
+                              {vitalsData?.O2Saturation || vitalsData?.OxygenSaturation || vitalsData?.spo2 || vitalsData?.SpO2 || vitalsData?.o2Sat || vitalsData?.oxygen_saturation || '0'}%
                             </p>
                           </div>
                           <div className="p-3 bg-gray-50 rounded-lg col-span-2">
@@ -2657,7 +2658,7 @@ export function ICUManagement() {
                               <p className="text-xs text-gray-500">Respiratory Rate</p>
                             </div>
                             <p className="text-lg text-gray-900">
-                              {vitalsData.respiratoryRate || vitalsData.RespiratoryRate || vitalsData.rr || vitalsData.RR || vitalsData.respiratory_rate || 'N/A'} /min
+                              {vitalsData?.respiratoryRate || vitalsData?.RespiratoryRate || vitalsData?.rr || vitalsData?.RR || vitalsData?.respiratory_rate || 'N/A'} /min
                             </p>
                           </div>
                         </div>
@@ -2699,6 +2700,7 @@ export function ICUManagement() {
                       <th className="dashboard-table-header-cell">Bed</th>
                       <th className="dashboard-table-header-cell">Patient</th>
                       <th className="dashboard-table-header-cell">Condition</th>
+                      <th className="dashboard-table-header-cell">ICU Allocation From Date</th>
                       <th className="dashboard-table-header-cell">Doctor</th>
                       <th className="dashboard-table-header-cell">Ventilator</th>
                       <th className="dashboard-table-header-cell">Patient Type</th>
@@ -2725,6 +2727,7 @@ export function ICUManagement() {
                           <p className="dashboard-table-body-cell-secondary text-xs">{patient.age}Y / {patient.gender}</p>
                         </td>
                         <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.condition}</td>
+                        <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.icuAllocationFromDate}</td>
                         <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.attendingDoctor}</td>
                         <td className="dashboard-table-body-cell">
                           {patient.ventilatorSupport ? (
@@ -2767,7 +2770,7 @@ export function ICUManagement() {
                               // Navigate to Manage ICU Case page with patient ICU admission ID (UUID)
                               // Prefer patientICUAdmissionId if available, otherwise use id
                               const patientICUAdmissionId = patient.patientICUAdmissionId || patient.id;
-                              
+
                               if (patientICUAdmissionId) {
                                 // Navigate using React Router
                                 navigate(`/manage-icu-case?patientICUAdmissionId=${String(patientICUAdmissionId)}`);

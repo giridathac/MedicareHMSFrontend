@@ -462,7 +462,7 @@ export const admissionsApi = {
             age: age,
             gender: gender,
             admissionDate: extractField(admission, [
-              'admissionDate', 'AdmissionDate', 'admission_date', 'Admission_Date',
+              'RoomAllocationDate','admissionDate', 'AdmissionDate', 'admission_date', 'Admission_Date',
               'admitDate', 'AdmitDate', 'admit_date', 'Admit_Date'
             ], new Date().toISOString().split('T')[0]),
             // Extract roomType - prioritize roomType field from API

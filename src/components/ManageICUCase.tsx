@@ -80,6 +80,10 @@ export function ManageICUCase() {
   const [patientDoctorVisits, setPatientDoctorVisits] = useState<PatientDoctorVisit[]>([]);
   const [doctorVisitsLoading, setDoctorVisitsLoading] = useState(false);
   const [doctorVisitsError, setDoctorVisitsError] = useState<string | null>(null);
+
+  const [patientNurseVisits, setPatientNurseVisits] = useState<any[]>([]);
+  const [nurseVisitsLoading, setNurseVisitsLoading] = useState(false);
+  const [nurseVisitsError, setNurseVisitsError] = useState<string | null>(null);
  
   
   // Add/Edit ICU Doctor Visit Dialog State
@@ -438,7 +442,7 @@ export function ManageICUCase() {
       setDoctorVisitsError(null);
       // Call the new ICU doctor visits API endpoint
       const response = await apiRequest<any>(`/icu-doctor-visits/icu-admission/${patientICUAdmissionId}`);
-      
+
       // Handle different response structures
       let doctorVisitsData: any[] = [];
       
@@ -510,7 +514,7 @@ export function ManageICUCase() {
     try {
       setIcuVitalsLoading(true);
       setIcuVitalsError(null);
-      const endpoint = `/icu-visit-vitals${patientICUAdmissionId ? `?ICUAdmissionId=${encodeURIComponent(patientICUAdmissionId)}` : ''}`;
+      const endpoint = `/icu-visit-vitals/icu-admission/${encodeURIComponent(patientICUAdmissionId)}`;
       const response = await apiRequest<any>(endpoint);
       const vitalsData = Array.isArray(response?.data) ? response.data : Array.isArray(response) ? response : [];
 
@@ -529,9 +533,12 @@ export function ManageICUCase() {
           bloodPressure: extract(v, ['bloodPressure', 'BloodPressure']),
           temperature: extract(v, ['temperature', 'Temperature']),
           oxygenSaturation: extract(v, [
-            'oxygenSaturation', 'OxygenSaturation', 'O2Saturation', 'o2Saturation',
+            'O2Saturation','oxygenSaturation', 'OxygenSaturation', 'O2Saturation', 'o2Saturation',
             'O2', 'o2', 'O2Sat', 'o2Sat', 'SpO2', 'spo2', 'spO2',
-            'oxygenSaturationLevel', 'OxygenSaturationLevel'
+            'oxygenSaturationLevel', 'OxygenSaturationLevel',
+            'o2_saturation', 'O2_Saturation', 'oxygen_saturation', 'Oxygen_Saturation',
+            'o2sat', 'O2sat', 'o2Saturation', 'O2Saturation',
+            'saturation', 'Saturation', 'o2_level', 'O2_Level'
           ]),
           respiratoryRate: extract(v, ['respiratoryRate', 'RespiratoryRate']),
           bloodSugar: extract(v, [
@@ -1327,18 +1334,18 @@ export function ManageICUCase() {
                           <tr key={vital.icuVisitVitalsId || vital.id} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="py-3 px-4">{vital.icuVisitVitalsId || 'N/A'}</td>
                             <td className="py-3 px-4">{vital.recordedDateTime || 'N/A'}</td>
-                            <td className="py-3 px-4">{vital.heartRate ? `${vital.heartRate} bpm` : 'N/A'}</td>
+                            <td className="py-3 px-4">{vital.heartRate != null ? `${vital.heartRate} bpm` : 'N/A'}</td>
                             <td className="py-3 px-4">{vital.bloodPressure || 'N/A'}</td>
-                            <td className="py-3 px-4">{vital.temperature ? `${vital.temperature}°C` : 'N/A'}</td>
+                            <td className="py-3 px-4">{vital.temperature != null ? `${vital.temperature}°C` : 'N/A'}</td>
                             <td className="py-3 px-4">
-                              {vital.oxygenSaturation || (vital as any).O2Saturation || (vital as any).O2 || (vital as any).o2Saturation 
-                                ? `${vital.oxygenSaturation || (vital as any).O2Saturation || (vital as any).O2 || (vital as any).o2Saturation}%` 
+                              {vital.oxygenSaturation != null || (vital as any).O2Saturation != null || (vital as any).O2 != null || (vital as any).o2Saturation != null
+                                ? `${vital.oxygenSaturation ?? (vital as any).O2Saturation ?? (vital as any).O2 ?? (vital as any).o2Saturation}%`
                                 : 'N/A'}
                             </td>
-                            <td className="py-3 px-4">{vital.respiratoryRate ? `${vital.respiratoryRate}/min` : 'N/A'}</td>
+                            <td className="py-3 px-4">{vital.respiratoryRate != null ? `${vital.respiratoryRate}/min` : 'N/A'}</td>
                             <td className="py-3 px-4">
-                              {vital.bloodSugar || (vital as any).BloodSugar || (vital as any).bloodGlucose || (vital as any).Glucose
-                                ? `${vital.bloodSugar || (vital as any).BloodSugar || (vital as any).bloodGlucose || (vital as any).Glucose} mg/dL` 
+                              {vital.bloodSugar != null || (vital as any).BloodSugar != null || (vital as any).bloodGlucose != null || (vital as any).Glucose != null
+                                ? `${vital.bloodSugar ?? (vital as any).BloodSugar ?? (vital as any).bloodGlucose ?? (vital as any).Glucose} mg/dL`
                                 : 'N/A'}
                             </td>
                             <td className="py-3 px-4">{vital.dailyOrHourlyVitals || 'N/A'}</td>
