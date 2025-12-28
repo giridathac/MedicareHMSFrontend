@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -151,6 +151,12 @@ export function Reports() {
   const [loadingIcuStats, setLoadingIcuStats] = useState(false);
   const [icuStatsError, setIcuStatsError] = useState<string | null>(null);
   const [icuOccupancy, setIcuOccupancy] = useState<ICUOccupancyEntry[]>(defaultIcuOccupancy);
+  const [totalICUBeds, setTotalICUBeds] = useState<number>(15);
+  const [loadingICUBeds, setLoadingICUBeds] = useState(false);
+  const [icuBedsError, setIcuBedsError] = useState<string | null>(null);
+  const [activeICUBeds, setActiveICUBeds] = useState<number>(15);
+  const [loadingActiveICUBeds, setLoadingActiveICUBeds] = useState(false);
+  const [activeICUBedsError, setActiveICUBedsError] = useState<string | null>(null);
   const [totalOpdPatients, setTotalOpdPatients] = useState<number>(0);
   const [loadingOpdStats, setLoadingOpdStats] = useState(false);
   const [opdStatsError, setOpdStatsError] = useState<string | null>(null);
@@ -332,7 +338,7 @@ export function Reports() {
       } catch (err) {
         console.error('Error fetching doctor statistics:', err);
         setDoctorStatsError(err instanceof Error ? err.message : 'Failed to load doctor statistics');
-        setDoctorStatistics([]);
+        setDoctorStatistics([] as DoctorStatistics[]);
       } finally {
         setLoadingDoctorStats(false);
       }
@@ -588,11 +594,11 @@ export function Reports() {
           ], '');
 
           const patients = Number(extractField(item, [
-            'patients', 'Patients', 'opdPatients', 'OPDPatients', 'opd', 'OPD', 'count', 'Count'
+            'patients', 'Patients', 'opdPatients', 'OPDPatients', 'opdPatientCount', 'OPDPatientCount', 'opd', 'OPD', 'count', 'Count'
           ], 0)) || 0;
 
           const admissions = Number(extractField(item, [
-            'admissions', 'Admissions', 'ipdAdmissions', 'IPDAdmissions', 'ipd', 'IPD', 'admissionCount', 'AdmissionCount'
+            'admissions', 'Admissions', 'ipdAdmissions', 'IPDAdmissions', 'ipdAdmissionCount', 'IPDAdmissionCount', 'ipd', 'IPD', 'admissionCount', 'AdmissionCount'
           ], 0)) || 0;
 
           return {
@@ -682,6 +688,15 @@ export function Reports() {
           return defaultValue;
         };
 
+        // Helper function to extract count from object or direct value
+        const extractCount = (data: any, fieldVariations: string[], defaultValue: any = 0) => {
+          const extracted = extractField(data, fieldVariations, defaultValue);
+          if (typeof extracted === 'object' && extracted !== null && 'count' in extracted) {
+            return Number(extracted.count) || 0;
+          }
+          return Number(extracted) || 0;
+        };
+
         // Map API response to IPDStatistics interface
         const totalAdmissions = Number(extractField(statsData, [
           'totalAdmissions', 'TotalAdmissions', 'total_admissions', 'Total_Admissions',
@@ -689,24 +704,24 @@ export function Reports() {
           'totalAdmissionCount', 'TotalAdmissionCount'
         ], 0)) || 0;
 
-        const regularWard = Number(extractField(statsData, [
+        const regularWard = extractCount(statsData, [
           'regularWard', 'RegularWard', 'regular_ward', 'Regular_Ward',
           'regularWardCount', 'RegularWardCount', 'regularWardPatients', 'RegularWardPatients',
           'regularWardAdmissions', 'RegularWardAdmissions'
-        ], 0)) || 0;
+        ], 0);
 
-        const specialShared = Number(extractField(statsData, [
+        const specialShared = extractCount(statsData, [
           'specialShared', 'SpecialShared', 'special_shared', 'Special_Shared',
           'specialSharedRoom', 'SpecialSharedRoom', 'specialSharedCount', 'SpecialSharedCount',
           'specialSharedPatients', 'SpecialSharedPatients', 'specialSharedAdmissions', 'SpecialSharedAdmissions'
-        ], 0)) || 0;
+        ], 0);
 
-        const specialRoom = Number(extractField(statsData, [
+        const specialRoom = extractCount(statsData, [
           'specialRoom', 'specialRooms', 'SpecialRoom', 'SpecialRooms',
           'special_room', 'Special_Room', 'special_rooms', 'Special_Rooms',
           'specialRoomCount', 'SpecialRoomCount', 'specialRoomPatients', 'SpecialRoomPatients',
           'specialRoomAdmissions', 'SpecialRoomAdmissions'
-        ], 0)) || 0;
+        ], 0);
 
         const avgStayDuration = Number(extractField(statsData, [
           'avgStayDuration', 'avgStayDurationDays', 'AvgStayDuration', 'AvgStayDurationDays',
@@ -938,7 +953,7 @@ export function Reports() {
 
         // Map API response to IPDSummary interface
         // Try all possible field name variations
-        const dischargedToday = safeNumber(extractField(summaryData, [
+        const dischargedTodayRaw = extractField(summaryData, [
           'dischargedToday', 'dischargedToday','dischargedToday', 'DischargedToday', 'discharged_today', 'Discharged_Today',
           'dischargedCount', 'DischargedCount', 'dischargesToday', 'DischargesToday',
           'todayDischarges', 'TodayDischarges', 'discharges', 'Discharges',
@@ -946,17 +961,25 @@ export function Reports() {
           'dischargeCount', 'DischargeCount', 'dischargeToday', 'DischargeToday',
           'dischargedTodayCount', 'DischargedTodayCount', 'todayDischarged', 'TodayDischarged',
           'dischargedPatientsToday', 'DischargedPatientsToday'
-        ], 10));
+        ], 10);
 
-        const criticalPatients = safeNumber(extractField(summaryData, [
+        const dischargedToday = typeof dischargedTodayRaw === 'object' && dischargedTodayRaw !== null && 'count' in dischargedTodayRaw
+          ? safeNumber(dischargedTodayRaw.count)
+          : safeNumber(dischargedTodayRaw);
+
+        const criticalPatientsRaw = extractField(summaryData, [
           'criticalPatients', 'CriticalPatients', 'criticalPatients','critical_patients', 'Critical_Patients',
           'criticalCount', 'CriticalCount', 'criticalPatientCount', 'CriticalPatientCount',
           'critical', 'Critical', 'criticalPatient', 'CriticalPatient',
           'criticalPatientsCount', 'CriticalPatientsCount',
           'criticalPatientCount', 'CriticalPatientCount', 'criticalPatientsNumber', 'CriticalPatientsNumber'
-        ], 0));
+        ], 0);
 
-        const bedOccupancy = safeNumber(extractField(summaryData, [
+        const criticalPatients = typeof criticalPatientsRaw === 'object' && criticalPatientsRaw !== null && 'count' in criticalPatientsRaw
+          ? safeNumber(criticalPatientsRaw.count)
+          : safeNumber(criticalPatientsRaw);
+
+        const bedOccupancyRaw = extractField(summaryData, [
           'bedOccupancy', 'BedOccupancy', 'bed_occupancy', 'Bed_Occupancy',
           'occupancy', 'Occupancy', 'occupancyRate', 'OccupancyRate',
           'occupancy_rate', 'Occupancy_Rate', 'bedOccupancyRate', 'BedOccupancyRate',
@@ -964,7 +987,11 @@ export function Reports() {
           'bedOccupancyPercentage', 'BedOccupancyPercentage', 'occupancyPercentage', 'OccupancyPercentage',
           'bedOccupancyPct', 'BedOccupancyPct', 'occupancyPct', 'OccupancyPct',
           'bedOccupancyRatePercent', 'BedOccupancyRatePercent', 'occupancyRatePercent', 'OccupancyRatePercent'
-        ], 0));
+        ], 0);
+
+        const bedOccupancy = typeof bedOccupancyRaw === 'object' && bedOccupancyRaw !== null && 'occupancyPercentage' in bedOccupancyRaw
+          ? safeNumber(bedOccupancyRaw.occupancyPercentage)
+          : safeNumber(bedOccupancyRaw);
         console.log('Extracted IPD summary values: dischargedToday =', dischargedToday, ', criticalPatients =', criticalPatients, ', bedOccupancy =', bedOccupancy);
 
         const mappedSummary: IPDSummary = {
@@ -1032,13 +1059,16 @@ export function Reports() {
 
         console.log('OT statistics API response (RAW):', JSON.stringify(response, null, 2));
 
-        // Normalize response payload
+        // Normalize response payload - handle the specific API structure
         let otData: any = {};
-        if (Array.isArray(response)) {
-          // Response is already a schedule list; wrap so we can pick it up
-          otData = { schedule: response };
-        } else if (response && typeof response === 'object') {
-          if (Array.isArray(response.data)) {
+        if (response && typeof response === 'object') {
+          // Check for the expected structure with summary and data
+          if (response.summary && response.data) {
+            otData = {
+              ...response.summary,
+              schedule: response.data
+            };
+          } else if (Array.isArray(response.data)) {
             // data is an array; treat as schedule
             otData = { schedule: response.data };
           } else if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
@@ -1231,42 +1261,59 @@ export function Reports() {
 
         if (Array.isArray(response)) {
           admissionsData = response;
+          console.log('Response is direct array, length:', admissionsData.length);
         } else if (response?.data && Array.isArray(response.data)) {
           admissionsData = response.data;
+          console.log('Response.data is array, length:', admissionsData.length);
         } else if (response?.admissions && Array.isArray(response.admissions)) {
           admissionsData = response.admissions;
+          console.log('Response.admissions is array, length:', admissionsData.length);
         } else if (response?.departmentAdmissions && Array.isArray(response.departmentAdmissions)) {
           admissionsData = response.departmentAdmissions;
+          console.log('Response.departmentAdmissions is array, length:', admissionsData.length);
+        } else if (response && typeof response === 'object' && !Array.isArray(response)) {
+          // Check if response is an object with department names as keys and counts as values
+          const keys = Object.keys(response);
+          if (keys.length > 0) {
+            const firstValue = response[keys[0]];
+            if (typeof firstValue === 'number') {
+              // Assume it's { "Cardiology": 5, "Neurology": 3 }
+              admissionsData = keys.map(dept => ({ department: dept, count: response[dept] }));
+              console.log('Response is object with department keys as numbers, converted to array, length:', admissionsData.length);
+            } else if (typeof firstValue === 'object' && firstValue !== null) {
+              // Check if nested data is the array
+              if (Array.isArray(firstValue)) {
+                admissionsData = firstValue;
+                console.log('Response is object with array value, using array, length:', admissionsData.length);
+              } else {
+                // Try to find nested array
+                const nestedKeys = Object.keys(firstValue);
+                const nestedArray = nestedKeys.find(k => Array.isArray(firstValue[k]));
+                if (nestedArray) {
+                  admissionsData = firstValue[nestedArray];
+                  console.log(`Response is object with nested array at ${nestedArray}, length:`, admissionsData.length);
+                } else {
+                  console.log('Response is object but no array found in nested structure');
+                }
+              }
+            } else {
+              console.log('Response is object but values are not numbers or objects');
+            }
+          } else {
+            console.log('Response is empty object');
+          }
+        } else {
+          console.log('No matching response structure found. Response type:', typeof response);
+          console.log('Response keys:', Object.keys(response || {}));
         }
 
         // Map API response to DepartmentAdmission interface
-        const mappedAdmissions: DepartmentAdmission[] = admissionsData.map((item: any) => {
-          // Helper function to extract field with multiple variations
-          const extractField = (data: any, fieldVariations: string[], defaultValue: any = '') => {
-            for (const field of fieldVariations) {
-              const value = data?.[field];
-              if (value !== undefined && value !== null && value !== '') {
-                return value;
-              }
-            }
-            return defaultValue;
-          };
-
-          const department = extractField(item, [
-            'department', 'Department', 'dept', 'Dept', 'departmentName', 'DepartmentName',
-            'deptName', 'DeptName', 'name', 'Name', 'specialty', 'Specialty'
-          ], 'Unknown Department');
-
-          const count = Number(extractField(item, [
-            'count', 'Count', 'admissions', 'Admissions', 'total', 'Total',
-            'admissionCount', 'AdmissionCount', 'number', 'Number'
-          ], 0)) || 0;
-
-          return {
-            department,
-            count
-          } as DepartmentAdmission;
-        });
+        const mappedAdmissions: DepartmentAdmission[] = admissionsData
+          .filter((item: any) => item && typeof item === 'object' && item.departmentName && typeof item.ipdAdmissionCount === 'number')
+          .map((item: any) => ({
+            department: item.departmentName || 'Unknown Department',
+            count: Number(item.ipdAdmissionCount) || 0
+          }));
 
         console.log('Mapped department admissions:', mappedAdmissions);
         setDepartmentAdmissions(mappedAdmissions);
@@ -1281,6 +1328,173 @@ export function Reports() {
 
     fetchDepartmentAdmissions();
   }, [reportType, selectedDate]);
+
+  // Fetch total ICU beds
+  useEffect(() => {
+    const fetchTotalICUBeds = async () => {
+      try {
+        setLoadingICUBeds(true);
+        setIcuBedsError(null);
+
+        const apiUrl = '/icu/active-count';
+        console.log('Fetching total ICU beds from:', apiUrl);
+        const response = await apiRequest<any>(apiUrl, {
+          method: 'GET',
+        });
+
+        console.log('Total ICU beds API response:', JSON.stringify(response, null, 2));
+
+        // Handle different response structures
+        let bedsData: any = {};
+        if (response && typeof response === 'object') {
+          if (response.data && typeof response.data === 'object') {
+            bedsData = response.data;
+          } else {
+            bedsData = response;
+          }
+        }
+
+        // Helper to extract with variations
+        const extractField = (data: any, fieldVariations: string[], defaultValue: any = 15) => {
+          if (!data || typeof data !== 'object') {
+            return defaultValue;
+          }
+
+          // Exact match
+          for (const field of fieldVariations) {
+            const value = data[field];
+            if (value !== undefined && value !== null && value !== '') {
+              return value;
+            }
+          }
+
+          // Case-insensitive
+          const keys = Object.keys(data);
+          for (const field of fieldVariations) {
+            const lower = field.toLowerCase();
+            const matchKey = keys.find(k => k.toLowerCase() === lower);
+            if (matchKey) {
+              const value = data[matchKey];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+          }
+
+          return defaultValue;
+        };
+
+        const safeNumber = (value: any, fallback = 15): number => {
+          if (value === null || value === undefined || value === '') return fallback;
+          const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+          return isNaN(num) ? fallback : num;
+        };
+
+        // Extract total ICU beds
+        const totalBeds = safeNumber(extractField(bedsData, [
+          'activeICUBedsCount','totalBeds', 'TotalBeds', 'total_beds', 'Total_Beds',
+          'totalICUBeds', 'TotalICUBeds', 'total_icu_beds', 'Total_ICU_Beds',
+          'icuBeds', 'ICUBeds', 'icu_beds', 'ICU_Beds',
+          'beds', 'Beds', 'capacity', 'Capacity', 'total', 'Total'
+        ], 15));
+
+        console.log('Extracted total ICU beds:', totalBeds);
+        setTotalICUBeds(totalBeds);
+      } catch (err) {
+        console.error('Error fetching total ICU beds:', err);
+        setIcuBedsError(err instanceof Error ? err.message : 'Failed to load ICU beds data');
+        setTotalICUBeds(15); // fallback to default
+      } finally {
+        setLoadingICUBeds(false);
+      }
+    };
+
+    fetchTotalICUBeds();
+  }, []);
+
+  // Fetch active ICU beds
+  useEffect(() => {
+    const fetchActiveICUBeds = async () => {
+      try {
+        setLoadingActiveICUBeds(true);
+        setActiveICUBedsError(null);
+
+        const apiUrl = '/reports/active-icu-beds';
+        console.log('Fetching active ICU beds from:', apiUrl);
+        const response = await apiRequest<any>(apiUrl, {
+          method: 'GET',
+        });
+
+        console.log('Active ICU beds API response:', JSON.stringify(response, null, 2));
+
+        // Handle different response structures
+        let bedsData: any = {};
+        if (response && typeof response === 'object') {
+          if (response.data && typeof response.data === 'object') {
+            bedsData = response.data;
+          } else {
+            bedsData = response;
+          }
+        }
+
+        // Helper to extract with variations
+        const extractField = (data: any, fieldVariations: string[], defaultValue: any = 15) => {
+          if (!data || typeof data !== 'object') {
+            return defaultValue;
+          }
+
+          // Exact match
+          for (const field of fieldVariations) {
+            const value = data[field];
+            if (value !== undefined && value !== null && value !== '') {
+              return value;
+            }
+          }
+
+          // Case-insensitive
+          const keys = Object.keys(data);
+          for (const field of fieldVariations) {
+            const lower = field.toLowerCase();
+            const matchKey = keys.find(k => k.toLowerCase() === lower);
+            if (matchKey) {
+              const value = data[matchKey];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+          }
+
+          return defaultValue;
+        };
+
+        const safeNumber = (value: any, fallback = 15): number => {
+          if (value === null || value === undefined || value === '') return fallback;
+          const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+          return isNaN(num) ? fallback : num;
+        };
+
+        // Extract active ICU beds
+        const activeBeds = safeNumber(extractField(bedsData, [
+          'activeBeds', 'ActiveBeds', 'active_beds', 'Active_Beds',
+          'activeICUBeds', 'ActiveICUBeds', 'active_icu_beds', 'Active_ICU_Beds',
+          'availableBeds', 'AvailableBeds', 'available_beds', 'Available_Beds',
+          'operationalBeds', 'OperationalBeds', 'operational_beds', 'Operational_Beds',
+          'beds', 'Beds', 'capacity', 'Capacity', 'active', 'Active'
+        ], 15));
+
+        console.log('Extracted active ICU beds:', activeBeds);
+        setActiveICUBeds(activeBeds);
+      } catch (err) {
+        console.error('Error fetching active ICU beds:', err);
+        setActiveICUBedsError(err instanceof Error ? err.message : 'Failed to load active ICU beds data');
+        setActiveICUBeds(15); // fallback to default
+      } finally {
+        setLoadingActiveICUBeds(false);
+      }
+    };
+
+    fetchActiveICUBeds();
+  }, []);
 
   // Fetch ICU statistics
   useEffect(() => {
@@ -1313,23 +1527,39 @@ export function Reports() {
 
         // Handle different response structures
         let icuData: any = {};
+        let summaryData: any = {};
+        let occupancyData: any[] = [];
 
         if (response && typeof response === 'object') {
-          if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
-            icuData = response.data;
+          // Extract summary data
+          if (response.summary && typeof response.summary === 'object') {
+            summaryData = response.summary;
+          } else if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+            summaryData = response.data;
           } else if (response.statistics && typeof response.statistics === 'object' && !Array.isArray(response.statistics)) {
-            icuData = response.statistics;
+            summaryData = response.statistics;
           } else if (response.icuStatistics && typeof response.icuStatistics === 'object' && !Array.isArray(response.icuStatistics)) {
-            icuData = response.icuStatistics;
+            summaryData = response.icuStatistics;
           } else if (!Array.isArray(response)) {
-            icuData = response;
+            summaryData = response;
           }
+
+          // Extract occupancy data
+          if (response.data && Array.isArray(response.data)) {
+            occupancyData = response.data;
+          } else if (response.occupancy && Array.isArray(response.occupancy)) {
+            occupancyData = response.occupancy;
+          } else if (response.icuOccupancy && Array.isArray(response.icuOccupancy)) {
+            occupancyData = response.icuOccupancy;
+          }
+
+          icuData = summaryData; // Use summary for stats extraction
         }
 
         console.log('Extracted icuData:', JSON.stringify(icuData, null, 2));
         console.log('icuData keys:', Object.keys(icuData || {}));
 
-        // Helper to extract with variations (exact, case-insensitive, partial)
+        // Helper to extract with variations (exact, case-insensitive, partial, nested)
         const extractField = (data: any, fieldVariations: string[], defaultValue: any = 0) => {
           if (!data || typeof data !== 'object') {
             return defaultValue;
@@ -1356,15 +1586,49 @@ export function Reports() {
             }
           }
 
-          // Partial match
-          for (const field of fieldVariations) {
-            const lower = field.toLowerCase();
-            const matchKey = keys.find(k => k.toLowerCase().includes(lower) || lower.includes(k.toLowerCase()));
-            if (matchKey) {
-              const value = data[matchKey];
+          // Also check nested objects recursively
+          const checkNested = (obj: any, field: string, depth: number = 0): any => {
+            if (depth > 3 || !obj || typeof obj !== 'object' || Array.isArray(obj)) {
+              return undefined;
+            }
+
+            // Check direct property (case-sensitive)
+            if (obj.hasOwnProperty(field)) {
+              const value = obj[field];
               if (value !== undefined && value !== null && value !== '') {
                 return value;
               }
+            }
+
+            // Check case-insensitive
+            const lowerField = field.toLowerCase();
+            for (const key in obj) {
+              if (obj.hasOwnProperty(key) && key.toLowerCase() === lowerField) {
+                const value = obj[key];
+                if (value !== undefined && value !== null && value !== '') {
+                  return value;
+                }
+              }
+            }
+
+            // Recursively check nested objects
+            for (const key in obj) {
+              if (obj.hasOwnProperty(key) && typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+                const nestedValue = checkNested(obj[key], field, depth + 1);
+                if (nestedValue !== undefined && nestedValue !== null && nestedValue !== '') {
+                  return nestedValue;
+                }
+              }
+            }
+            return undefined;
+          };
+
+          // Try nested search for each field variation
+          for (const field of fieldVariations) {
+            const nestedValue = checkNested(data, field);
+            if (nestedValue !== undefined && nestedValue !== null && nestedValue !== '') {
+              console.log(`ICU - Found nested value for field "${field}":`, nestedValue);
+              return nestedValue;
             }
           }
 
@@ -1405,7 +1669,8 @@ export function Reports() {
         const occupancyRaw = extractField(icuData, [
           'occupancy', 'Occupancy', 'occupancyTrend', 'OccupancyTrend',
           'trend', 'Trend', 'dailyOccupancy', 'DailyOccupancy',
-          'occupancyData', 'OccupancyData', 'icuOccupancy', 'IcuOccupancy'
+          'occupancyData', 'OccupancyData', 'icuOccupancy', 'IcuOccupancy',
+          'icu_occupancy', 'Icu_Occupancy', 'data', 'Data'
         ], []);
 
         let mappedOccupancy: ICUOccupancyEntry[] = [];
@@ -1423,7 +1688,7 @@ export function Reports() {
             const total = safeNumber(extractField(item, [
               'total', 'Total', 'totalBeds', 'TotalBeds',
               'total_beds', 'Total_Beds', 'capacity', 'Capacity'
-            ], 15), 15);
+            ], totalICUBeds), totalICUBeds);
 
             return {
               date: dateLabel,
@@ -1435,7 +1700,7 @@ export function Reports() {
           // If it's an object, try to extract as a single entry or convert to array
           const dateLabel = String(extractField(occupancyRaw, ['date', 'Date'], '')).trim() || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
           const occupied = safeNumber(extractField(occupancyRaw, ['occupied', 'Occupied'], 0), 0);
-          const total = safeNumber(extractField(occupancyRaw, ['total', 'Total'], 15), 15);
+          const total = safeNumber(extractField(occupancyRaw, ['total', 'Total'], totalICUBeds), totalICUBeds);
           if (dateLabel) {
             mappedOccupancy = [{ date: dateLabel, occupied, total }];
           }
@@ -1446,14 +1711,14 @@ export function Reports() {
           mappedOccupancy = response.map((item: any) => {
             const dateLabel = String(extractField(item, ['date', 'Date', 'day', 'Day'], '')).trim() || '';
             const occupied = safeNumber(extractField(item, ['occupied', 'Occupied', 'count', 'Count'], 0), 0);
-            const total = safeNumber(extractField(item, ['total', 'Total', 'capacity', 'Capacity'], 15), 15);
+            const total = safeNumber(extractField(item, ['total', 'Total', 'capacity', 'Capacity'], totalICUBeds), totalICUBeds);
             return { date: dateLabel, occupied, total };
           }).filter(entry => entry.date);
         } else if (response?.data && Array.isArray(response.data)) {
           mappedOccupancy = response.data.map((item: any) => {
             const dateLabel = String(extractField(item, ['date', 'Date', 'day', 'Day'], '')).trim() || '';
             const occupied = safeNumber(extractField(item, ['occupied', 'Occupied', 'count', 'Count'], 0), 0);
-            const total = safeNumber(extractField(item, ['total', 'Total', 'capacity', 'Capacity'], 15), 15);
+            const total = safeNumber(extractField(item, ['total', 'Total', 'capacity', 'Capacity'], totalICUBeds), totalICUBeds);
             return { date: dateLabel, occupied, total };
           }).filter(entry => entry.date);
         }
@@ -1481,7 +1746,7 @@ export function Reports() {
     };
 
     fetchICUStatistics();
-  }, [reportType, selectedDate]);
+  }, [reportType, selectedDate, totalICUBeds]);
 
   return (
     <div className="px-4 pt-4 pb-4 bg-blue-100 h-screen flex flex-col overflow-hidden">
@@ -1803,7 +2068,7 @@ export function Reports() {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={departmentAdmissions}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="department" />
+                    <XAxis dataKey="department" angle={-45} textAnchor="end" height={100} />
                     <YAxis />
                     <Tooltip />
                     <Bar dataKey="count" fill="#8b5cf6" />
@@ -1954,9 +2219,9 @@ export function Reports() {
                 <Card>
                   <CardContent className="p-6">
                     <p className="text-sm text-gray-500 mb-1">Total ICU Patients</p>
-                    <h3 className="text-2xl font-bold text-gray-900">{icuStats.totalPatients}/15</h3>
+                    <h3 className="text-2xl font-bold text-gray-900">{icuStats.totalPatients}/{totalICUBeds}</h3>
                     <p className="text-xs text-gray-500">
-                      {icuStats.totalPatients > 0 ? `${Math.round((icuStats.totalPatients / 15) * 100)}% occupancy` : '0% occupancy'}
+                      {icuStats.totalPatients > 0 ? `${Math.round((icuStats.totalPatients / totalICUBeds) * 100)}% occupancy` : '0% occupancy'}
                     </p>
                   </CardContent>
                 </Card>
@@ -1988,7 +2253,7 @@ export function Reports() {
                   <CardTitle>ICU Occupancy Trend</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {icuOccupancy.length > 0 ? (
+                  {(icuOccupancy && Array.isArray(icuOccupancy) && icuOccupancy.length > 0) ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <LineChart data={icuOccupancy}>
                         <CartesianGrid strokeDasharray="3 3" />
