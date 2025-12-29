@@ -13,7 +13,7 @@ export const dashboardApi = {
     try {
       // Fetch OPD Patients Today count, Active Tokens count, IPD Admissions count, OT Scheduled count, ICU Occupied count, Total ICU Beds count, and Total Patients count in parallel
       // Each endpoint has individual error handling to prevent one failure from breaking the entire dashboard
-      const [opdCountResponse, activeTokensResponse, roomBedsCountResponse, otScheduledResponse, icuOccupiedResponse, icuTotalResponse, totalPatientsResponse] = await Promise.all([
+      const [opdCountResponse, activeTokensResponse, todayIpdResponse, otScheduledResponse, icuOccupiedResponse, icuTotalResponse, totalPatientsResponse] = await Promise.all([
         apiRequest<any>('/dashboard/count/today-opd').catch(err => {
           console.warn('Failed to fetch OPD count:', err);
           return null;
@@ -22,8 +22,8 @@ export const dashboardApi = {
           console.warn('Failed to fetch active tokens count:', err);
           return null;
         }),
-        apiRequest<any>('/room-beds/count/active').catch(err => {
-          console.warn('Failed to fetch room beds active count:', err);
+        apiRequest<any>('/dashboard/count/today-ipd').catch(err => {
+          console.warn('Failed to fetch today IPD count:', err);
           return null;
         }),
         apiRequest<any>('/dashboard/count/today-scheduled').catch(err => {
@@ -46,16 +46,16 @@ export const dashboardApi = {
       
       console.log('OPD Patients Today count fetched from API:', opdCountResponse);
       console.log('Active Tokens count fetched from API:', activeTokensResponse);
-      console.log('Room Beds Active count fetched from API:', roomBedsCountResponse);
+      console.log('Today IPD count fetched from API:', todayIpdResponse);
       console.log('OT Scheduled count fetched from API:', otScheduledResponse);
       console.log('ICU Occupied count fetched from API:', icuOccupiedResponse);
       console.log('Total ICU Beds count fetched from API:', icuTotalResponse);
       console.log('Total Patients count fetched from API:', totalPatientsResponse);
-      
+
       // Handle different response structures: { data: {...} } or direct object
       const opdCountData = opdCountResponse?.data || opdCountResponse;
       const activeTokensData = activeTokensResponse?.data || activeTokensResponse;
-      const roomBedsCountData = roomBedsCountResponse?.data || roomBedsCountResponse;
+      const todayIpdData = todayIpdResponse?.data || todayIpdResponse;
       const otScheduledData = otScheduledResponse?.data || otScheduledResponse;
       const icuOccupiedData = icuOccupiedResponse?.data || icuOccupiedResponse;
       const icuTotalData = icuTotalResponse?.data || icuTotalResponse;
@@ -83,27 +83,57 @@ export const dashboardApi = {
         0
       );
       
-      // Extract IPD admissions count from the response (now using room-beds active count)
-      const ipdAdmissionsCount = Number(
-        roomBedsCountData?.count || 
-        roomBedsCountData?.Count || 
-        roomBedsCountData?.active || 
-        roomBedsCountData?.Active || 
-        roomBedsCountData?.activeBeds || 
-        roomBedsCountData?.ActiveBeds || 
-        roomBedsCountData?.available || 
-        roomBedsCountData?.Available || 
+      // Extract IPD data from the response - handle both total admissions and available beds
+      const totalIPDAdmissions = Number(
+        todayIpdData?.totalAdmissions ||
+        todayIpdData?.TotalAdmissions ||
+        todayIpdData?.totalIPDAdmissions ||
+        todayIpdData?.TotalIPDAdmissions ||
+        todayIpdData?.admissions ||
+        todayIpdData?.Admissions ||
+        todayIpdData?.count ||
+        todayIpdData?.Count ||
+        todayIpdData?.ipdToday ||
+        todayIpdData?.IpdToday ||
+        todayIpdData?.todayIpd ||
+        todayIpdData?.TodayIpd ||
+        todayIpdData?.ipd ||
+        todayIpdData?.Ipd ||
+        0
+      );
+
+      const availableIPDBeds = Number(
+        todayIpdData?.availableBeds ||
+        todayIpdData?.AvailableBeds ||
+        todayIpdData?.availableIPDBeds ||
+        todayIpdData?.AvailableIPDBeds ||
+        todayIpdData?.beds ||
+        todayIpdData?.Beds ||
+        todayIpdData?.available ||
+        todayIpdData?.Available ||
         0
       );
       
-      // Extract OT scheduled count from the response
+      // Extract OT scheduled count and ongoing count from the response
       const otScheduledCount = Number(
-        otScheduledData?.count || 
-        otScheduledData?.Count || 
-        otScheduledData?.otScheduled || 
-        otScheduledData?.OtScheduled || 
-        otScheduledData?.ot || 
-        otScheduledData?.Ot || 
+        otScheduledData?.scheduledCount ||
+        otScheduledData?.ScheduledCount ||
+        otScheduledData?.count ||
+        otScheduledData?.Count ||
+        otScheduledData?.otScheduled ||
+        otScheduledData?.OtScheduled ||
+        otScheduledData?.ot ||
+        otScheduledData?.Ot ||
+        0
+      );
+
+      const ongoingOTCount = Number(
+        otScheduledData?.ongoingOTCount ||
+        otScheduledData?.OngoingOTCount ||
+        otScheduledData?.ongoingCount ||
+        otScheduledData?.OngoingCount ||
+        otScheduledData?.ongoing ||
+        otScheduledData?.Ongoing ||
         0
       );
       
@@ -151,8 +181,10 @@ export const dashboardApi = {
       const mappedStats: DashboardStats = {
         opdPatientsToday: opdPatientsCount,
         activeTokens: activeTokensCount,
-        ipdAdmissions: ipdAdmissionsCount,
+        ipdAdmissions: totalIPDAdmissions,
+        availableIPDBeds: availableIPDBeds,
         otScheduled: otScheduledCount,
+        ongoingOTCount: ongoingOTCount,
         icuOccupied: icuOccupiedValue,
         totalPatients: totalPatientsCount,
       };

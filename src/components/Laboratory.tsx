@@ -1377,7 +1377,7 @@ export function Laboratory() {
         payload.BillId = Number(editFormData.billId);
       }
 
-      console.log('Saving edit with payload:', payload);
+      console.log('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Saving edit with payload:', payload);
       const updateResponse = await apiRequest(`/patient-lab-tests/${patientLabTestsId}`, {
         method: 'PUT',
         body: JSON.stringify(payload)

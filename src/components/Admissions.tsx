@@ -1199,6 +1199,7 @@ export function Admissions() {
     const totalCapacity = dashboardMetrics?.totalCapacity ?? Object.values(currentRoomCapacity).reduce((sum, room) => sum + room.total, 0);
     return totalCapacity > 0 ? Math.round((totalOccupied / totalCapacity) * 100) : 0;
   })();
+  const bedOccupancy1 = dashboardMetrics?.bedOccupancy1 ?? '0/0';
   const totalOccupied = dashboardMetrics?.totalOccupied ?? Object.values(currentRoomCapacity).reduce((sum, room) => sum + room.occupied, 0);
   const totalCapacity = dashboardMetrics?.totalCapacity ?? Object.values(currentRoomCapacity).reduce((sum, room) => sum + room.total, 0);
   const availableBeds = dashboardMetrics?.availableBeds ?? (totalCapacity - totalOccupied);
@@ -2329,7 +2330,7 @@ export function Admissions() {
               <p className="text-sm text-gray-500">Bed Occupancy</p>
               <Badge variant={bedOccupancy > 80 ? 'destructive' : 'default'}>{metricsLoading ? '...' : `${bedOccupancy}%`}</Badge>
             </div>
-            <h3 className="text-gray-900">{metricsLoading ? '...' : `${totalOccupied}/${totalCapacity}`}</h3>
+            <h3 className="text-gray-900">{metricsLoading ? '...' : (dashboardMetrics?.bedOccupancy1?? `${totalOccupied}/${totalCapacity}`)}</h3>
             <p className="text-xs text-gray-500">Occupied beds</p>
           </CardContent>
         </Card>
@@ -2838,7 +2839,7 @@ function AdmissionsList({
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-primary">{admission.patientName}</td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.age}Y / {admission.gender}</td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.roomType}</td>
-                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.admissionDate}</td>
+                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{formatDateTimeIST(admission.admissionDate)}</td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">
                       {admission.admittingDoctorName || admission.admittedBy || 'N/A'}
                     </td>

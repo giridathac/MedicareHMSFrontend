@@ -138,24 +138,40 @@ export default function App() {
 
   const userInfo = getUserInfoFromToken();
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    navigate('/login');
+  };
+
   // Filter nav items based on user role
   const navItems = allNavItems.filter(item => {
-    if (userRole === 'LabAdmin') {
+    const trimmedRole = userRole?.trim();
+    
+    if (trimmedRole === 'LabAdmin') {
       // Show only laboratory related menus for LabAdmin
       // return item.path === '/laboratory' || item.path === '/lab-tests';
       return item.path === '/laboratory';
-    } else if (userRole === 'OTAdmin') {
+    } else if (trimmedRole === 'OTAdmin') {
       // Show only OT related menus for OTAdmin
       // return item.path === '/ot' || item.path === '/ot-rooms';
       return item.path === '/ot';
-    } else if (userRole === 'ICUAdmin') {
+    } else if (trimmedRole === 'ICUAdmin') {
       // Show only ICU related menus for ICUAdmin
       // return item.path === '/icu' || item.path === '/icu-beds';
       return item.path === '/icu';
-    } else if (userRole === 'IPDAdmin') {
+    } else if (trimmedRole === 'IPDAdmin') {
       // Show only IPD related menus for IPDAdmin
       // return item.path === '/admissions' || item.path === '/room-beds' || item.path === '/manage-ipd-admission';
       return item.path === '/admissions' || item.path === '/manage-ipd-admission';
+    } else if (trimmedRole === 'EmergencyAdmin') {
+      // Show only Emergency related menus for EmergencyAdmin
+      return item.path === '/emergency';
+    } else if (trimmedRole === 'FrontDesk') {
+      // Show only FrontDesk related menus for FrontDesk
+      return item.path === '/frontdesk' || item.path === '/patient-registration' || item.path === '/consultation' || item.path === '/dashboard';
+    } else if (trimmedRole === 'Doctor') {
+      // Show only Doctor Consultation menu for Doctor
+      return item.path === '/consultation';
     } else {
       // Show all menus for SuperAdmin and other roles
       return true;
@@ -241,7 +257,13 @@ export default function App() {
               </div>
               <div>
                 <p className="text-sm text-gray-900">{userInfo.userName}</p>
-                <p className="text-xs text-gray-500">{userInfo.roleName}</p>
+                <p className="text-xs text-gray-500">{userInfo.roleName}</p>                
+                <button
+                  onClick={handleLogout}
+                  className="text-xs text-red-500 hover:text-red-500 mt-1"
+                >
+                  Log out
+                </button>
               </div>
             </div>
           </div>

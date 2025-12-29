@@ -175,52 +175,93 @@ export function Reports() {
       const reportContent = document.querySelector('.reports-scrollable') as HTMLElement;
       if (!reportContent) {
         console.error('Report content not found');
+        alert('Report content not found. Please try again.');
         return;
       }
 
-      // Create canvas from the report content
+      // Show loading indicator
+      const loadingAlert = document.createElement('div');
+      loadingAlert.innerHTML = '<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999;">Generating PDF... Please wait.</div>';
+      document.body.appendChild(loadingAlert);
+
+      // Create canvas from the report content with improved settings
       const canvas = await html2canvas(reportContent, {
-        scale: 2,
+        scale: 1.5, // Higher scale for better quality
         useCORS: true,
-        allowTaint: true,
+        allowTaint: true, // Enable to handle unsupported CSS
         backgroundColor: '#ffffff',
-        width: reportContent.scrollWidth,
+        width: Math.min(reportContent.scrollWidth, 1200),
         height: reportContent.scrollHeight,
+        logging: false, // Disable logging for cleaner output
+        imageTimeout: 15000, // Increase timeout for images
+        removeContainer: true, // Clean up after rendering
+        foreignObjectRendering: true, // Enable for better rendering
+        // Handle charts and problematic elements
+        ignoreElements: (element) => {
+          // Skip elements that might cause issues
+          return element.classList.contains('recharts-wrapper') ||
+                 element.tagName === 'CANVAS' ||
+                 element.tagName === 'SVG' ||
+                 element.style.color.includes('oklch') ||
+                 element.style.backgroundColor.includes('oklch');
+        }
       });
 
-      // Create PDF
+      // Remove loading indicator
+      document.body.removeChild(loadingAlert);
+
+      // Create PDF with better settings
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4',
+        compress: true // Enable compression
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/jpeg', 0.95); // Use JPEG for smaller file size
       const imgWidth = 210; // A4 width in mm
       const pageHeight = 295; // A4 height in mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
+      const totalPages = Math.ceil(imgHeight / pageHeight);
 
-      let position = 0;
-
-      // Add first page
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      // Add additional pages if content is longer than one page
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+      // Add pages
+      for (let i = 0; i < totalPages; i++) {
+        if (i > 0) {
+          pdf.addPage();
+        }
+        const yPosition = -i * pageHeight;
+        pdf.addImage(imgData, 'JPEG', 0, yPosition, imgWidth, imgHeight, undefined, 'FAST');
       }
 
       // Download the PDF
       const fileName = `Hospital_Report_${reportType}_${selectedDate}.pdf`;
       pdf.save(fileName);
+
+      // Success message
+      alert('PDF generated successfully!');
+
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF. Please try again.');
+
+      // Remove loading indicator if it exists
+      const loadingAlert = document.querySelector('div[style*="Generating PDF"]');
+      if (loadingAlert) {
+        document.body.removeChild(loadingAlert);
+      }
+
+      // Provide more specific error messages
+      let errorMessage = 'Failed to generate PDF. Please try again.';
+      if (error instanceof Error) {
+        if (error.message.includes('Canvas')) {
+          errorMessage = 'Failed to capture report content. Try refreshing the page and try again.';
+        } else if (error.message.includes('CORS') || error.message.includes('taint')) {
+          errorMessage = 'Content security issue. Some elements cannot be exported to PDF.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'PDF generation timed out. Please try again.';
+        }
+      }
+
+      alert(errorMessage);
     }
   };
 

@@ -632,6 +632,7 @@ export function PatientRegistration() {
                                 <option value="OPD">OPD</option>
                                 <option value="IPD">IPD</option>
                                 <option value="Emergency">Emergency</option>
+                                <option value="Direct">Direct</option>
                               </select>
                             </div>
                             <div className="dialog-form-field">
@@ -756,44 +757,7 @@ export function PatientRegistration() {
                             />
                           </div>
                           <div className="dialog-form-field-grid">
-                            <div className="dialog-form-field">
-                              <Label htmlFor="registeredBy" className="dialog-label-standard">Registered By</Label>
-                              <Input
-                                id="registeredBy"
-                                value={formData.registeredBy}
-                                onChange={(e) => setFormData({ ...formData, registeredBy: e.target.value })}
-                                placeholder="Registered by"
-                                className="dialog-input-standard"
-                              />
-                            </div>
-                            <div className="dialog-form-field">
-                              <Label htmlFor="registeredDate" className="dialog-label-standard">Registered Date</Label>
-                              <DatePicker
-                                id="registeredDate"
-                                selected={addRegisteredDate}
-                                onChange={(date: Date | null) => {
-                                  setAddRegisteredDate(date);
-                                  if (date) {
-                                    const year = date.getFullYear();
-                                    const month = String(date.getMonth() + 1).padStart(2, '0');
-                                    const day = String(date.getDate()).padStart(2, '0');
-                                    const dateStr = `${year}-${month}-${day}`;
-                                    setFormData({ ...formData, registeredDate: dateStr });
-                                  } else {
-                                    setFormData({ ...formData, registeredDate: '' });
-                                  }
-                                }}
-                                dateFormat="dd-MM-yyyy"
-                                placeholderText="dd-mm-yyyy"
-                                className="dialog-input-standard w-full"
-                                wrapperClassName="w-full"
-                                showYearDropdown
-                                showMonthDropdown
-                                dropdownMode="select"
-                                yearDropdownItemNumber={100}
-                                scrollableYearDropdown
-                              />
-                            </div>
+                           
                           </div>
                           <div className="dialog-footer-buttons">
                             <Button 

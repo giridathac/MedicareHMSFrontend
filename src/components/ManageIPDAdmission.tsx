@@ -144,6 +144,7 @@ export function ManageIPDAdmission() {
   const [viewingLabTest, setViewingLabTest] = useState<PatientLabTest | null>(null);
   const [editingLabTestId, setEditingLabTestId] = useState<string | number | null>(null);
   const [customizingLabTest, setCustomizingLabTest] = useState<PatientLabTest | null>(null);
+  const [customizingLabTestId, setCustomizingLabTestId] = useState<string | number | null>(null);
   const [ipdLabTestFormData, setIpdLabTestFormData] = useState({
     roomAdmissionId: '',
     patientId: '',
@@ -197,6 +198,8 @@ export function ManageIPDAdmission() {
   const [showCustomizeDoctorList, setShowCustomizeDoctorList] = useState(false);
   const [customizeSelectedFiles, setCustomizeSelectedFiles] = useState<File[]>([]);
   const [customizeUploadedDocumentUrls, setCustomizeUploadedDocumentUrls] = useState<string[]>([]);
+  const [customizeLabTestSubmitting, setCustomizeLabTestSubmitting] = useState(false);
+  const [customizeLabTestSubmitError, setCustomizeLabTestSubmitError] = useState<string | null>(null);
 
   // Manage Doctor Visit Dialog State
   const [isCustomizeDoctorVisitDialogOpen, setIsCustomizeDoctorVisitDialogOpen] = useState(false);
@@ -1743,6 +1746,206 @@ export function ManageIPDAdmission() {
     setIsEditVisitVitalsDialogOpen(true);
   };
 
+  // Handle saving Customize IPD Lab Test
+  const handleSaveCustomizeIPDLabTest = async () => {
+    try {
+      setCustomizeLabTestSubmitting(true);
+      setCustomizeLabTestSubmitError(null);
+
+      console.log('Saving Customize IPD Lab Test with data:', customizeLabTestFormData);
+
+      // Validate required fields
+      if (!customizeLabTestFormData.roomAdmissionId || customizeLabTestFormData.roomAdmissionId === 'undefined' || customizeLabTestFormData.roomAdmissionId === '') {
+        throw new Error('Room Admission ID is required');
+      }
+
+      // Extract PatientId with fallbacks for different field name variations
+      let patientIdValue = customizeLabTestFormData.patientId;
+      if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '' || patientIdValue === 'null') {
+        // Try to get from admission with multiple field name variations
+        patientIdValue = (admission as any)?.patientId ||
+                        (admission as any)?.PatientId ||
+                        (admission as any)?.PatientID ||
+                        (admission as any)?.patient_id ||
+                        (admission as any)?.Patient_ID ||
+                        '';
+        console.log('PatientId from form was empty, trying from admission:', patientIdValue);
+      }
+
+      if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '' || patientIdValue === 'null') {
+        throw new Error('Patient ID is required. Please ensure the admission has a valid patient ID.');
+      }
+
+      if (!customizeLabTestFormData.labTestId || customizeLabTestFormData.labTestId === '') {
+        throw new Error('Lab Test is required. Please select a lab test.');
+      }
+
+      if (!customizeLabTestFormData.orderedDate) {
+        throw new Error('Ordered Date is required');
+      }
+
+      if (!customizeLabTestFormData.orderedByDoctorId) {
+        throw new Error('Ordered By Doctor is required');
+      }
+
+      if (!customizeLabTestFormData.patientType || customizeLabTestFormData.patientType === '') {
+        throw new Error('Patient Type is required.');
+      }
+
+      // Get selected lab test details
+      const selectedLabTest = availableLabTests.find((lt: LabTest) => {
+        const lid = (lt as any).labTestId || (lt as any).id || '';
+        return String(lid) === customizeLabTestFormData.labTestId;
+      });
+      if (!selectedLabTest) {
+        throw new Error('Selected lab test details not found.');
+      }
+
+      // Prepare the request payload
+      const payload: any = {
+        RoomAdmissionId: Number(customizeLabTestFormData.roomAdmissionId),
+        PatientId: String(patientIdValue).trim(),
+        LabTestId: Number(customizeLabTestFormData.labTestId),
+        Priority: customizeLabTestFormData.priority || 'Normal',
+        OrderedDate: customizeLabTestFormData.orderedDate,
+        PatientType: customizeLabTestFormData.patientType,
+        LabTestDone: customizeLabTestFormData.labTestDone || 'No',
+        TestStatus: customizeLabTestFormData.testStatus || 'Pending',
+      };
+
+      // Add conditional fields based on PatientType (only if they have values)
+      if (customizeLabTestFormData.patientType === 'OPD') {
+        if (customizeLabTestFormData.appointmentId && customizeLabTestFormData.appointmentId.trim() !== '') {
+          payload.AppointmentId = String(customizeLabTestFormData.appointmentId).trim();
+        }
+      }
+      if (customizeLabTestFormData.patientType === 'IPD') {
+        if (customizeLabTestFormData.roomAdmissionId && customizeLabTestFormData.roomAdmissionId.trim() !== '') {
+          payload.RoomAdmissionId = Number(customizeLabTestFormData.roomAdmissionId);
+        }
+      }
+      if (customizeLabTestFormData.patientType === 'Emergency') {
+        if (customizeLabTestFormData.emergencyBedSlotId && customizeLabTestFormData.emergencyBedSlotId.trim() !== '') {
+          payload.EmergencyBedSlotId = String(customizeLabTestFormData.emergencyBedSlotId).trim();
+        }
+      }
+
+      // Add OrderedByDoctorId (required)
+      if (customizeLabTestFormData.orderedByDoctorId && customizeLabTestFormData.orderedByDoctorId.trim() !== '') {
+        payload.OrderedByDoctorId = Number(customizeLabTestFormData.orderedByDoctorId);
+      }
+
+      // Add optional fields
+      if (customizeLabTestFormData.orderedBy && customizeLabTestFormData.orderedBy.trim() !== '') {
+        payload.OrderedBy = customizeLabTestFormData.orderedBy.trim();
+      }
+      if (customizeLabTestFormData.description && customizeLabTestFormData.description.trim() !== '') {
+        payload.Description = customizeLabTestFormData.description.trim();
+      }
+      if (customizeLabTestFormData.charges && customizeLabTestFormData.charges.trim() !== '') {
+        payload.Charges = Number(customizeLabTestFormData.charges);
+      } else if (selectedLabTest.charges) {
+        payload.Charges = selectedLabTest.charges;
+      }
+
+      // Upload files first if any are selected (now that we have patientId)
+      // Start with existing uploaded documents (for customize mode)
+      let documentUrls: string[] = [...customizeUploadedDocumentUrls];
+
+      if (customizeSelectedFiles.length > 0) {
+        try {
+          const newUrls = await uploadFiles(customizeSelectedFiles, String(patientIdValue).trim());
+          documentUrls = [...documentUrls, ...newUrls];
+        } catch (error) {
+          alert(`Failed to upload files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          return;
+        }
+      }
+
+      // Combine all document URLs (JSON array)
+      const combinedReportsUrl = documentUrls.length > 0 ? JSON.stringify(documentUrls) : null;
+
+      if (combinedReportsUrl) {
+        payload.ReportsUrl = combinedReportsUrl;
+      }
+      if (customizeLabTestFormData.testDoneDateTime && customizeLabTestFormData.testDoneDateTime.trim() !== '') {
+        // Convert datetime-local to ISO 8601 format
+        try {
+          const date = new Date(customizeLabTestFormData.testDoneDateTime);
+          if (!isNaN(date.getTime())) {
+            payload.TestDoneDateTime = date.toISOString();
+          } else {
+            payload.TestDoneDateTime = customizeLabTestFormData.testDoneDateTime;
+          }
+        } catch (e) {
+          payload.TestDoneDateTime = customizeLabTestFormData.testDoneDateTime;
+        }
+      }
+
+      console.log('API Payload:', JSON.stringify(payload, null, 2));
+
+      // Call the API to update the patient lab test
+      const patientLabTestsId = customizingLabTest?.patientLabTestsId || customizingLabTest?.patientLabTestId || customizingLabTest?.id;
+      if (!patientLabTestsId) {
+        throw new Error('Patient Lab Test ID is required for updating');
+      }
+
+      console.log('API Endpoint: PUT /patient-lab-tests/' + patientLabTestsId);
+      const response = await apiRequest<any>(`/patient-lab-tests/${patientLabTestsId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      console.log('Customize IPD Lab test updated successfully:', response);
+
+      // Close dialog
+      setIsCustomizeIPDLabTestDialogOpen(false);
+      setCustomizingLabTest(null);
+      setCustomizeSelectedFiles([]);
+      setCustomizeUploadedDocumentUrls([]);
+      setCustomizeOrderedDate(null);
+      setCustomizeTestDoneDateTime(null);
+
+      // Refresh the lab tests list
+      if (admission?.roomAdmissionId) {
+        await fetchPatientLabTests(admission.roomAdmissionId);
+      }
+
+      // Reset form
+      setCustomizeLabTestFormData({
+        roomAdmissionId: '',
+        patientId: '',
+        labTestId: '',
+        priority: 'Normal',
+        orderedDate: '',
+        orderedBy: '',
+        orderedByDoctorId: '',
+        description: '',
+        charges: '',
+        patientType: 'IPD',
+        appointmentId: '',
+        emergencyBedSlotId: '',
+        labTestDone: 'No',
+        reportsUrl: '',
+        testStatus: 'Pending',
+        testDoneDateTime: ''
+      });
+      setCustomizeLabTestSearchTerm('');
+      setShowCustomizeLabTestList(false);
+      setCustomizeDoctorSearchTerm('');
+      setShowCustomizeDoctorList(false);
+    } catch (err) {
+      console.error('Error saving Customize IPD Lab Test:', err);
+      setCustomizeLabTestSubmitError(
+        err instanceof Error ? err.message : 'Failed to save Customize IPD Lab Test'
+      );
+    } finally {
+      setCustomizeLabTestSubmitting(false);
+    }
+  };
+
   // Handle saving Visit Vitals
   const handleSaveVisitVitals = async () => {
     try {
@@ -2568,7 +2771,7 @@ export function ManageIPDAdmission() {
                     id="ipdPriority"
                     className="w-full px-3 py-2 border border-gray-200 rounded-md"
                     value={ipdLabTestFormData.priority}
-                    onChange={(e) => setIpdLabTestFormData({ ...ipdLabTestFormData, priority: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setIpdLabTestFormData({ ...ipdLabTestFormData, priority: e.target.value })}
                     required
                   >
                     <option value="Normal">Normal</option>
@@ -3433,15 +3636,10 @@ export function ManageIPDAdmission() {
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                // TODO: Add save functionality for manage dialog
-                console.log('Manage lab test data:', customizeLabTestFormData);
-                setIsCustomizeIPDLabTestDialogOpen(false);
-                setCustomizeOrderedDate(null);
-                setCustomizeTestDoneDateTime(null);
-              }}
+              onClick={handleSaveCustomizeIPDLabTest}
+              disabled={customizeLabTestSubmitting}
             >
-              Save
+              {customizeLabTestSubmitting ? 'Saving...' : 'Save'}
             </Button>
           </div>
         </div>
@@ -4018,6 +4216,16 @@ export function ManageIPDAdmission() {
                     placeholder="Enter O2 saturation (optional)"
                   />
                 </div>
+                <div className="col-span-2">
+                  <Label htmlFor="visitVitalsRemarks">Vitals Remarks</Label>
+                  <Textarea
+                    id="visitVitalsRemarks"
+                    value={visitVitalsFormData.vitalsRemarks}
+                    onChange={(e) => setVisitVitalsFormData({ ...visitVitalsFormData, vitalsRemarks: e.target.value })}
+                    placeholder="Enter vitals remarks (optional)"
+                    rows={3}
+                  />
+                </div>
                 <div>
                   <Label htmlFor="visitVitalsRespiratoryRate">Respiratory Rate</Label>
                   <Input
@@ -4054,16 +4262,7 @@ export function ManageIPDAdmission() {
                     <option value="Normal">Normal</option>
                   </select>
                 </div>
-                <div className="col-span-2">
-                  <Label htmlFor="visitVitalsVitalsRemarks">Vitals Remarks</Label>
-                  <Textarea
-                    id="visitVitalsVitalsRemarks"
-                    value={visitVitalsFormData.vitalsRemarks}
-                    onChange={(e) => setVisitVitalsFormData({ ...visitVitalsFormData, vitalsRemarks: e.target.value })}
-                    placeholder="Enter vitals remarks (optional)"
-                    rows={3}
-                  />
-                </div>
+                
               </div>
             </div>
           </div>
@@ -4360,53 +4559,7 @@ export function ManageIPDAdmission() {
                     <option value="Inactive">Inactive</option>
                   </select>
                 </div>
-                <div className="dialog-form-field">
-                  <Label htmlFor="customizeVisitVitalsCreatedBy" className="dialog-label-standard">Vitals Created By</Label>
-                  <Input
-                    id="customizeVisitVitalsCreatedBy"
-                    value={customizeVisitVitalsFormData.vitalsCreatedBy}
-                    onChange={(e) => setCustomizeVisitVitalsFormData({ ...customizeVisitVitalsFormData, vitalsCreatedBy: e.target.value })}
-                    placeholder="Enter created by (optional)"
-                    className="dialog-input-standard"
-                  />
-                </div>
-                <div className="dialog-form-field">
-                  <Label htmlFor="customizeVisitVitalsCreatedAt" className="dialog-label-standard">Vitals Created At</Label>
-                  <DatePicker
-                    id="customizeVisitVitalsCreatedAt"
-                    selected={customizeVisitVitalsCreatedAt}
-                    onChange={(date: Date | null) => {
-                      setCustomizeVisitVitalsCreatedAt(date);
-                      if (date) {
-                        const year = date.getFullYear();
-                        const month = String(date.getMonth() + 1).padStart(2, '0');
-                        const day = String(date.getDate()).padStart(2, '0');
-                        const hours = String(date.getHours()).padStart(2, '0');
-                        const minutes = String(date.getMinutes()).padStart(2, '0');
-                        const seconds = String(date.getSeconds()).padStart(2, '0');
-                        const istDateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
-                        const dateObj = new Date(istDateTimeStr);
-                        if (!isNaN(dateObj.getTime())) {
-                          // Store in form data if needed
-                        }
-                      }
-                    }}
-                    showTimeSelect
-                    timeIntervals={1}
-                    timeCaption="Time"
-                    timeFormat="hh:mm aa"
-                    dateFormat="dd-MM-yyyy hh:mm aa"
-                    placeholderText="dd-mm-yyyy HH:MM AM/PM"
-                    className="dialog-input-standard w-full"
-                    wrapperClassName="w-full"
-                    showYearDropdown
-                    showMonthDropdown
-                    dropdownMode="select"
-                    yearDropdownItemNumber={100}
-                    scrollableYearDropdown
-                  />
-                </div>
-                
+               
                 <div className="dialog-form-field col-span-2">
                   <Label htmlFor="customizeVisitVitalsVitalsRemarks" className="dialog-label-standard">Vitals Remarks</Label>
                   <Textarea

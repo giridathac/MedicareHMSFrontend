@@ -12,6 +12,7 @@ export interface Admission {
   admissionDate: string;
   roomType: 'Regular Ward' | 'Special Shared Room' | 'Special Room';
   bedNumber: string;
+  roomNo?: string;
   admittedBy: string;
   admittingDoctorName?: string; // AdmittingDoctorName from API
   patientNo?: string; // PatientNo from API
@@ -95,6 +96,7 @@ export interface RoomCapacityOverview {
 
 export interface DashboardMetrics {
   totalAdmissions: number;
+  totalBeds: number;
   activePatients: number;
   bedOccupancy: number; // percentage
   totalOccupied: number;
@@ -787,7 +789,7 @@ export const admissionsApi = {
           'patientName', 'PatientName', 'patient_name', 'Patient_Name',
           'patientFullName', 'PatientFullName', 'name', 'Name', 'fullName', 'FullName'
         ], ''),
-        age: admissionData.age || admissionData.Age || admissionData.patientAge || admissionData.PatientAge || null,
+        age: age,
         gender: gender,
         admissionDate: extractField(admissionData, [
           'admissionDate', 'AdmissionDate', 'admission_date', 'Admission_Date',
@@ -1595,12 +1597,100 @@ export const admissionsApi = {
 
       // Helper function to extract numeric value from various field name formats
       const extractValue = (data: any, fieldVariations: string[], defaultValue: number = 0): number => {
+        if (!Array.isArray(fieldVariations)) {
+          console.error('extractValue: fieldVariations must be an array', fieldVariations);
+          return defaultValue;
+        }
+        if (!data || typeof data !== 'object') {
+          return defaultValue;
+        }
+
+        // Helper to recursively check nested objects
+        const checkNested = (obj: any, field: string, depth: number = 0): any => {
+          if (depth > 3 || !obj || typeof obj !== 'object' || Array.isArray(obj)) {
+            return undefined;
+          }
+
+          // Check direct property (case-sensitive)
+          if (obj.hasOwnProperty(field)) {
+            const value = obj[field];
+            if (value !== undefined && value !== null && value !== '') {
+              return value;
+            }
+          }
+
+          // Check case-insensitive
+          const lowerField = field.toLowerCase();
+          for (const key in obj) {
+            if (obj.hasOwnProperty(key) && key.toLowerCase() === lowerField) {
+              const value = obj[key];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+          }
+
+          // Check partial match
+          for (const key in obj) {
+            if (obj.hasOwnProperty(key) && (key.toLowerCase().includes(lowerField) || lowerField.includes(key.toLowerCase()))) {
+              const value = obj[key];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+          }
+
+          // Recursively check nested objects
+          for (const key in obj) {
+            if (obj.hasOwnProperty(key) && typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+              const nestedValue = checkNested(obj[key], field, depth + 1);
+              if (nestedValue !== undefined && nestedValue !== null && nestedValue !== '') {
+                return nestedValue;
+              }
+            }
+          }
+          return undefined;
+        };
+
+        // Try each field variation
         for (const field of fieldVariations) {
-          const value = data?.[field];
-          if (value !== undefined && value !== null) {
-            const numValue = Number(value);
+          // Check direct field
+          let value = data?.[field];
+          if (value !== undefined && value !== null && value !== '') {
+            // Handle strings with % symbol
+            const cleanedValue = String(value).replace('%', '').trim();
+            const numValue = Number(cleanedValue);
             if (!isNaN(numValue)) {
               return numValue;
+            }
+          }
+
+          // Check nested objects
+          const nestedValue = checkNested(data, field);
+          if (nestedValue !== undefined && nestedValue !== null && nestedValue !== '') {
+            // Handle strings with % symbol
+            const cleanedValue = String(nestedValue).replace('%', '').trim();
+            const numValue = Number(cleanedValue);
+            if (!isNaN(numValue)) {
+              return numValue;
+            }
+          }
+
+          // Check nested paths (e.g., Metrics.BedOccupancy)
+          if (field.includes('.')) {
+            const parts = field.split('.');
+            let nestedPathValue = data;
+            for (const part of parts) {
+              nestedPathValue = nestedPathValue?.[part];
+              if (nestedPathValue === undefined || nestedPathValue === null) break;
+            }
+            if (nestedPathValue !== undefined && nestedPathValue !== null && nestedPathValue !== '') {
+              // Handle strings with % symbol
+              const cleanedValue = String(nestedPathValue).replace('%', '').trim();
+              const numValue = Number(cleanedValue);
+              if (!isNaN(numValue)) {
+                return numValue;
+              }
             }
           }
         }
@@ -1631,7 +1721,7 @@ export const admissionsApi = {
           'occupied', 'Occupied', 'occupiedCount', 'OccupiedCount', 'occupied_count', 'Occupied_Count'
         ], 0),
         totalCapacity: extractValue(metricsData, [
-          'totalCapacity', 'TotalCapacity', 'total_capacity', 'Total_Capacity',
+          'totalBeds', 'TotalCapacity', 'total_capacity', 'Total_Capacity',
           'totalBeds', 'TotalBeds', 'total_beds', 'Total_Beds',
           'capacity', 'Capacity', 'bedCapacity', 'BedCapacity', 'bed_capacity', 'Bed_Capacity'
         ], 0),

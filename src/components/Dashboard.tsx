@@ -15,8 +15,8 @@ import { Department, DepartmentCategory } from '../types/departments';
 const statConfig = [
   { title: 'OPD Patients Today', key: 'opdPatientsToday' as const, changeType: 'otherPatients', icon: Users, color: 'bg-blue-500' },
   { title: 'Active Tokens', key: 'activeTokens' as const, change: 'Live', icon: ClipboardList, color: 'bg-green-500' },
-  { title: 'IPD Admissions', key: 'ipdAdmissions' as const, changeKey: 'ipdAdmissions' as const, changeSuffix: 'Available', icon: BedDouble, color: 'bg-purple-500' },
-  { title: 'OT Scheduled', key: 'otScheduled' as const, change: '3 Ongoing', icon: Scissors, color: 'bg-orange-500' },
+  { title: 'IPD Admissions', key: 'ipdAdmissions' as const, changeKey: 'availableIPDBeds' as const, changeSuffix: 'Available', icon: BedDouble, color: 'bg-purple-500' },
+  { title: 'Ongoing', key: 'ongoingOTCount' as const, changeKey: 'otScheduled' as const, changeSuffix: 'Scheduled', icon: Scissors, color: 'bg-orange-500' },
   { title: 'ICU Occupied', key: 'icuOccupied' as const, changeType: 'percentage', icon: HeartPulse, color: 'bg-red-500' },
   { title: 'Total Patients', key: 'totalPatients' as const, change: 'Today', icon: Activity, color: 'bg-teal-500' },
 ];

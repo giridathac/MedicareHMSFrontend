@@ -86,7 +86,9 @@ export interface DashboardStats {
   opdPatientsToday: number;
   activeTokens: number;
   ipdAdmissions: number;
+  availableIPDBeds: number;
   otScheduled: number;
+  ongoingOTCount: number;
   icuOccupied: string;
   totalPatients: number;
 }

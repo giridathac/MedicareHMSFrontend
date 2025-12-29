@@ -17,8 +17,6 @@ import { usePatientAppointments } from '../hooks/usePatientAppointments';
 import { useStaff } from '../hooks/useStaff';
 import { useRoles } from '../hooks/useRoles';
 import { useDepartments } from '../hooks/useDepartments';
-import { patientsApi } from '../api/patients';
-import { apiRequest } from '../api/base';
 import { Patient, PatientAppointment, Doctor } from '../types';
 import { formatDateIST, getTodayIST } from '../utils/timeUtils';
 import DatePicker from 'react-datepicker';
