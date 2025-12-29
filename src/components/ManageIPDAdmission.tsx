@@ -247,6 +247,8 @@ export function ManageIPDAdmission() {
 
   // Doctor Visit Dialog State
   const [isAddDoctorVisitDialogOpen, setIsAddDoctorVisitDialogOpen] = useState(false);
+  const [isEditDoctorVisitDialogOpen, setIsEditDoctorVisitDialogOpen] = useState(false);
+  const [isViewDoctorVisitDialogOpen, setIsViewDoctorVisitDialogOpen] = useState(false);
   const [doctorVisitFormData, setDoctorVisitFormData] = useState({
     patientId: '',
     doctorId: '',
@@ -290,6 +292,31 @@ export function ManageIPDAdmission() {
   const [availableNurses, setAvailableNurses] = useState<any[]>([]);
   const [nurseSearchTerm, setNurseSearchTerm] = useState('');
   const [showNurseList, setShowNurseList] = useState(false);
+
+  // Edit Admission Dialog State
+  const [isEditAdmissionDialogOpen, setIsEditAdmissionDialogOpen] = useState(false);
+  const [editAdmissionFormData, setEditAdmissionFormData] = useState({
+    patientId: '',
+    roomAdmissionId: '',
+    bedNumber: '',
+    roomType: '',
+    admissionDate: '',
+    admittedBy: '',
+    admittingDoctorName: '',
+    diagnosis: '',
+    age: '',
+    gender: '',
+    patientName: '',
+    patientNo: '',
+    admissionStatus: '',
+    scheduleOT: '',
+    isLinkedToICU: false,
+    estimatedStay: '',
+    caseSheetDetails: '',
+    caseSheet: ''
+  });
+  const [editAdmissionSubmitting, setEditAdmissionSubmitting] = useState(false);
+  const [editAdmissionSubmitError, setEditAdmissionSubmitError] = useState<string | null>(null);
 
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

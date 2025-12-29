@@ -2,6 +2,13 @@
 import { apiRequest, ApiError } from './base';
 import { EmergencyBed } from '../types';
 
+// Helper function to generate a unique emergency bed number
+function generateEmergencyBedNo(): string {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000);
+  return `ER-${timestamp}-${random}`;
+}
+
 export interface CreateEmergencyBedDto {
   emergencyBedNo?: string;
   emergencyRoomNameNo?: string;
