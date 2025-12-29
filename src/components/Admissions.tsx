@@ -29,7 +29,7 @@ const fallbackRoomCapacity: RoomCapacityOverview = {
   'Special Room': { total: 15, occupied: 8, available: 7 },
 };
 
-export function Admissions() {
+export default function Admissions() {
   const { admissions, roomCapacity, dashboardMetrics, loading, capacityLoading, metricsLoading, fetchRoomCapacityOverview, fetchDashboardMetrics, updateAdmission, fetchAdmissions } = useAdmissions();
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -1199,11 +1199,11 @@ export function Admissions() {
     const totalCapacity = dashboardMetrics?.totalCapacity ?? Object.values(currentRoomCapacity).reduce((sum, room) => sum + room.total, 0);
     return totalCapacity > 0 ? Math.round((totalOccupied / totalCapacity) * 100) : 0;
   })();
-  const bedOccupancy1 = dashboardMetrics?.bedOccupancy1 ?? '0/0';
+  //const bedOccupancy1 = dashboardMetrics?.bedOccupancy1 ?? '0/0';
   const totalOccupied = dashboardMetrics?.totalOccupied ?? Object.values(currentRoomCapacity).reduce((sum, room) => sum + room.occupied, 0);
   const totalCapacity = dashboardMetrics?.totalCapacity ?? Object.values(currentRoomCapacity).reduce((sum, room) => sum + room.total, 0);
   const availableBeds = dashboardMetrics?.availableBeds ?? (totalCapacity - totalOccupied);
-  const avgStay = dashboardMetrics?.avgStay ?? 5.2;
+  const avgStay = dashboardMetrics?.avgStay ?? 0.0;
 
   const handleScheduleOT = async (admission: Admission) => {
     // Use roomAdmissionId as primary identifier
@@ -2330,7 +2330,7 @@ export function Admissions() {
               <p className="text-sm text-gray-500">Bed Occupancy</p>
               <Badge variant={bedOccupancy > 80 ? 'destructive' : 'default'}>{metricsLoading ? '...' : `${bedOccupancy}%`}</Badge>
             </div>
-            <h3 className="text-gray-900">{metricsLoading ? '...' : (dashboardMetrics?.bedOccupancy1?? `${totalOccupied}/${totalCapacity}`)}</h3>
+            <h3 className="text-gray-900">{metricsLoading ? '...' : (`${totalOccupied}/${totalCapacity}`)}</h3>
             <p className="text-xs text-gray-500">Occupied beds</p>
           </CardContent>
         </Card>

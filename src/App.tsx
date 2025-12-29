@@ -29,7 +29,7 @@ const Dashboard = lazy(() => import('./components/Dashboard').then(m => ({ defau
 const FrontDesk = lazy(() => import('./components/FrontDesk').then(m => ({ default: m.FrontDesk })));
 const DoctorConsultation = lazy(() => import('./components/DoctorConsultation').then(m => ({ default: m.DoctorConsultation })));
 const ManageConsultation = lazy(() => import('./components/ManageConsultation').then(m => ({ default: m.ManageConsultation })));
-const Admissions = lazy(() => import('./components/Admissions').then(m => ({ default: m.Admissions })));
+const Admissions = lazy(() => import('./components/Admissions').then(m => ({ default: m.default })));
 const OTManagement = lazy(() => import('./components/OTManagement').then(m => ({ default: m.OTManagement })));
 const OTRoomsManagement = lazy(() => import('./components/OTRoomsManagement').then(m => ({ default: m.OTRoomsManagement })));
 const ICUManagement = lazy(() => import('./components/ICUManagement').then(m => ({ default: m.ICUManagement })));
