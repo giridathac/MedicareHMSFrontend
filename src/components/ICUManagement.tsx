@@ -2350,7 +2350,7 @@ export function ICUManagement() {
             <Card className="dashboard-stats-card">
               <CardContent className="dashboard-stats-card-content">
                 <div className="dashboard-stats-icon-container">
-                  <HeartPulse className="size-7 text-white bg-red-500 p-4 rounded-lg shadow-sm" />
+                  <HeartPulse className="size-5 text-red-600" />
                   <span className="dashboard-stats-status-label">Occupied beds</span>
                 </div>
                 <h3 className="dashboard-stats-number">{occupancy.occupiedBeds}/{occupancy.totalBeds}</h3>
@@ -2361,8 +2361,9 @@ export function ICUManagement() {
             <Card className="dashboard-stats-card">
               <CardContent className="dashboard-stats-card-content">
                 <div className="dashboard-stats-icon-container">
-                  <Badge variant="destructive">{criticalPatientsCount}</Badge>
+                  
                   <span className="dashboard-stats-status-label">Require immediate attention</span>
+                  <Badge variant="destructive">{criticalPatientsCount}</Badge>
                 </div>
                 <h3 className="dashboard-stats-number">{criticalPatientsCount}</h3>
                 <p className="dashboard-stats-label">Critical Patients</p>
@@ -2372,7 +2373,7 @@ export function ICUManagement() {
             <Card className="dashboard-stats-card">
               <CardContent className="dashboard-stats-card-content">
                 <div className="dashboard-stats-icon-container">
-                  <Wind className="size-7 text-white bg-blue-500 p-4 rounded-lg shadow-sm" />
+                  <Wind className="size-5 text-blue-600" />
                   <span className="dashboard-stats-status-label">Ventilator support</span>
                 </div>
                 <h3 className="dashboard-stats-number">{onVentilatorCount}</h3>

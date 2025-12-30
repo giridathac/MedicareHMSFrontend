@@ -54,17 +54,21 @@ export interface CreateAdmissionDto {
   bedNumber: string;
   admittedBy: string;
   diagnosis: string;
-  status?: 'Active' | 'Discharged' | 'Moved to ICU' | 'Surgery Scheduled';
-  estimatedStay?: string;
-  patientType?: 'Direct' | 'OPD' | 'Emergency';
-  patientAppointmentId?: string;
-  emergencyAdmissionId?: string;
-  emergencyBedNo?: string;
+  admissionStatus?: 'Active' | 'Discharged' | 'Moved to ICU' | 'Surgery Scheduled';
+  status: 'Active' | 'Inactive';
+  estimatedStay: string;
+  patientType: 'Direct' | 'OPD' | 'Emergency';
+  patientAppointmentId: string;
+  emergencyAdmissionId: string;
+  emergencyBedNo: string;
  
   roomBedsId?: string;
   doctorId?: string;
   admittedByDoctorId?: string;
   roomAllocationDate?: string;
+  roomvacantDate?: string;
+  shiftedToAnotherRoom?: boolean | string;
+  shiftedToDetails?: string;
   caseSheet?: string;
   caseSheetDetails?: string;
   isLinkedToICU?: boolean;
@@ -931,7 +935,7 @@ export const admissionsApi = {
           'movedTo', 'MovedTo', 'moved_to', 'Moved_To'
         ], undefined),
         shiftedToDetails: extractField(admissionData, [
-          'shiftedToDetails', 'ShiftedToDetails', 'shifted_to_details', 'Shifted_To_Details',
+          'shiftedToDetails','shiftedToDetails', 'ShiftedToDetails', 'shifted_to_details', 'Shifted_To_Details',
           'shiftDetails', 'ShiftDetails', 'shift_details', 'Shift_Details',
           'shiftNotes', 'ShiftNotes', 'shift_notes', 'Shift_Notes'
         ], undefined),
@@ -973,6 +977,10 @@ export const admissionsApi = {
         rawAdmittedBy: admissionData.admittedBy || admissionData.AdmittedBy || admissionData.admitted_by || admissionData.Admitted_By,
         rawDiagnosis: admissionData.diagnosis || admissionData.Diagnosis || admissionData.diagnosisDescription || admissionData.DiagnosisDescription,
         rawCaseSheetDetails: admissionData.caseSheetDetails || admissionData.CaseSheetDetails || admissionData.case_sheet_details || admissionData.Case_Sheet_Details,
+        rawCaseDetails: admissionData.caseDetails || admissionData.CaseDetails || admissionData.case_details || admissionData.Case_Details,
+        rawShiftedToRoom: admissionData.shiftedToRoom || admissionData.ShiftedToRoom || admissionData.shifted_to_room || admissionData.Shifted_To_Room,
+        rawShiftedToDetails: admissionData.shiftedToDetails || admissionData.ShiftedToDetails || admissionData.shifted_to_details || admissionData.Shifted_To_Details,
+        rawRoomVacantDate: admissionData.roomVacantDate || admissionData.RoomVacantDate || admissionData.room_vacant_date || admissionData.Room_Vacant_Date,
         full: normalizedAdmission
       });
       
@@ -1108,11 +1116,15 @@ export const admissionsApi = {
        patientAppointmentId: data.patientAppointmentId,
        emergencyAdmissionId: data.emergencyAdmissionId,
        emergencyBedNo: data.emergencyBedNo,
-       
+       admissionStatus: data.admissionStatus,
        roomBedsId: data.roomBedsId,
        doctorId: data.doctorId,
        admittedByDoctorId: data.admittedByDoctorId,
        roomAllocationDate: data.roomAllocationDate, 
+       roomvacantDate: data.roomVacantDate,
+       shiftToAnotherRoom: data.shiftToAnotherRoom,
+       shiftedToDetails: data.shiftedToDetails,
+       estimatedStay: data.estimatedStay,
        caseSheet: data.caseSheet,
        caseSheetDetails: data.caseSheetDetails,
        isLinkedToICU: data.isLinkedToICU,
@@ -1126,6 +1138,11 @@ export const admissionsApi = {
       
       if (data.status !== undefined && data.status !== null) {
         backendData.Status = data.status;
+      } else {
+        backendData.Status = 'Active';
+      }
+      if (data.admissionStatus !== undefined && data.admissionStatus !== null) {
+        backendData.admissionStatus = data.admissionStatus;
       } else {
         backendData.Status = 'Active';
       }
@@ -1144,8 +1161,17 @@ export const admissionsApi = {
       if ((data as any).roomAllocationDate) {
         backendData.RoomAllocationDate = (data as any).roomAllocationDate.trim();
       }
+       if ((data as any).shiftToAnotherRoom !== undefined) {
+        backendData.shiftToAnotherRoom = (data as any).shiftToAnotherRoom.trim();
+      }
+      if ((data as any).shiftedToDetails !== undefined) {
+        backendData.shiftedToDetails = (data as any).shiftedToDetails.trim();
+      }
+      if ((data as any).roomVacantDate !== undefined) {
+        backendData.roomVacantDate = (data as any).roomVacantDate.trim();
+      }
 
-      console.log('Creating admission with data:', JSON.stringify(backendData, null, 2));
+      console.log('@@@@@@@@@@@@@@@@@@@@@@@', backendData);
 
       // Call the actual API endpoint
       const response = await apiRequest<any>('/room-admissions', {

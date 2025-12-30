@@ -18,9 +18,23 @@ export function convertToIST(date: string | Date): Date {
     if (!date) {
       return new Date();
     }
-    
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
-    
+
+    let dateStr = typeof date === 'string' ? date : date.toISOString();
+
+    // Handle DD-MM-YYYY format (convert to YYYY-MM-DD)
+    if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+      const [day, month, year] = dateStr.split('-').map(Number);
+      dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+    // Handle DD-MM-YYYY HH:MM format (convert to YYYY-MM-DDTHH:MM)
+    else if (/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}$/.test(dateStr)) {
+      const [datePart, timePart] = dateStr.split(' ');
+      const [day, month, year] = datePart.split('-').map(Number);
+      dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${timePart}:00`;
+    }
+
+    const dateObj = typeof date === 'string' ? new Date(dateStr) : date;
+
     // Check if date is valid
     if (isNaN(dateObj.getTime())) {
       console.warn('Invalid date provided to convertToIST:', date);

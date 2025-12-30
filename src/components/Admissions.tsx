@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -76,6 +76,7 @@ export default function Admissions() {
   const [availableEmergencyBedSlots, setAvailableEmergencyBedSlots] = useState<any[]>([]);
   const [availableIPDAdmissions, setAvailableIPDAdmissions] = useState<any[]>([]);
   const [roomAllocationDate, setRoomAllocationDate] = useState<Date | null>(null);
+  const [roomVacantDate, setRoomVacantDate] = useState<Date | null>(null);
   const [addAdmissionForm, setAddAdmissionForm] = useState({
     patientId: '',
     patientType: '',
@@ -90,6 +91,7 @@ export default function Admissions() {
     diagnosis: '',
     roomAllocationDate: '',
     admissionStatus: 'Active',
+    status: 'Active',
     caseSheet: '',
     caseDetails: '',
     isLinkedToICU: 'No',
@@ -104,10 +106,10 @@ export default function Admissions() {
     eBedSlotNo: '',
     emergencyAdmissionDate: '',
     roomVacantDate: '',
-    shiftToAnotherRoom: '',
-    shiftedTo: '',
-    shiftedToDetails: '',
-    scheduleOT: '',
+        shiftToAnotherRoom: 'No',
+        shiftedTo: '',
+        shiftedToDetails: '',
+        scheduleOT: 'No',
     otAdmissionId: '',
     icuAdmissionId: '',
     billId: '',
@@ -296,6 +298,8 @@ export default function Admissions() {
         },
         body: JSON.stringify(payload),
       });
+
+      console.log(`Lab order created for patient ${labOrderFormData.patientId}`);
 
       console.log('Lab order created successfully:', response);
 
@@ -700,6 +704,12 @@ export default function Admissions() {
         throw new Error('Room Allocation Date is required');
       }
 
+      // Validate admissionStatus is one of the allowed values
+      const allowedAdmissionStatuses = ['Active', 'Moved To ICU', 'Surgery Scheduled', 'Discharged'];
+      if (!addAdmissionForm.admissionStatus || !allowedAdmissionStatuses.includes(addAdmissionForm.admissionStatus)) {
+        throw new Error('Admission Status must be one of: Active, Moved To ICU, Surgery Scheduled, Discharged');
+      }
+
       // Get selected patient details
       const selectedPatient = patientOptions.find((p: any) => {
         const pid = (p as any).patientId || (p as any).PatientId || '';
@@ -822,17 +832,26 @@ export default function Admissions() {
         bedNumber: bedNumber,
         admittedBy: doctorName,
         diagnosis: addAdmissionForm.diagnosis || '',
-        status: addAdmissionForm.status || 'Active' as const,
+        status: addAdmissionForm.status || 'Active',
         admissionStatus: addAdmissionForm.admissionStatus || 'Active',
-        AdmissionStatus: addAdmissionForm.admissionStatus || 'Active',
         patientType: addAdmissionForm.patientType || '',
         roomBedsId: roomBedsId ? String(roomBedsId) : undefined,
         doctorId: doctorId ? String(doctorId) : undefined,
         admittedByDoctorId: doctorId ? String(doctorId) : undefined, // Also include as admittedByDoctorId for API
         roomAllocationDate: addAdmissionForm.roomAllocationDate,
+        roomVacantDate: addAdmissionForm.roomVacantDate || '',
         caseSheet: addAdmissionForm.caseSheet || '',
         caseSheetDetails: addAdmissionForm.caseDetails || '',
         isLinkedToICU: addAdmissionForm.isLinkedToICU || 'No',
+        shiftToAnotherRoom: addAdmissionForm.shiftToAnotherRoom || 'No',
+        shiftedTo: addAdmissionForm.shiftedTo || '',
+        shiftedToDetails: addAdmissionForm.shiftedToDetails || '',
+        scheduleOT: addAdmissionForm.scheduleOT || 'No',
+        otAdmissionId: addAdmissionForm.otAdmissionId || '',
+        icuAdmissionId: addAdmissionForm.icuAdmissionId || '',
+        billId: addAdmissionForm.billId || '',
+        estimatedStay: addAdmissionForm.estimatedStay || '',
+        patientNo: addAdmissionForm.patientNo || '',
       };
 
       // Add conditional fields based on PatientType
@@ -849,7 +868,7 @@ export default function Admissions() {
         // The emergencyBedSlotId field contains the EmergencyAdmissionId from the dropdown selection
         admissionData.emergencyAdmissionId = String(addAdmissionForm.emergencyBedSlotId);
         admissionData.emergencyBedSlotId = String(addAdmissionForm.emergencyBedSlotId);
-      }
+      } 
 
       console.log('Saving admission with data:', admissionData);
       console.log('PatientType in admissionData:', admissionData.patientType);
@@ -865,6 +884,7 @@ export default function Admissions() {
           ...admissionData,
           roomAdmissionId: Number(roomAdmissionId)
         };
+        console.log('BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',updateData );
         createdAdmission = await admissionsApi.update(updateData);
         console.log('Admission updated successfully');
         // Close edit dialog after update
@@ -1691,8 +1711,7 @@ export default function Admissions() {
                         const year = date.getFullYear();
                         const month = String(date.getMonth() + 1).padStart(2, '0');
                         const day = String(date.getDate()).padStart(2, '0');
-                        /* const dateStr = `${year}-${month}-${day}`; */
-                        const dateStr = `${day}-${month}-${year}`;
+                        const dateStr = `${year}-${month}-${day}`;
                         setAddAdmissionForm({ ...addAdmissionForm, roomAllocationDate: dateStr });
                       } else {
                         setAddAdmissionForm({ ...addAdmissionForm, roomAllocationDate: '' });
@@ -1709,7 +1728,35 @@ export default function Admissions() {
                     scrollableYearDropdown
                   />
               </div>
-              <div>
+              <div className="dialog-form-field">
+                  <Label htmlFor="roomVacantDate" className="dialog-label-standard">Room Vacant Date</Label>
+                  <DatePicker
+                    id="roomVacantDate"
+                    selected={roomVacantDate}
+                    onChange={(date: Date | null) => {
+                      setRoomVacantDate(date);
+                      if (date) {
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const dateStr = `${day}-${month}-${year}`;
+                        setAddAdmissionForm({ ...addAdmissionForm, roomVacantDate: dateStr });
+                      } else {
+                        setAddAdmissionForm({ ...addAdmissionForm, roomVacantDate: '' });
+                      }
+                    }}
+                    dateFormat="dd-MM-yyyy"
+                    placeholderText="dd-mm-yyyy"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
+                  />
+              </div>
+                <div>
                   <Label htmlFor="admissionStatus">Admission Status *</Label>
                   <select
                     id="admissionStatus"
@@ -1719,7 +1766,7 @@ export default function Admissions() {
                     required
                   >
                     <option value="Active">Active</option>
-                    <option value="Moved to ICU">Moved to ICU</option>
+                    <option value="Moved To ICU">Moved To ICU</option>
                     <option value="Surgery Scheduled">Surgery Scheduled</option>
                     <option value="Discharged">Discharged</option>
                   </select>
@@ -1758,7 +1805,45 @@ export default function Admissions() {
                     <option value="No">No</option>
                     <option value="Yes">Yes</option>
                   </select>
-            </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="scheduleOT">OT Scheduled *</Label>
+                  <select
+                    id="scheduleOT"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                    value={addAdmissionForm.scheduleOT}
+                    onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, scheduleOT: e.target.value })}
+                    required
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+
+               
+                <div>
+                  <Label htmlFor="shiftToAnotherRoom">Shift to Another Room</Label>
+                  <select
+                    id="shiftToAnotherRoom"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                    value={addAdmissionForm.shiftToAnotherRoom}
+                    onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, shiftToAnotherRoom: e.target.value })}
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+
+                <div>
+                  <Label htmlFor="shiftedToDetails">Shifted Details</Label>
+                  <Input
+                    id="shiftedToDetails"
+                    placeholder="Enter shifted details"
+                    value={addAdmissionForm.shiftedToDetails}
+                    onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, shiftedToDetails: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
             {admissionError && (
@@ -2438,8 +2523,8 @@ export default function Admissions() {
           </TabsList>
 
           <TabsContent value="all">
-            <AdmissionsList 
-              admissions={filteredAdmissions} 
+            <AdmissionsList
+              admissions={filteredAdmissions}
               onScheduleOT={handleScheduleOT}
               onEdit={handleViewEditAdmission}
               onManage={(admission) => {
@@ -2447,12 +2532,13 @@ export default function Admissions() {
                 setIsManageDialogOpen(true);
               }}
               onManageCase={handleManageCase}
+              onNewLabOrder={handleOpenNewLabOrderDialog}
               schedulingOT={schedulingOT}
             />
           </TabsContent>
           <TabsContent value="active">
-            <AdmissionsList 
-              admissions={getAdmissionsByStatus('Active')} 
+            <AdmissionsList
+              admissions={getAdmissionsByStatus('Active')}
               onScheduleOT={handleScheduleOT}
               onEdit={handleViewEditAdmission}
               onManage={(admission) => {
@@ -2460,12 +2546,13 @@ export default function Admissions() {
                 setIsManageDialogOpen(true);
               }}
               onManageCase={handleManageCase}
+              onNewLabOrder={handleOpenNewLabOrderDialog}
               schedulingOT={schedulingOT}
             />
           </TabsContent>
           <TabsContent value="surgery">
-            <AdmissionsList 
-              admissions={getAdmissionsByStatus('Surgery Scheduled')} 
+            <AdmissionsList
+              admissions={getAdmissionsByStatus('Surgery Scheduled')}
               onScheduleOT={handleScheduleOT}
               onEdit={handleViewEditAdmission}
               onManage={(admission) => {
@@ -2473,12 +2560,13 @@ export default function Admissions() {
                 setIsManageDialogOpen(true);
               }}
               onManageCase={handleManageCase}
+              onNewLabOrder={handleOpenNewLabOrderDialog}
               schedulingOT={schedulingOT}
             />
           </TabsContent>
           <TabsContent value="icu">
-            <AdmissionsList 
-              admissions={getAdmissionsByStatus('Moved to ICU')} 
+            <AdmissionsList
+              admissions={getAdmissionsByStatus('Moved to ICU')}
               onScheduleOT={handleScheduleOT}
               onEdit={handleViewEditAdmission}
               onManage={(admission) => {
@@ -2486,6 +2574,7 @@ export default function Admissions() {
                 setIsManageDialogOpen(true);
               }}
               onManageCase={handleManageCase}
+              onNewLabOrder={handleOpenNewLabOrderDialog}
               schedulingOT={schedulingOT}
             />
           </TabsContent>
@@ -2785,19 +2874,21 @@ export default function Admissions() {
   );
 }
 
-function AdmissionsList({ 
-  admissions, 
+function AdmissionsList({
+  admissions,
   onScheduleOT,
   onManage,
   onManageCase,
   onEdit,
-  schedulingOT 
-}: { 
-  admissions: Admission[]; 
+  onNewLabOrder,
+  schedulingOT
+}: {
+  admissions: Admission[];
   onScheduleOT: (admission: Admission) => void;
   onManage: (admission: Admission) => void;
   onManageCase: (admission: Admission) => void;
   onEdit: (admission: Admission) => void;
+  onNewLabOrder: (admission: Admission) => void;
   schedulingOT: number | null;
 }) {
   return (
@@ -2886,20 +2977,20 @@ function AdmissionsList({
                             <Scissors className="size-3" />
                             {schedulingOT === (admission.roomAdmissionId || admission.admissionId) ? 'Scheduling...' : 'Schedule OT'}
                           </Button>
-                          
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
+
+                          <Button
+                            variant="outline"
+                            size="sm"
                             className="gap-1"
                             onClick={() => onEdit(admission)}
                           >
                             <Edit className="size-3" />
                             Edit Admission
                           </Button>
-                         
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
+
+                          <Button
+                            variant="outline"
+                            size="sm"
                             className="gap-1"
                             onClick={() => onManageCase(admission)}
                           >

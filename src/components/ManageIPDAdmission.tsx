@@ -52,18 +52,18 @@ export function ManageIPDAdmission() {
     try {
       // Use convertToIST to properly convert to IST
       const istDate = convertToIST(dateTime);
-      
+
       // Get date components in IST
       const day = String(istDate.getUTCDate()).padStart(2, '0');
       const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
       const year = String(istDate.getUTCFullYear());
       const hours24 = istDate.getUTCHours();
       const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
-      
+
       // Convert to 12-hour format with AM/PM
       const period = hours24 >= 12 ? 'PM' : 'AM';
       const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
-      
+
       return `${day}-${month}-${year}, ${String(hours12).padStart(2, '0')}:${minutes} ${period}`;
     } catch {
       return '';
@@ -338,8 +338,11 @@ export function ManageIPDAdmission() {
       setLoading(true);
       setError(null);
       console.log('Fetching admission details for roomAdmissionId:', roomAdmissionId);
+
+      // Fetch basic admission data
       const admissionData = await admissionsApi.getById(roomAdmissionId);
-      console.log('Fetched admission data:', {
+      
+      console.log('Fetched basic admission data:', {
         age: admissionData.age,
         gender: admissionData.gender,
         admittedBy: admissionData.admittedBy,
@@ -349,8 +352,119 @@ export function ManageIPDAdmission() {
         roomType: admissionData.roomType,
         full: admissionData
       });
-      setAdmission(admissionData);
+
+      // Fetch additional admission details from /room-admissions/data/id endpoint
+      let additionalData = {};
+      try {
+        console.log('Fetching additional admission data from /room-admissions/data/' + roomAdmissionId);
+        const additionalResponse = await apiRequest<any>(`/room-admissions/data/${roomAdmissionId}`);
+        console.log('Fetched additional admission data:', additionalResponse);
+
+        // Handle different response structures
+        let additionalDataObj: any = null;
+
+        if (additionalResponse && typeof additionalResponse === 'object' && !Array.isArray(additionalResponse)) {
+          // Check if data is wrapped in a data property
+          if (additionalResponse.data) {
+            additionalDataObj = additionalResponse.data;
+          } else {
+            // Direct object
+            additionalDataObj = additionalResponse;
+          }
+        }
+
+        console.log('Processed additional data object:', additionalDataObj);
+
+        // Enhanced helper function to extract field with multiple variations (including nested objects)
+        const extractField = (data: any, fieldVariations: string[], defaultValue: any = undefined) => {
+          for (const field of fieldVariations) {
+            // Check direct field
+            let value = data?.[field];
+            if (value !== undefined && value !== null && value !== '') {
+              return value;
+            }
+
+            // Check nested paths (e.g., Room.RoomVacantDate)
+            if (field.includes('.')) {
+              const parts = field.split('.');
+              let nestedValue = data;
+              for (const part of parts) {
+                nestedValue = nestedValue?.[part];
+                if (nestedValue === undefined || nestedValue === null) break;
+              }
+              if (nestedValue !== undefined && nestedValue !== null && nestedValue !== '') {
+                return nestedValue;
+              }
+            }
+
+            // Check nested objects (Room, Admission, etc.)
+            if (data?.Room?.[field]) {
+              value = data.Room[field];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+            if (data?.Admission?.[field]) {
+              value = data.Admission[field];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+            if (data?.room?.[field]) {
+              value = data.room[field];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+            if (data?.admission?.[field]) {
+              value = data.admission[field];
+              if (value !== undefined && value !== null && value !== '') {
+                return value;
+              }
+            }
+          }
+          return defaultValue;
+        };
+
+        // Extract the additional fields with multiple name variations
+        if (additionalDataObj) {
+          additionalData = {
+            shiftToAnotherRoom: extractField(additionalDataObj, [
+              'shiftToAnotherRoom', 'ShiftToAnotherRoom', 'shift_to_another_room', 'Shift_To_Another_Room',
+              'shiftToAnotherRoom', 'shiftedToAnotherRoom', 'ShiftedToAnotherRoom'
+            ]),
+            shifted: extractField(additionalDataObj, [
+              'shifted', 'Shifted', 'shifted', 'Shifted'
+            ]),
+            shiftedToDetails: extractField(additionalDataObj, [
+              'shiftedToDetails', 'ShiftedToDetails', 'shifted_to_details', 'Shifted_To_Details',
+              'shiftDetails', 'ShiftDetails', 'shift_details', 'Shift_Details',
+              'shiftedToRoomDetails', 'ShiftedToRoomDetails'
+            ]),
+            roomVacantDate: extractField(additionalDataObj, [
+              'roomVacantDate', 'RoomVacantDate', 'room_vacant_date', 'Room_Vacant_Date',
+              'vacantDate', 'VacantDate', 'vacant_date', 'Vacant_Date',
+              'roomVacantDateTime', 'RoomVacantDateTime'
+            ])
+          };
+        }
+
+        console.log('Extracted additional data:', additionalData);
       
+      } catch (additionalErr) {
+        console.warn('Error fetching additional admission data:', additionalErr);
+        // Continue with basic data if additional data fetch fails
+      }
+
+      // Merge the data
+      const mergedAdmissionData = {
+        ...admissionData,
+        ...additionalData
+      };
+
+      console.log('Merged admission data:', mergedAdmissionData);
+      setAdmission(mergedAdmissionData);
+
       // Fetch patient lab tests, doctor visits, nurse visits, and visit vitals after admission is loaded
       fetchPatientLabTests(roomAdmissionId);
       fetchPatientDoctorVisits(roomAdmissionId);
@@ -1684,7 +1798,7 @@ export function ManageIPDAdmission() {
       vitalsStatus: vitals.vitalsStatus || 'Stable',
       vitalsRemarks: vitals.vitalsRemarks || '',
       vitalsCreatedBy: String(vitals.vitalsCreatedBy || ''),
-      status: vitals.status || 'Active'
+      status: (vitals.status === 'Active' || vitals.status === 'Inactive') ? vitals.status : 'Active'
     });
 
     // Set DatePicker values
@@ -1985,25 +2099,25 @@ export function ManageIPDAdmission() {
       if (!admission?.roomAdmissionId) {
         throw new Error('Room Admission ID is required');
       }
-      
+
       let patientIdValue = visitVitalsFormData.patientId;
       if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '' || patientIdValue === 'null') {
-        patientIdValue = (admission as any)?.patientId || 
-                        (admission as any)?.PatientId || 
-                        (admission as any)?.PatientID || 
-                        (admission as any)?.patient_id || 
-                        (admission as any)?.Patient_ID || 
+        patientIdValue = (admission as any)?.patientId ||
+                        (admission as any)?.PatientId ||
+                        (admission as any)?.PatientID ||
+                        (admission as any)?.patient_id ||
+                        (admission as any)?.Patient_ID ||
                         '';
       }
-      
+
       if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '' || patientIdValue === 'null') {
         throw new Error('Patient ID is required. Please ensure the admission has a valid patient ID.');
       }
-      
+
       if (!visitVitalsFormData.nurseId || visitVitalsFormData.nurseId === '') {
         throw new Error('Nurse is required. Please select a nurse.');
       }
-      
+
       if (!visitVitalsFormData.recordedDateTime) {
         throw new Error('Recorded Date & Time is required');
       }
@@ -2068,12 +2182,12 @@ export function ManageIPDAdmission() {
       // Close dialog
       setIsAddVisitVitalsDialogOpen(false);
       setAddVisitVitalsRecordedDateTime(null);
-      
+
       // Refresh the visit vitals list
       if (admission?.roomAdmissionId) {
         await fetchPatientAdmitVisitVitals(admission.roomAdmissionId);
       }
-      
+
       // Reset form
       setVisitVitalsFormData({
         patientId: '',
@@ -2097,6 +2211,144 @@ export function ManageIPDAdmission() {
       setShowNurseList(false);
     } catch (err) {
       console.error('Error saving visit vitals:', err);
+      setVisitVitalsSubmitError(err instanceof Error ? err.message : 'Failed to save visit vitals');
+    } finally {
+      setVisitVitalsSubmitting(false);
+    }
+  };
+
+  // Handle saving Customize Visit Vitals
+  const handleSaveCustomizeVisitVitals = async () => {
+    try {
+      setVisitVitalsSubmitting(true);
+      setVisitVitalsSubmitError(null);
+
+      console.log('Saving Customize Visit Vitals with data:', customizeVisitVitalsFormData);
+
+      // Validate required fields
+      if (!admission?.roomAdmissionId) {
+        throw new Error('Room Admission ID is required');
+      }
+
+      let patientIdValue = customizeVisitVitalsFormData.patientId;
+      if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '' || patientIdValue === 'null') {
+        patientIdValue = (admission as any)?.patientId ||
+                        (admission as any)?.PatientId ||
+                        (admission as any)?.PatientID ||
+                        (admission as any)?.patient_id ||
+                        (admission as any)?.Patient_ID ||
+                        '';
+      }
+
+      if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '' || patientIdValue === 'null') {
+        throw new Error('Patient ID is required. Please ensure the admission has a valid patient ID.');
+      }
+
+      if (!customizeVisitVitalsFormData.nurseId || customizeVisitVitalsFormData.nurseId === '') {
+        throw new Error('Nurse is required. Please select a nurse.');
+      }
+
+      if (!customizeVisitVitalsFormData.recordedDateTime) {
+        throw new Error('Recorded Date & Time is required');
+      }
+
+      // Get the vitals ID for updating
+      const vitalsId = customizingVisitVitals?.patientAdmitVisitVitalsId || customizingVisitVitals?.id;
+      if (!vitalsId) {
+        throw new Error('Visit Vitals ID is required for updating');
+      }
+
+      // Prepare the request payload
+      const payload: any = {
+        RoomAdmissionId: Number(admission.roomAdmissionId),
+        PatientId: String(patientIdValue).trim(),
+        NurseId: Number(customizeVisitVitalsFormData.nurseId),
+        RecordedDateTime: new Date(customizeVisitVitalsFormData.recordedDateTime).toISOString(),
+        DailyOrHourlyVitals: customizeVisitVitalsFormData.dailyOrHourlyVitals || 'Daily',
+        Status: customizeVisitVitalsFormData.status || 'Active',
+      };
+
+      // Add required/optional fields
+      // Patient Status is required
+      payload.PatientStatus = customizeVisitVitalsFormData.patientStatus.trim() || 'Stable';
+      if (customizeVisitVitalsFormData.visitRemarks && customizeVisitVitalsFormData.visitRemarks.trim() !== '') {
+        payload.VisitRemarks = customizeVisitVitalsFormData.visitRemarks.trim();
+      }
+      if (customizeVisitVitalsFormData.heartRate && customizeVisitVitalsFormData.heartRate.trim() !== '') {
+        payload.HeartRate = Number(customizeVisitVitalsFormData.heartRate);
+      }
+      if (customizeVisitVitalsFormData.bloodPressure && customizeVisitVitalsFormData.bloodPressure.trim() !== '') {
+        payload.BloodPressure = customizeVisitVitalsFormData.bloodPressure.trim();
+      }
+      if (customizeVisitVitalsFormData.temperature && customizeVisitVitalsFormData.temperature.trim() !== '') {
+        payload.Temperature = Number(customizeVisitVitalsFormData.temperature);
+      }
+      if (customizeVisitVitalsFormData.o2Saturation && customizeVisitVitalsFormData.o2Saturation.trim() !== '') {
+        payload.O2Saturation = Number(customizeVisitVitalsFormData.o2Saturation);
+      }
+      if (customizeVisitVitalsFormData.respiratoryRate && customizeVisitVitalsFormData.respiratoryRate.trim() !== '') {
+        payload.RespiratoryRate = Number(customizeVisitVitalsFormData.respiratoryRate);
+      }
+      if (customizeVisitVitalsFormData.pulseRate && customizeVisitVitalsFormData.pulseRate.trim() !== '') {
+        payload.PulseRate = Number(customizeVisitVitalsFormData.pulseRate);
+      }
+      if (customizeVisitVitalsFormData.vitalsStatus && customizeVisitVitalsFormData.vitalsStatus.trim() !== '') {
+        payload.VitalsStatus = customizeVisitVitalsFormData.vitalsStatus.trim();
+      }
+      if (customizeVisitVitalsFormData.vitalsRemarks && customizeVisitVitalsFormData.vitalsRemarks.trim() !== '') {
+        payload.VitalsRemarks = customizeVisitVitalsFormData.vitalsRemarks.trim();
+      }
+      if (customizeVisitVitalsFormData.vitalsCreatedBy && customizeVisitVitalsFormData.vitalsCreatedBy.trim() !== '') {
+        payload.VitalsCreatedBy = customizeVisitVitalsFormData.vitalsCreatedBy.trim();
+      }
+
+      console.log('API Payload:', JSON.stringify(payload, null, 2));
+
+      // Call the API to update the visit vitals
+      console.log('API Endpoint: PUT /patient-admit-visit-vitals/' + vitalsId);
+      const response = await apiRequest<any>(`/patient-admit-visit-vitals/${vitalsId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      console.log('Visit vitals updated successfully:', response);
+
+      // Close dialog
+      setIsCustomizeVisitVitalsDialogOpen(false);
+      setCustomizingVisitVitals(null);
+      setCustomizeVisitVitalsRecordedDateTime(null);
+      setCustomizeVisitVitalsCreatedAt(null);
+
+      // Refresh the visit vitals list
+      if (admission?.roomAdmissionId) {
+        await fetchPatientAdmitVisitVitals(admission.roomAdmissionId);
+      }
+
+      // Reset form
+      setCustomizeVisitVitalsFormData({
+        patientId: '',
+        nurseId: '',
+        patientStatus: '',
+        recordedDateTime: '',
+        visitRemarks: '',
+        dailyOrHourlyVitals: 'Daily',
+        heartRate: '',
+        bloodPressure: '',
+        temperature: '',
+        o2Saturation: '',
+        respiratoryRate: '',
+        pulseRate: '',
+        vitalsStatus: 'Stable',
+        vitalsRemarks: '',
+        vitalsCreatedBy: '',
+        status: 'Active'
+      });
+      setCustomizeVisitVitalsNurseSearchTerm('');
+      setShowCustomizeVisitVitalsNurseList(false);
+    } catch (err) {
+      console.error('Error saving customize visit vitals:', err);
       setVisitVitalsSubmitError(err instanceof Error ? err.message : 'Failed to save visit vitals');
     } finally {
       setVisitVitalsSubmitting(false);
@@ -2235,6 +2487,40 @@ export function ManageIPDAdmission() {
                   </p>
                 </div>
               )}
+              {admission.estimatedStay && (
+                    <div>
+                      <Label className="text-sm text-gray-500">Estimated Stay</Label>
+                      <p className="text-gray-900 font-medium mt-1">{admission.estimatedStay}</p>
+                    </div>
+                  )}
+                  {admission.createdAt && (
+                    <div>
+                      <Label className="text-sm text-gray-500">Created At</Label>
+                      <p className="text-gray-900 font-medium mt-1">{formatDateTimeIST(admission.createdAt)}</p>
+                      
+                    </div>
+                  )}
+                  <div className="mt-2 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Label className="text-sm text-gray-500">Shift To Another Room:</Label>
+                          <Badge variant={(admission as any).shiftToAnotherRoom ? 'default' : 'outline'}>
+                            
+                            {/* {(admission as any).shiftToAnotherRoom !== undefined ? ((admission as any).shiftToAnotherRoom ? 'Yes' : 'No') : 'N/A'}
+                            */}
+
+                            {(admission as any).shiftToAnotherRoom}
+                          </Badge>
+                        </div>
+                       
+                      </div>
+                   <div className="flex items-center gap-2">
+                          <Label className="text-sm text-gray-500">Shifted To Details:</Label>
+                          <span className="text-gray-900 font-medium">{(admission as any).shiftedToDetails || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label className="text-sm text-gray-500">Room Vacant Date:</Label>
+                          <span className="text-gray-900 font-medium">{(admission as any).roomVacantDate ? formatDateTimeIST((admission as any).roomVacantDate) : 'N/A'}</span>
+                        </div>
             </div>
           </CardContent>
         </Card>
@@ -2283,18 +2569,7 @@ export function ManageIPDAdmission() {
                       </div>
                     </div>
                   )}
-                  {admission.estimatedStay && (
-                    <div>
-                      <Label className="text-sm text-gray-500">Estimated Stay</Label>
-                      <p className="text-gray-900 font-medium mt-1">{admission.estimatedStay}</p>
-                    </div>
-                  )}
-                  {admission.createdAt && (
-                    <div>
-                      <Label className="text-sm text-gray-500">Created At</Label>
-                      <p className="text-gray-900 font-medium mt-1">{formatDateTimeIST(admission.createdAt)}</p>
-                    </div>
-                  )}
+                  
                   {!admission.caseSheetDetails && !admission.caseSheet && (
                     <div>
                       <Label className="text-sm text-gray-500">Admission Notes</Label>

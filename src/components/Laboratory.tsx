@@ -1377,7 +1377,7 @@ export function Laboratory() {
         payload.BillId = Number(editFormData.billId);
       }
 
-      console.log('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Saving edit with payload:', payload);
+      console.log('Saving edit with payload:', payload);
       const updateResponse = await apiRequest(`/patient-lab-tests/${patientLabTestsId}`, {
         method: 'PUT',
         body: JSON.stringify(payload)
@@ -1821,6 +1821,7 @@ export function Laboratory() {
         const testDoneDateTime = new Date(newLabOrderFormData.testDoneDate + 'T00:00:00');
         payload.TestDoneDateTime = testDoneDateTime.toISOString();
       }
+      
 
       console.log('Saving new lab order with payload:', payload);
       await apiRequest('/patient-lab-tests', {
