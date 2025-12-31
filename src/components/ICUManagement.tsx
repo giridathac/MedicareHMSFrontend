@@ -2272,7 +2272,7 @@ export function ICUManagement() {
                   <SelectTrigger>
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
-                  <SelectContent className="z-[99999] !pointer-events-auto" position="popper">
+                  <SelectContent className="w-full px-3 py-2 border border-gray-200 rounded-md" position="popper">
                     <SelectItem value="Yes">Yes</SelectItem>
                     <SelectItem value="No">No</SelectItem>
                   </SelectContent>
@@ -2290,7 +2290,7 @@ export function ICUManagement() {
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
-                  <SelectContent className="z-[99999] !pointer-events-auto" position="popper">
+                  <SelectContent className="w-full px-3 py-2 border border-gray-200 rounded-md" position="popper">
                     <SelectItem value="Occupied">Occupied</SelectItem>
                     <SelectItem value="Discharged">Discharged</SelectItem>
                   </SelectContent>

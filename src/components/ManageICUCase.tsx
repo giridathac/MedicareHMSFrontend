@@ -18,6 +18,7 @@ interface ICUAdmission {
   id?: number | string;
   patientICUAdmissionId?: number | string; // UUID string
   patientId?: string; // UUID string
+  patientNo?: string;
   patientName?: string;
   age?: number;
   gender?: string;
@@ -319,6 +320,8 @@ export function ManageICUCase() {
           'id', 'Id', 'admission.patientId', 'admission.PatientId',
           'admission.patient_id', 'admission.Patient_ID'
         ], '')) || '',
+         patientNo: String(extractField(admission, [
+          'patient.patientNo'], '')) || '',
         patientName: String(extractField(admission, [
           'patientName', 'PatientName', 'patient_name', 'Patient_Name',
           'name', 'Name', 'fullName', 'FullName',
@@ -1062,6 +1065,10 @@ export function ManageICUCase() {
                 <p className="text-gray-900 font-medium mt-1">{icuAdmission.patientId || 'N/A'}</p>
               </div>
               <div>
+                <Label className="text-sm text-gray-500">Patient No</Label>
+                <p className="text-gray-900 font-medium mt-1">{icuAdmission.patientNo || 'N/A'}</p>
+              </div>
+              <div>
                 <Label className="text-sm text-gray-500">Bed Number</Label>
                 <p className="text-gray-900 font-medium mt-1">{icuAdmission.bedNumber || 'N/A'}</p>
               </div>
@@ -1179,35 +1186,7 @@ export function ManageICUCase() {
                         <p className="text-gray-900 font-medium mt-1">{icuAdmission.condition}</p>
                       </div>
                     )}
-                    {icuAdmission.severity && (
-                      <div>
-                        <Label className="text-sm text-gray-500">Severity Status</Label>
-                        <p className="mt-1">
-                          <Badge variant={
-                            icuAdmission.severity === 'Critical' ? 'destructive' :
-                            icuAdmission.severity === 'Serious' ? 'default' : 'secondary'
-                          }>
-                            {icuAdmission.severity}
-                          </Badge>
-                        </p>
-                      </div>
-                    )}
-                    {icuAdmission.attendingDoctor && icuAdmission.attendingDoctor !== 'Not Assigned' && (
-                      <div>
-                        <Label className="text-sm text-gray-500">Attending Doctor</Label>
-                        <p className="text-gray-900 font-medium mt-1">{icuAdmission.attendingDoctor}</p>
-                      </div>
-                    )}
-                    {icuAdmission.ventilatorSupport !== undefined && (
-                      <div>
-                        <Label className="text-sm text-gray-500">Ventilator Support</Label>
-                        <p className="mt-1">
-                          <Badge variant={icuAdmission.ventilatorSupport ? 'default' : 'outline'}>
-                            {icuAdmission.ventilatorSupport ? 'Yes' : 'No'}
-                          </Badge>
-                        </p>
-                      </div>
-                    )}
+                   
                   </div>
                 </div>
               </CardContent>

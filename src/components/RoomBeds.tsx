@@ -182,7 +182,7 @@ function RoomBedsView({
         numberOfBeds: 1,
         chargesPerDay: formData.chargesPerDay,
         status: formData.status,
-        createdBy: 1, // Default to user ID 1 (should be replaced with actual logged-in user ID)
+        createdBy: null,//1, // Default to user ID 1 (should be replaced with actual logged-in user ID)
       });
       setIsAddDialogOpen(false);
       setSubmitError(null);

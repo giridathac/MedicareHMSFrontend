@@ -90,6 +90,13 @@ interface DepartmentAdmission {
   count: number;
 }
 
+// Helper function to safely convert values to numbers
+const safeNumber = (value: any, fallback = 0): number => {
+  if (value === null || value === undefined || value === '') return fallback;
+  const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+  return isNaN(num) ? fallback : num;
+};
+
 const defaultIpdStats: IPDStatistics = {
   totalAdmissions: 0,
   regularWard: 0,
@@ -171,8 +178,10 @@ export function Reports() {
   // PDF Export function
   const exportToPDF = async () => {
     try {
-      // Get the current tab content
-      const reportContent = document.querySelector('.reports-scrollable') as HTMLElement;
+      // Get the current tab content - target the visible TabsContent
+      const activeTabContent = document.querySelector('[data-state="active"]')?.parentElement?.nextElementSibling as HTMLElement;
+      const reportContent = activeTabContent || document.querySelector('.reports-scrollable') as HTMLElement;
+
       if (!reportContent) {
         console.error('Report content not found');
         alert('Report content not found. Please try again.');
@@ -184,35 +193,43 @@ export function Reports() {
       loadingAlert.innerHTML = '<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999;">Generating PDF... Please wait.</div>';
       document.body.appendChild(loadingAlert);
 
+      // Add a small delay to ensure content is fully rendered
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Create canvas from the report content with improved settings
       const canvas = await html2canvas(reportContent, {
         scale: 1.5, // Higher scale for better quality
         useCORS: true,
         allowTaint: true, // Enable to handle unsupported CSS
         backgroundColor: '#ffffff',
-        width: Math.min(reportContent.scrollWidth, 1200),
+        width: reportContent.scrollWidth, // Use full width instead of limiting to 1200
         height: reportContent.scrollHeight,
         logging: false, // Disable logging for cleaner output
-        imageTimeout: 15000, // Increase timeout for images
+        imageTimeout: 20000, // Increase timeout for images
         removeContainer: true, // Clean up after rendering
         foreignObjectRendering: true, // Enable for better rendering
-        // Handle charts and problematic elements
+        // Less aggressive ignoreElements - only exclude truly problematic elements
         ignoreElements: (element) => {
-          // Skip elements that might cause issues
-          return element.classList.contains('recharts-wrapper') ||
-                 element.tagName === 'CANVAS' ||
-                 element.tagName === 'SVG' ||
-                 element.style.color.includes('oklch') ||
-                 element.style.backgroundColor.includes('oklch');
+          // Only skip elements that are known to cause canvas rendering issues
+          return element.tagName === 'IFRAME' ||
+                 element.tagName === 'VIDEO' ||
+                 element.tagName === 'AUDIO' ||
+                 (element.tagName === 'INPUT' && (element as HTMLInputElement).type === 'password') ||
+                 element.classList.contains('pdf-ignore'); // Add this class to elements you want to exclude
         }
       });
 
       // Remove loading indicator
       document.body.removeChild(loadingAlert);
 
+      // Check if canvas has content
+      if (canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Canvas capture resulted in empty image');
+      }
+
       // Create PDF with better settings
       const pdf = new jsPDF({
-        orientation: 'portrait',
+        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
         unit: 'mm',
         format: 'a4',
         compress: true // Enable compression
@@ -252,12 +269,12 @@ export function Reports() {
       // Provide more specific error messages
       let errorMessage = 'Failed to generate PDF. Please try again.';
       if (error instanceof Error) {
-        if (error.message.includes('Canvas')) {
-          errorMessage = 'Failed to capture report content. Try refreshing the page and try again.';
+        if (error.message.includes('Canvas') || error.message.includes('empty image')) {
+          errorMessage = 'Failed to capture report content. The report may be empty or not fully loaded.';
         } else if (error.message.includes('CORS') || error.message.includes('taint')) {
           errorMessage = 'Content security issue. Some elements cannot be exported to PDF.';
         } else if (error.message.includes('timeout')) {
-          errorMessage = 'PDF generation timed out. Please try again.';
+          errorMessage = 'PDF generation timed out. Please try again with less content.';
         }
       }
 
