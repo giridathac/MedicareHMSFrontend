@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar as CalendarComponent } from './ui/calendar';
 import { Siren, Plus, Ambulance, AlertTriangle, BedDouble, ArrowRight, Clock, Search, Calendar, ChevronUp, Edit, Trash2, Eye } from 'lucide-react';
 import { Switch } from './ui/switch';
+import ISTDatePicker from './ui/ISTDatePicker';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { patientsApi } from '../api/patients';
@@ -620,11 +621,13 @@ export function Emergency() {
     return undefined;
   }, []);
 
-  // Helper function to convert Date object to DD-MM-YYYY
+  // Helper function to convert Date object to DD-MM-YYYY (using IST)
   const getDDMMYYYYFromDate = useCallback((date: Date): string => {
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
+    // Convert to IST before formatting
+    const istDate = convertToIST(date);
+    const day = String(istDate.getUTCDate()).padStart(2, '0');
+    const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+    const year = istDate.getUTCFullYear();
     return `${day}-${month}-${year}`;
   }, []);
 
@@ -648,18 +651,21 @@ export function Emergency() {
     }
   }, [editFormData.emergencyAdmissionDate, getDateFromDDMMYYYY]);
 
-  // Set default date when Add dialog opens
+  // Set default date when Add dialog opens (using IST)
   useEffect(() => {
     if (isAddDialogOpen) {
-      const today = new Date();
-      setAddEmergencyAdmissionDate(today);
-      const formattedDate = getDDMMYYYYFromDate(today);
+      // Use IST for today's date
+      const todayIST = getTodayIST();
+      const [year, month, day] = todayIST.split('-');
+      const formattedDate = `${day}-${month}-${year}`;
+      const todayDate = convertToIST(new Date());
+      setAddEmergencyAdmissionDate(todayDate);
       setEmergencyFormData(prev => ({
         ...prev,
         emergencyAdmissionDate: formattedDate,
       }));
     }
-  }, [isAddDialogOpen, getDDMMYYYYFromDate]);
+  }, [isAddDialogOpen]);
 
   
   const getStatusBadge = useCallback((status: EmergencyAdmission['emergencyStatus']) => {
@@ -1235,13 +1241,19 @@ export function Emergency() {
 
                   <div className="dialog-form-field">
                     <Label htmlFor="add-emergencyAdmissionDate" className="dialog-label-standard">Emergency Admission Date *</Label>
-                    <DatePicker
+                    <ISTDatePicker
                       id="add-emergencyAdmissionDate"
-                      selected={addEmergencyAdmissionDate}
-                      onChange={(date: Date | null) => {
+                      selected={emergencyFormData.emergencyAdmissionDate ? (() => {
+                        // Convert DD-MM-YYYY to YYYY-MM-DD for ISTDatePicker
+                        const [day, month, year] = emergencyFormData.emergencyAdmissionDate.split('-');
+                        return `${year}-${month}-${day}`;
+                      })() : null}
+                      onChange={(dateStr, date) => {
                         setAddEmergencyAdmissionDate(date);
-                        if (date) {
-                          const formattedDate = getDDMMYYYYFromDate(date);
+                        // Convert YYYY-MM-DD to DD-MM-YYYY for form data
+                        if (dateStr) {
+                          const [year, month, day] = dateStr.split('-');
+                          const formattedDate = `${day}-${month}-${year}`;
                           setEmergencyFormData({ ...emergencyFormData, emergencyAdmissionDate: formattedDate });
                         } else {
                           setEmergencyFormData({ ...emergencyFormData, emergencyAdmissionDate: '' });

@@ -27,6 +27,7 @@ import { patientAppointmentsApi } from '../api/patientAppointments';
 import { admissionsApi, Admission } from '../api/admissions';
 import { emergencyAdmissionsApi } from '../api/emergencyAdmissions';
 import { PatientAppointment } from '../types';
+import ISTDatePicker from './ui/ISTDatePicker';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -4377,20 +4378,12 @@ function AllocationList({ allocations, otRooms, otSlotsByRoom, onRefresh, availa
 
                   <div className="dialog-form-field">
                     <Label htmlFor="edit-otAllocationDate" className="dialog-label-standard">OT Allocation Date *</Label>
-                    <DatePicker
+                    <ISTDatePicker
                       id="edit-otAllocationDate"
-                      selected={editOtAllocationDate}
-                      onChange={(date: Date | null) => {
+                      selected={editFormData.otAllocationDate || null}
+                      onChange={(dateStr, date) => {
                         setEditOtAllocationDate(date);
-                        if (date) {
-                          const year = date.getFullYear();
-                          const month = String(date.getMonth() + 1).padStart(2, '0');
-                          const day = String(date.getDate()).padStart(2, '0');
-                          const dateStr = `${year}-${month}-${day}`;
-                          setEditFormData({ ...editFormData, otAllocationDate: dateStr });
-                        } else {
-                          setEditFormData({ ...editFormData, otAllocationDate: '' });
-                        }
+                        setEditFormData({ ...editFormData, otAllocationDate: dateStr || '' });
                       }}
                       dateFormat="dd-MM-yyyy"
                       placeholderText="dd-mm-yyyy"
