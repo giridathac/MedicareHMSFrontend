@@ -24,7 +24,7 @@ import { DialogFooter } from './ui/dialog';
 import { Switch } from './ui/switch';
 import { convertToIST, formatDateTimeIST } from '../utils/timeUtils';
 import { getCurrentIST } from '../config/timezone';
-import DatePicker from 'react-datepicker';
+import ISTDatePicker from './ui/ISTDatePicker';
 import "react-datepicker/dist/react-datepicker.css";
 
 interface LabTest {
@@ -2304,20 +2304,12 @@ export function Laboratory() {
                   {/* Test Done Date */}
                   <div className="dialog-form-field">
                     <Label htmlFor="testDoneDate">Test Done Date</Label>
-                    <DatePicker
+                    <ISTDatePicker
                       id="testDoneDate"
-                      selected={newLabOrderTestDoneDate}
-                      onChange={(date: Date | null) => {
+                      selected={newLabOrderFormData.testDoneDate || null}
+                      onChange={(dateStr, date) => {
                         setNewLabOrderTestDoneDate(date);
-                        if (date) {
-                          const year = date.getFullYear();
-                          const month = String(date.getMonth() + 1).padStart(2, '0');
-                          const day = String(date.getDate()).padStart(2, '0');
-                          const dateStr = `${year}-${month}-${day}`;
-                          setNewLabOrderFormData({ ...newLabOrderFormData, testDoneDate: dateStr });
-                        } else {
-                          setNewLabOrderFormData({ ...newLabOrderFormData, testDoneDate: '' });
-                        }
+                        setNewLabOrderFormData({ ...newLabOrderFormData, testDoneDate: dateStr || '' });
                       }}
                       dateFormat="dd-MM-yyyy"
                       placeholderText="dd-mm-yyyy"

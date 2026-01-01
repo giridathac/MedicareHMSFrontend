@@ -66,55 +66,82 @@ if (typeof window !== 'undefined') {
 // Log timezone configuration in development
 if (import.meta.env.DEV) {
   import('./config/timezone').then(({ DEFAULT_TIMEZONE, IST_OFFSET_STRING }) => {
-    console.log('Application Timezone:', DEFAULT_TIMEZONE, `(${IST_OFFSET_STRING})`);
+    console.log('🌏 Application Timezone:', DEFAULT_TIMEZONE, `(${IST_OFFSET_STRING})`);
+    console.log('📅 All dates and times are in Indian Standard Time (IST)');
+    console.log('💡 Use ISTDatePicker component and IST utilities from src/utils/timeUtils.ts');
   });
 }
 
-// Disable autocomplete for all inputs, selects, and textareas within dialogs
-// This runs after the DOM is ready and sets up a mutation observer to handle dynamically added dialogs
+// Disable autocomplete/autofill for all inputs, selects, textareas, and forms across the entire website
+// This runs after the DOM is ready and sets up a mutation observer to handle dynamically added elements
 if (typeof window !== 'undefined') {
-  const disableAutocompleteInDialogs = () => {
-    // Find all dialog content elements
-    const dialogContents = document.querySelectorAll('[data-slot="dialog-content"]');
-    dialogContents.forEach((dialog) => {
-      // Find all form elements, inputs, selects, and textareas within the dialog
-      const forms = dialog.querySelectorAll('form');
-      const inputs = dialog.querySelectorAll('input');
-      const selects = dialog.querySelectorAll('select');
-      const textareas = dialog.querySelectorAll('textarea');
-      
-      forms.forEach((form) => {
-        (form as HTMLFormElement).setAttribute('autocomplete', 'off');
-      });
-      inputs.forEach((input) => {
-        (input as HTMLInputElement).setAttribute('autocomplete', 'off');
-      });
-      selects.forEach((select) => {
-        (select as HTMLSelectElement).setAttribute('autocomplete', 'off');
-      });
-      textareas.forEach((textarea) => {
-        (textarea as HTMLTextAreaElement).setAttribute('autocomplete', 'off');
-      });
+  const disableAutocompleteGlobally = () => {
+    // Find all form elements, inputs, selects, and textareas in the entire document
+    const forms = document.querySelectorAll('form');
+    const inputs = document.querySelectorAll('input');
+    const selects = document.querySelectorAll('select');
+    const textareas = document.querySelectorAll('textarea');
+    
+    // Disable autocomplete on all forms
+    forms.forEach((form) => {
+      (form as HTMLFormElement).setAttribute('autocomplete', 'off');
+    });
+    
+    // Disable autocomplete on all inputs
+    inputs.forEach((input) => {
+      const inputElement = input as HTMLInputElement;
+      inputElement.setAttribute('autocomplete', 'off');
+      // Additional attributes to prevent autofill
+      inputElement.setAttribute('data-lpignore', 'true');
+      inputElement.setAttribute('data-form-type', 'other');
+    });
+    
+    // Disable autocomplete on all selects
+    selects.forEach((select) => {
+      (select as HTMLSelectElement).setAttribute('autocomplete', 'off');
+    });
+    
+    // Disable autocomplete on all textareas
+    textareas.forEach((textarea) => {
+      (textarea as HTMLTextAreaElement).setAttribute('autocomplete', 'off');
     });
   };
 
-  // Run immediately
-  setTimeout(disableAutocompleteInDialogs, 100);
+  // Run immediately when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(disableAutocompleteGlobally, 100);
+    });
+  } else {
+    setTimeout(disableAutocompleteGlobally, 100);
+  }
 
-  // Set up a mutation observer to watch for new dialogs
+  // Set up a mutation observer to watch for dynamically added elements
   const observer = new MutationObserver(() => {
-    disableAutocompleteInDialogs();
+    disableAutocompleteGlobally();
   });
 
-  // Observe the document body for changes
+  // Observe the document body for changes (including dynamically added elements)
   observer.observe(document.body, {
     childList: true,
     subtree: true,
   });
 
-  // Also run when dialogs open (using Radix UI's data attributes)
+  // Also run on user interactions to catch any elements added after interactions
   document.addEventListener('click', () => {
-    setTimeout(disableAutocompleteInDialogs, 100);
+    setTimeout(disableAutocompleteGlobally, 100);
+  });
+  
+  document.addEventListener('focusin', (e) => {
+    // When an input receives focus, ensure autocomplete is disabled
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA') {
+      (target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).setAttribute('autocomplete', 'off');
+      if (target.tagName === 'INPUT') {
+        (target as HTMLInputElement).setAttribute('data-lpignore', 'true');
+        (target as HTMLInputElement).setAttribute('data-form-type', 'other');
+      }
+    }
   });
 }
 
