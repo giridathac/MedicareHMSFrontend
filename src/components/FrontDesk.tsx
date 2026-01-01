@@ -13,14 +13,12 @@ import { Textarea } from './ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Switch } from './ui/switch';
 import { Search, Eye, Edit, Clock, Stethoscope, CheckCircle2, Hospital, Plus, Users, X } from 'lucide-react';
-import { formatDateToDDMMYYYY, formatDateTimeIST, convertToIST } from '../utils/timeUtils';
 import { usePatientAppointments } from '../hooks/usePatientAppointments';
 import { useStaff } from '../hooks/useStaff';
 import { useRoles } from '../hooks/useRoles';
 import { useDepartments } from '../hooks/useDepartments';
 import { patientsApi } from '../api';
 import { Patient, PatientAppointment, Doctor } from '../types';
-import { formatDateIST, getTodayIST } from '../utils/timeUtils';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -37,8 +35,20 @@ export function FrontDesk() {
     fetchDepartments();
   }, [fetchStaff, fetchRoles, fetchDepartments]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFilter, setDateFilter] = useState<Date | null>(null);
-  const [dateFilterDisplay, setDateFilterDisplay] = useState('');
+  // Initialize date filter with today's date
+  const [dateFilter, setDateFilter] = useState<Date | null>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
+  const [dateFilterDisplay, setDateFilterDisplay] = useState(() => {
+    // Format today's date for display (dd-mm-yyyy)
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    return `${day}-${month}-${year}`;
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState('all');
   const itemsPerPage = 10;
@@ -79,6 +89,9 @@ export function FrontDesk() {
   const [editDoctorSearchTerm, setEditDoctorSearchTerm] = useState('');
   const [editPatientError, setEditPatientError] = useState('');
   const [editDoctorError, setEditDoctorError] = useState('');
+  const [editDateError, setEditDateError] = useState('');
+  const [editTimeError, setEditTimeError] = useState('');
+  const [editConsultationChargeError, setEditConsultationChargeError] = useState('');
   
   // Keyboard navigation indices for dropdowns
   const [patientHighlightIndex, setPatientHighlightIndex] = useState(-1);
@@ -195,17 +208,16 @@ export function FrontDesk() {
     };
   }, [patientSearchTerm, doctorSearchTerm]);
 
-  // Helper functions for date formatting (dd-mm-yyyy) in IST
+  // Helper functions for date formatting (dd-mm-yyyy)
   const formatDateToDisplay = (dateStr: string): string => {
     if (!dateStr) return '';
     try {
-      // Use IST utilities to get date in IST timezone
-      const istDate = formatDateIST(dateStr);
-      if (!istDate) return '';
-      
-      // Parse the YYYY-MM-DD format and convert to dd-mm-yyyy
-      const [year, month, day] = istDate.split('-');
-      return `${day}-${month}-${year}`;
+      // Date is already in YYYY-MM-DD format, just convert to dd-mm-yyyy
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        const [year, month, day] = dateStr.split('-');
+        return `${day}-${month}-${year}`;
+      }
+      return dateStr;
     } catch {
       return '';
     }
@@ -231,38 +243,52 @@ export function FrontDesk() {
     if (day < 1 || day > 31 || month < 1 || month > 12) return '';
     
     try {
-      // Create date in IST timezone (Asia/Kolkata)
+      // Create date string in YYYY-MM-DD format
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      // Validate the date by converting to IST and checking
-      const istDate = convertToIST(dateStr);
-      // Check if the IST date matches the input (using UTC methods since convertToIST returns a Date with IST offset)
-      if (istDate.getUTCDate() !== day || istDate.getUTCMonth() !== month - 1) return '';
+      // Validate the date by creating a Date object and checking
+      const dateObj = new Date(year, month - 1, day);
+      if (dateObj.getFullYear() !== year || dateObj.getMonth() !== month - 1 || dateObj.getDate() !== day) return '';
       return dateStr; // Return YYYY-MM-DD format
     } catch {
       return '';
     }
   };
 
-  // Helper functions for time formatting (hh:mm AM/PM) in IST
+  // Helper functions for time formatting (hh:mm AM/PM)
   const formatTimeToDisplay = (timeStr: string): string => {
     if (!timeStr) return '';
     try {
-      // Use formatTimeIST utility to ensure proper IST conversion
-      // If it's a full datetime string, convert to IST; if it's HH:mm, use as-is
-      const istTimeStr = formatTimeIST(timeStr);
-      if (!istTimeStr) return '';
+      // Handle time string - could be HH:MM or HH:MM:SS
+      let timeOnly = timeStr.trim();
       
-      const [hours, minutes] = istTimeStr.split(':');
-      if (!hours || !minutes) return '';
-      const h = parseInt(hours, 10);
-      const m = parseInt(minutes, 10);
-      if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) return '';
+      // Remove seconds if present (HH:MM:SS -> HH:MM)
+      if (timeOnly.includes(':') && timeOnly.split(':').length === 3) {
+        const parts = timeOnly.split(':');
+        timeOnly = `${parts[0]}:${parts[1]}`;
+      }
       
-      // Convert 24-hour to 12-hour format with AM/PM
-      const period = h >= 12 ? 'PM' : 'AM';
-      const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
-      return `${String(displayHour).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
-    } catch {
+      // Direct parse of HH:MM format (most common from backend)
+      const timePattern = /^(\d{1,2}):(\d{2})$/;
+      const match = timeOnly.match(timePattern);
+      
+      if (match) {
+        const h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        
+        // Validate time values
+        if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) {
+          return '';
+        }
+        
+        // Convert 24-hour to 12-hour format with AM/PM
+        const period = h >= 12 ? 'PM' : 'AM';
+        const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        return `${String(displayHour).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
+      }
+      
+      return '';
+    } catch (error) {
+      console.error('Error formatting time to display:', error, timeStr);
       return '';
     }
   };
@@ -340,12 +366,24 @@ export function FrontDesk() {
     if (addFormData.appointmentDate) {
       try {
         const dateStr = addFormData.appointmentDate;
-        // Convert date string to IST Date object
-        const istDate = convertToIST(dateStr);
-        if (!isNaN(istDate.getTime())) {
-          setAddAppointmentDate(istDate);
+        // Parse date-only string (YYYY-MM-DD) directly as local date
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          const [year, month, day] = dateStr.split('-').map(Number);
+          // Create date at midnight (will be interpreted correctly by DatePicker)
+          const localDate = new Date(year, month - 1, day);
+          if (!isNaN(localDate.getTime())) {
+            setAddAppointmentDate(localDate);
+          } else {
+            setAddAppointmentDate(null);
+          }
         } else {
-          setAddAppointmentDate(null);
+          // For datetime strings, parse directly
+          const dateObj = new Date(dateStr);
+          if (!isNaN(dateObj.getTime())) {
+            setAddAppointmentDate(dateObj);
+          } else {
+            setAddAppointmentDate(null);
+          }
         }
       } catch {
         setAddAppointmentDate(null);
@@ -392,12 +430,24 @@ export function FrontDesk() {
     if (editFormData.appointmentDate) {
       try {
         const dateStr = editFormData.appointmentDate;
-        // Convert date string to IST Date object
-        const istDate = convertToIST(dateStr);
-        if (!isNaN(istDate.getTime())) {
-          setEditAppointmentDate(istDate);
+        // Parse date-only string (YYYY-MM-DD) directly as local date
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          const [year, month, day] = dateStr.split('-').map(Number);
+          // Create date at midnight (will be interpreted correctly by DatePicker)
+          const localDate = new Date(year, month - 1, day);
+          if (!isNaN(localDate.getTime())) {
+            setEditAppointmentDate(localDate);
+          } else {
+            setEditAppointmentDate(null);
+          }
         } else {
-          setEditAppointmentDate(null);
+          // For datetime strings, parse directly
+          const dateObj = new Date(dateStr);
+          if (!isNaN(dateObj.getTime())) {
+            setEditAppointmentDate(dateObj);
+          } else {
+            setEditAppointmentDate(null);
+          }
         }
       } catch {
         setEditAppointmentDate(null);
@@ -418,22 +468,25 @@ export function FrontDesk() {
   // Set default date and time when Add dialog opens
   useEffect(() => {
     if (isAddDialogOpen) {
-      // Set default date to today in IST
-      const todayIST = getTodayIST();
+      // Set default date to today
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
       setAddFormData(prev => ({
         ...prev,
-        appointmentDate: todayIST,
+        appointmentDate: todayStr,
       }));
 
-      // Set default time to current time in IST (HH:MM format)
+      // Set default time to current time (HH:MM format)
       const now = new Date();
-      const istNow = convertToIST(now);
-      const hours = String(istNow.getUTCHours()).padStart(2, '0');
-      const minutes = String(istNow.getUTCMinutes()).padStart(2, '0');
-      const currentTimeIST = `${hours}:${minutes}`;
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const currentTime = `${hours}:${minutes}`;
       setAddFormData(prev => ({
         ...prev,
-        appointmentTime: currentTimeIST,
+        appointmentTime: currentTime,
       }));
     }
   }, [isAddDialogOpen]);
@@ -499,19 +552,19 @@ export function FrontDesk() {
     return defaultValue;
   };
 
-  // Helper function to format datetime to dd-mm-yyyy, hh:mm format in IST
+  // Helper function to format datetime to dd-mm-yyyy, hh:mm format
   const formatDateTimeForInput = (dateTime: string | Date | undefined): string => {
     if (!dateTime) return '';
     try {
-      // Use convertToIST to properly convert to IST
-      const istDate = convertToIST(dateTime);
+      // Use date directly without timezone conversion
+      const dateObj = typeof dateTime === 'string' ? new Date(dateTime) : dateTime;
       
-      // Get date components in IST
-      const day = String(istDate.getUTCDate()).padStart(2, '0');
-      const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-      const year = String(istDate.getUTCFullYear());
-      const hours = String(istDate.getUTCHours()).padStart(2, '0');
-      const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+      // Get date components directly
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = String(dateObj.getFullYear());
+      const hours = String(dateObj.getHours()).padStart(2, '0');
+      const minutes = String(dateObj.getMinutes()).padStart(2, '0');
       
       return `${day}-${month}-${year}, ${hours}:${minutes}`;
     } catch {
@@ -519,7 +572,7 @@ export function FrontDesk() {
     }
   };
 
-  // Helper function to parse datetime from dd-mm-yyyy, hh:mm format (assumed to be in IST)
+  // Helper function to parse datetime from dd-mm-yyyy, hh:mm format
   const parseDateTimeFromInput = (inputStr: string): string => {
     if (!inputStr) return '';
     try {
@@ -536,14 +589,13 @@ export function FrontDesk() {
       if (day < 1 || day > 31 || month < 1 || month > 12) return '';
       if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return '';
       
-      // Create date string in IST timezone (UTC+5:30)
-      // Format: YYYY-MM-DDTHH:mm:ss+05:30
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00+05:30`;
+      // Create date string in ISO format
+      // Format: YYYY-MM-DDTHH:mm:ss
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
       const date = new Date(dateStr);
       if (isNaN(date.getTime())) return '';
       
-      // Return in ISO format (UTC) for API
-      // The date object will automatically convert from IST to UTC
+      // Return in ISO format for API
       return date.toISOString();
     } catch {
       return '';
@@ -678,17 +730,19 @@ export function FrontDesk() {
     // Apply date filter to both active and inactive if set
     let dateFilterStr: string | null = null;
     if (dateFilter) {
-      const filterDateIST = convertToIST(dateFilter);
-      dateFilterStr = formatDateIST(filterDateIST);
+      // Extract date directly from Date object
+      const year = dateFilter.getFullYear();
+      const month = String(dateFilter.getMonth() + 1).padStart(2, '0');
+      const day = String(dateFilter.getDate()).padStart(2, '0');
+      dateFilterStr = `${year}-${month}-${day}`;
     }
     
     const filterByDate = (appointments: PatientAppointment[]): PatientAppointment[] => {
       if (!dateFilterStr) return appointments;
       return appointments.filter(appointment => {
         if (!appointment.appointmentDate) return false;
-        // Convert appointment date to IST and compare
-        const appointmentDateIST = formatDateIST(appointment.appointmentDate);
-        return appointmentDateIST === dateFilterStr;
+        // Compare dates directly (both in YYYY-MM-DD format)
+        return appointment.appointmentDate === dateFilterStr;
       });
     };
     
@@ -789,10 +843,26 @@ export function FrontDesk() {
         return dateCompare;
       }
       
-      // Same date, sort by appointment time (earliest first)
+      // Same date, sort by appointment time (earliest first) - primary sort for same date
       const timeA = a.appointmentTime || '';
       const timeB = b.appointmentTime || '';
-      return timeA.localeCompare(timeB);
+      
+      // Handle empty times - put them at the end
+      if (!timeA && !timeB) {
+        // If both have no time, sort by ID for stability
+        return a.id - b.id;
+      }
+      if (!timeA) return 1;
+      if (!timeB) return -1;
+      
+      // Compare time strings (HH:MM format) - this works correctly for ascending order
+      const timeCompare = timeA.localeCompare(timeB);
+      if (timeCompare !== 0) {
+        return timeCompare;
+      }
+      
+      // Same time, sort by ID for stability (maintains order after updates)
+      return a.id - b.id;
     });
 
     return { activeAppointments: activeFilteredByDate, inactiveAppointments: inactiveFilteredByDate, filteredActiveAppointments: sortedFiltered };
@@ -867,6 +937,14 @@ export function FrontDesk() {
       status: statusBoolean,
     });
     
+    // Set appointment time display immediately
+    if (appointment.appointmentTime) {
+      const formattedTime = formatTimeToDisplay(appointment.appointmentTime);
+      setEditTimeDisplay(formattedTime);
+    } else {
+      setEditTimeDisplay('');
+    }
+    
     // Set search terms for patient and doctor
     const patient = patients.find(p => {
       const pid = (p as any).patientId || (p as any).PatientId || '';
@@ -891,6 +969,9 @@ export function FrontDesk() {
     
     setEditPatientError('');
     setEditDoctorError('');
+    setEditDateError('');
+    setEditTimeError('');
+    setEditConsultationChargeError('');
     setIsEditDialogOpen(true);
   };
 
@@ -956,7 +1037,7 @@ export function FrontDesk() {
           {doctorName}
         </td>
         <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>
-          {appointment.appointmentTime}
+          {appointment.appointmentTime ? formatTimeToDisplay(appointment.appointmentTime) : '-'}
         </td>
         <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : ''}`}>
           {getStatusBadge(appointment.appointmentStatus)}
@@ -1039,10 +1120,26 @@ export function FrontDesk() {
         return dateCompare;
       }
       
-      // Same date, sort by appointment time (earliest first)
+      // Same date, sort by appointment time (earliest first) - primary sort for same date
       const timeA = a.appointmentTime || '';
       const timeB = b.appointmentTime || '';
-      return timeA.localeCompare(timeB);
+      
+      // Handle empty times - put them at the end
+      if (!timeA && !timeB) {
+        // If both have no time, sort by ID for stability
+        return a.id - b.id;
+      }
+      if (!timeA) return 1;
+      if (!timeB) return -1;
+      
+      // Compare time strings (HH:MM format) - this works correctly for ascending order
+      const timeCompare = timeA.localeCompare(timeB);
+      if (timeCompare !== 0) {
+        return timeCompare;
+      }
+      
+      // Same time, sort by ID for stability (maintains order after updates)
+      return a.id - b.id;
     });
 
     const allAppointments = sortedAppointments;
@@ -1686,11 +1783,11 @@ export function FrontDesk() {
                       onChange={(date: Date | null) => {
                         setAddAppointmentDate(date);
                         if (date) {
-                          // Convert to IST and format as YYYY-MM-DD
-                          const istDate = convertToIST(date);
-                          const year = istDate.getUTCFullYear();
-                          const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-                          const day = String(istDate.getUTCDate()).padStart(2, '0');
+                          // Extract date components directly from date
+                          // DatePicker gives us a date, use local methods
+                          const year = date.getFullYear();
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
                           const dateStr = `${year}-${month}-${day}`;
                           setAddFormData({ ...addFormData, appointmentDate: dateStr });
                         } else {
@@ -1706,7 +1803,7 @@ export function FrontDesk() {
                       dropdownMode="select"
                       yearDropdownItemNumber={100}
                       scrollableYearDropdown
-                      minDate={convertToIST(new Date())}
+                      minDate={new Date()}
                     />
                   </div>
                   <div>
@@ -1851,17 +1948,15 @@ export function FrontDesk() {
                         // selectedDoctor is already validated above
                         const doctorName = selectedDoctor ? selectedDoctor.name : 'Unknown Doctor';
                         
-                        // Ensure appointment date and time are in IST format
-                        const appointmentDateIST = addFormData.appointmentDate 
-                          ? formatDateIST(addFormData.appointmentDate) 
-                          : '';
-                        const appointmentTimeIST = addFormData.appointmentTime || '';
+                        // Use appointment date and time directly (already in correct format)
+                        const appointmentDate = addFormData.appointmentDate || '';
+                        const appointmentTime = addFormData.appointmentTime || '';
                         
                         await createPatientAppointment({
                           patientId: addFormData.patientId,
                           doctorId: addFormData.doctorId,
-                          appointmentDate: appointmentDateIST,
-                          appointmentTime: appointmentTimeIST,
+                          appointmentDate: appointmentDate,
+                          appointmentTime: appointmentTime,
                           appointmentStatus: addFormData.appointmentStatus,
                           consultationCharge: addFormData.consultationCharge,
                           status: addFormData.status,
@@ -1978,11 +2073,13 @@ export function FrontDesk() {
                     onChange={(date: Date | null) => {
                       setDateFilter(date);
                       if (date) {
-                        // Convert to IST and format as dd-mm-yyyy for display
-                        const istDate = convertToIST(date);
-                        const dateStr = formatDateIST(istDate);
-                        setDateFilterDisplay(formatDateToDisplay(dateStr));
+                        // Extract date directly and format as dd-mm-yyyy for display
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        setDateFilterDisplay(`${day}-${month}-${year}`);
                       } else {
+                        // Clear date filter to show all records
                         setDateFilterDisplay('');
                       }
                     }}
@@ -2004,11 +2101,12 @@ export function FrontDesk() {
                     variant="ghost"
                     size="sm"
                     onClick={() => {
+                      // Clear date filter to show all records
                       setDateFilter(null);
                       setDateFilterDisplay('');
                     }}
                     className="text-gray-500 hover:text-gray-700"
-                    title="Clear date filter"
+                    title="Clear date filter to show all records"
                   >
                     <X className="size-4" />
                   </Button>
@@ -2444,12 +2542,16 @@ export function FrontDesk() {
                         selected={editAppointmentDate}
                         onChange={(date: Date | null) => {
                           setEditAppointmentDate(date);
+                          // Clear error when date is selected
+                          if (editDateError) {
+                            setEditDateError('');
+                          }
                           if (date) {
-                            // Convert to IST and format as YYYY-MM-DD
-                            const istDate = convertToIST(date);
-                            const year = istDate.getUTCFullYear();
-                            const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-                            const day = String(istDate.getUTCDate()).padStart(2, '0');
+                            // Extract date components directly from date
+                            // DatePicker gives us a date, use local methods
+                            const year = date.getFullYear();
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
                             const dateStr = `${year}-${month}-${day}`;
                             setEditFormData({ ...editFormData, appointmentDate: dateStr });
                           } else {
@@ -2458,14 +2560,18 @@ export function FrontDesk() {
                         }}
                         dateFormat="dd-MM-yyyy"
                         placeholderText="dd-mm-yyyy"
-                        className="dialog-input-standard w-full"
+                        className={`dialog-input-standard w-full ${editDateError ? 'border-red-500' : ''}`}
                         wrapperClassName="w-full"
                         showYearDropdown
                         showMonthDropdown
                         dropdownMode="select"
                         yearDropdownItemNumber={100}
                         scrollableYearDropdown
+                        minDate={new Date()}
                       />
+                      {editDateError && (
+                        <p className="text-sm text-red-600 mt-1">{editDateError}</p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="edit-appointmentTime">Appointment Time *</Label>
@@ -2474,7 +2580,12 @@ export function FrontDesk() {
                         type="text"
                         placeholder="hh:mm AM/PM"
                         value={editTimeDisplay}
+                        className={editTimeError ? 'border-red-500' : ''}
                         onChange={(e) => {
+                          // Clear error when user starts typing
+                          if (editTimeError) {
+                            setEditTimeError('');
+                          }
                           let value = e.target.value.toUpperCase();
                           // Auto-format as user types
                           value = value.replace(/[^\d:APM\s]/g, '');
@@ -2529,6 +2640,9 @@ export function FrontDesk() {
                           setEditFormData({ ...editFormData, appointmentTime: parsed });
                         }}
                       />
+                      {editTimeError && (
+                        <p className="text-sm text-red-600 mt-1">{editTimeError}</p>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -2540,8 +2654,18 @@ export function FrontDesk() {
                       step="0.01"
                       placeholder="e.g., 500"
                       value={editFormData.consultationCharge}
-                      onChange={(e) => setEditFormData({ ...editFormData, consultationCharge: parseFloat(e.target.value) || 0 })}
+                      className={editConsultationChargeError ? 'border-red-500' : ''}
+                      onChange={(e) => {
+                        // Clear error when user starts typing
+                        if (editConsultationChargeError) {
+                          setEditConsultationChargeError('');
+                        }
+                        setEditFormData({ ...editFormData, consultationCharge: parseFloat(e.target.value) || 0 });
+                      }}
                     />
+                    {editConsultationChargeError && (
+                      <p className="text-sm text-red-600 mt-1">{editConsultationChargeError}</p>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="edit-followUpDetails">Follow Up Details</Label>
@@ -2594,6 +2718,12 @@ export function FrontDesk() {
                   <Button variant="outline" onClick={() => {
                     setIsEditDialogOpen(false);
                     setEditAppointmentDate(null);
+                    // Clear all errors when closing
+                    setEditPatientError('');
+                    setEditDoctorError('');
+                    setEditDateError('');
+                    setEditTimeError('');
+                    setEditConsultationChargeError('');
                   }} className="dialog-footer-button">Cancel</Button>
                   <Button 
                     onClick={async () => {
@@ -2629,40 +2759,73 @@ export function FrontDesk() {
                         return;
                       }
                       
-                      if (!editFormData.appointmentDate || !editFormData.appointmentTime) {
-                        alert('Please fill in all required fields.');
+                      // Validate appointment date
+                      if (!editFormData.appointmentDate) {
+                        setEditDateError('Appointment date is required.');
+                        return;
+                      }
+                      
+                      // Validate appointment time
+                      if (!editFormData.appointmentTime) {
+                        setEditTimeError('Appointment time is required.');
+                        return;
+                      }
+                      
+                      // Validate consultation charge
+                      if (!editFormData.consultationCharge || editFormData.consultationCharge <= 0) {
+                        setEditConsultationChargeError('Consultation charge must be greater than 0.');
                         return;
                       }
                       
                       // Clear any previous errors
                       setEditPatientError('');
                       setEditDoctorError('');
+                      setEditDateError('');
+                      setEditTimeError('');
+                      setEditConsultationChargeError('');
                       try {
-                        // Ensure appointment date and time are in IST format
-                        const appointmentDateIST = editFormData.appointmentDate 
-                          ? formatDateIST(editFormData.appointmentDate) 
-                          : '';
-                        const appointmentTimeIST = editFormData.appointmentTime || '';
+                        // Use appointment date and time directly (already in correct format)
+                        const appointmentDate = editFormData.appointmentDate || '';
+                        const appointmentTime = editFormData.appointmentTime || '';
                         
-                        await updatePatientAppointment({
+                        const updatedAppointment =                         await updatePatientAppointment({
                           id: selectedAppointment.id,
                           patientId: editFormData.patientId,
                           doctorId: editFormData.doctorId,
-                          appointmentDate: appointmentDateIST,
-                          appointmentTime: appointmentTimeIST,
+                          appointmentDate: appointmentDate,
+                          appointmentTime: appointmentTime,
                           appointmentStatus: editFormData.appointmentStatus,
                           consultationCharge: editFormData.consultationCharge,
                           followUpDetails: editFormData.followUpDetails || undefined,
                           status: editFormData.status,
                         } as any);
-                        await fetchPatientAppointments();
+                        
+                        // Close dialog first to prevent any state updates from affecting the form
                         setIsEditDialogOpen(false);
+                        
+                        // Refresh appointments list after dialog is closed
+                        await fetchPatientAppointments();
+                        
+                        // Clear form data after dialog is closed
                         setSelectedAppointment(null);
                         setEditAppointmentDate(null);
+                        setEditFormData({
+                          patientId: '',
+                          doctorId: '',
+                          appointmentDate: '',
+                          appointmentTime: '',
+                          appointmentStatus: 'Waiting',
+                          consultationCharge: 0,
+                          followUpDetails: '',
+                          status: false,
+                        });
                         setEditPatientSearchTerm('');
                         setEditDoctorSearchTerm('');
                         setEditPatientError('');
                         setEditDoctorError('');
+                        setEditDateError('');
+                        setEditTimeError('');
+                        setEditConsultationChargeError('');
                         setEditPatientHighlightIndex(-1);
                         setEditDoctorHighlightIndex(-1);
                       } catch (err) {
@@ -2967,7 +3130,7 @@ export function FrontDesk() {
                           }
                         }}
                       />
-                      <p className="text-xs text-gray-500 mt-1">Format: dd-mm-yyyy, hh:mm (24-hour format, IST)</p>
+                      <p className="text-xs text-gray-500 mt-1">Format: dd-mm-yyyy, hh:mm (24-hour format)</p>
                     </div>
                   </>
                 )}

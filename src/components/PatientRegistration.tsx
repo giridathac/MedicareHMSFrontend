@@ -26,11 +26,16 @@ import "react-datepicker/dist/react-datepicker.css";
 export function PatientRegistration() {
   // Use paginated hook for table, but keep regular hook for search/forms
   const { patients: allPatients, createPatient, loading: allLoading, error: allError, fetchPatients } = usePatients();
-  const { patients, loading, loadingMore, error, hasMore, total, loadMore } = usePatientsPaginated(10);
+  const { patients, loading, loadingMore, error, hasMore, total, loadMore, refresh: refreshPaginatedPatients } = usePatientsPaginated(10);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [adhaarError, setAdhaarError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [patientNameError, setPatientNameError] = useState('');
+  const [genderError, setGenderError] = useState('');
+  const [ageError, setAgeError] = useState('');
+  const [panCardError, setPanCardError] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<any>(null);
@@ -38,8 +43,12 @@ export function PatientRegistration() {
   const [editFormData, setEditFormData] = useState<any>(null);
   const [updatingPatient, setUpdatingPatient] = useState(false);
   const [editAdhaarError, setEditAdhaarError] = useState('');
+  const [editPhoneError, setEditPhoneError] = useState('');
+  const [editPatientNameError, setEditPatientNameError] = useState('');
+  const [editGenderError, setEditGenderError] = useState('');
+  const [editAgeError, setEditAgeError] = useState('');
+  const [editPanCardError, setEditPanCardError] = useState('');
   const [formData, setFormData] = useState({
-    patientNo: '',
     patientName: '',
     patientType: '',
     lastName: '',
@@ -66,6 +75,30 @@ export function PatientRegistration() {
       console.error('Error fetching patients in PatientRegistration:', err);
     });
   }, [fetchPatients]);
+
+  // Clear errors when Add dialog closes
+  useEffect(() => {
+    if (!isAddDialogOpen) {
+      setPatientNameError('');
+      setPhoneError('');
+      setGenderError('');
+      setAgeError('');
+      setAdhaarError('');
+      setPanCardError('');
+    }
+  }, [isAddDialogOpen]);
+
+  // Clear errors when Edit dialog closes
+  useEffect(() => {
+    if (!isEditDialogOpen) {
+      setEditPatientNameError('');
+      setEditPhoneError('');
+      setEditGenderError('');
+      setEditAgeError('');
+      setEditAdhaarError('');
+      setEditPanCardError('');
+    }
+  }, [isEditDialogOpen]);
 
   // Sync DatePicker with formData.registeredDate for Add dialog
   useEffect(() => {
@@ -129,24 +162,110 @@ export function PatientRegistration() {
     
     setFormData({ ...formData, adhaarID: limitedValue });
     
-    if (limitedValue && limitedValue.length !== 12) {
+    // Clear any previous errors when user starts typing
+    if (limitedValue.length === 0) {
+      setAdhaarError('');
+    } else if (limitedValue.length !== 12) {
       setAdhaarError('Aadhaar ID must be exactly 12 digits');
     } else {
-      setAdhaarError('');
+      // Check if Aadhaar ID already exists (only if exactly 12 digits)
+      const existingPatient = allPatients.find((patient: any) => {
+        const patientAdhaarId = (patient as any).AdhaarId || (patient as any).adhaarID || (patient as any).AdhaarID || patient.AdhaarId || '';
+        return patientAdhaarId && patientAdhaarId.toString() === limitedValue;
+      });
+      
+      if (existingPatient) {
+        setAdhaarError('Aadhaar ID already exists for another patient');
+      } else {
+        setAdhaarError('');
+      }
+    }
+  };
+
+  const handlePhoneChange = (value: string) => {
+    const numericValue = value.replace(/\D/g, '');
+    const limitedValue = numericValue.slice(0, 10);
+    
+    setFormData({ ...formData, phoneNo: limitedValue });
+    
+    if (limitedValue && limitedValue.length !== 10) {
+      setPhoneError('Phone number must be exactly 10 digits');
+    } else {
+      setPhoneError('');
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Clear previous errors
+    setPatientNameError('');
+    setPhoneError('');
+    setGenderError('');
+    setAgeError('');
+    setAdhaarError('');
+    setPanCardError('');
+    
+    // Validate mandatory fields
+    let hasError = false;
+    
+    if (!formData.patientName || formData.patientName.trim() === '') {
+      setPatientNameError('Patient Name is required');
+      hasError = true;
+    }
+    
+    if (!formData.phoneNo || formData.phoneNo.length !== 10) {
+      setPhoneError('Phone number must be exactly 10 digits');
+      hasError = true;
+    }
+    
+    if (!formData.gender || formData.gender.trim() === '') {
+      setGenderError('Gender is required');
+      hasError = true;
+    }
+    
+    if (!formData.age || formData.age.trim() === '' || parseInt(formData.age) <= 0) {
+      setAgeError('Age is required and must be greater than 0');
+      hasError = true;
+    }
+    
     if (formData.adhaarID && formData.adhaarID.length !== 12) {
       setAdhaarError('Aadhaar ID must be exactly 12 digits');
+      hasError = true;
+    }
+    
+    // Check if Aadhaar ID already exists (only if provided)
+    if (formData.adhaarID && formData.adhaarID.length === 12) {
+      const existingPatient = allPatients.find((patient: any) => {
+        const patientAdhaarId = (patient as any).AdhaarId || (patient as any).adhaarID || (patient as any).AdhaarID || patient.AdhaarId || '';
+        return patientAdhaarId && patientAdhaarId.toString() === formData.adhaarID;
+      });
+      
+      if (existingPatient) {
+        setAdhaarError('Aadhaar ID already exists for another patient');
+        hasError = true;
+      }
+    }
+    
+    // Check if PAN Card already exists (only if provided)
+    if (formData.panCard && formData.panCard.trim() !== '') {
+      const existingPatient = allPatients.find((patient: any) => {
+        const patientPanCard = (patient as any).PANCard || (patient as any).panCard || (patient as any).PanCard || '';
+        return patientPanCard && patientPanCard.toString().toUpperCase() === formData.panCard.toUpperCase();
+      });
+      
+      if (existingPatient) {
+        setPanCardError('PAN Card already exists for another patient');
+        hasError = true;
+      }
+    }
+    
+    if (hasError) {
       return;
     }
     
     try {
       await createPatient({
-        patientNo: formData.patientNo || undefined,
         patientName: formData.patientName,
         patientType: formData.patientType || undefined,
         lastName: formData.lastName || undefined,
@@ -163,9 +282,10 @@ export function PatientRegistration() {
       } as any);
       setIsSubmitted(true);
       await fetchPatients();
+      // Refresh paginated table to show the new patient
+      await refreshPaginatedPatients();
       setTimeout(() => {
         setFormData({
-          patientNo: '',
           patientName: '',
           patientType: '',
           lastName: '',
@@ -183,6 +303,11 @@ export function PatientRegistration() {
         setRegisteredDateDisplay('');
         setAddRegisteredDate(null);
         setAdhaarError('');
+        setPhoneError('');
+        setPatientNameError('');
+        setGenderError('');
+        setAgeError('');
+        setPanCardError('');
         setIsSubmitted(false);
         setIsAddDialogOpen(false);
         setPatientSearchTerm('');
@@ -291,6 +416,24 @@ export function PatientRegistration() {
     setEditFormData(null);
     setEditRegisteredDate(null);
     setEditAdhaarError('');
+    setEditPhoneError('');
+    setEditPatientNameError('');
+    setEditGenderError('');
+    setEditAgeError('');
+    setEditPanCardError('');
+  };
+
+  const handleEditPhoneChange = (value: string) => {
+    const numericValue = value.replace(/\D/g, '');
+    const limitedValue = numericValue.slice(0, 10);
+    
+    setEditFormData({ ...editFormData, phoneNo: limitedValue });
+    
+    if (limitedValue && limitedValue.length !== 10) {
+      setEditPhoneError('Phone number must be exactly 10 digits');
+    } else {
+      setEditPhoneError('');
+    }
   };
 
   const handleUpdatePatient = async () => {
@@ -302,16 +445,81 @@ export function PatientRegistration() {
       return;
     }
 
-    if (!editFormData.patientName || !editFormData.phoneNo || !editFormData.gender || !editFormData.age) {
-      alert('Please fill all required fields: Patient Name, Phone No, Gender, Age.');
-      return;
+    // Clear previous errors
+    setEditPatientNameError('');
+    setEditPhoneError('');
+    setEditGenderError('');
+    setEditAgeError('');
+    setEditAdhaarError('');
+    setEditPanCardError('');
+    
+    // Validate mandatory fields
+    let hasError = false;
+    
+    if (!editFormData.patientName || editFormData.patientName.trim() === '') {
+      setEditPatientNameError('Patient Name is required');
+      hasError = true;
     }
-
+    
+    if (!editFormData.phoneNo || editFormData.phoneNo.length !== 10) {
+      setEditPhoneError('Phone number must be exactly 10 digits');
+      hasError = true;
+    }
+    
+    if (!editFormData.gender || editFormData.gender.trim() === '') {
+      setEditGenderError('Gender is required');
+      hasError = true;
+    }
+    
+    if (!editFormData.age || editFormData.age.trim() === '' || parseInt(editFormData.age) <= 0) {
+      setEditAgeError('Age is required and must be greater than 0');
+      hasError = true;
+    }
+    
     if (editFormData.adhaarID && editFormData.adhaarID.length !== 12) {
       setEditAdhaarError('Aadhaar ID must be exactly 12 digits');
+      hasError = true;
+    }
+    
+    // Check if Aadhaar ID already exists for a different patient (only if provided and different from current)
+    if (editFormData.adhaarID && editFormData.adhaarID.length === 12) {
+      const currentPatientId = editingPatient?.patientId || editingPatient?.PatientId || editingPatient?.id;
+      const existingPatient = allPatients.find((patient: any) => {
+        const patientAdhaarId = (patient as any).AdhaarId || (patient as any).adhaarID || (patient as any).AdhaarID || patient.AdhaarId || '';
+        const patientId = (patient as any).PatientId || (patient as any).patientId || (patient as any).id;
+        // Check if Aadhaar ID matches and it's not the current patient being edited
+        return patientAdhaarId && 
+               patientAdhaarId.toString() === editFormData.adhaarID &&
+               patientId !== currentPatientId;
+      });
+      
+      if (existingPatient) {
+        setEditAdhaarError('Aadhaar ID already exists for another patient');
+        hasError = true;
+      }
+    }
+    
+    // Check if PAN Card already exists for a different patient (only if provided)
+    if (editFormData.panCard && editFormData.panCard.trim() !== '') {
+      const currentPatientId = editingPatient?.patientId || editingPatient?.PatientId || editingPatient?.id;
+      const existingPatient = allPatients.find((patient: any) => {
+        const patientPanCard = (patient as any).PANCard || (patient as any).panCard || (patient as any).PanCard || '';
+        const patientId = (patient as any).PatientId || (patient as any).patientId || (patient as any).id;
+        // Check if PAN Card matches and it's not the current patient being edited
+        return patientPanCard && 
+               patientPanCard.toString().toUpperCase() === editFormData.panCard.toUpperCase() &&
+               patientId !== currentPatientId;
+      });
+      
+      if (existingPatient) {
+        setEditPanCardError('PAN Card already exists for another patient');
+        hasError = true;
+      }
+    }
+    
+    if (hasError) {
       return;
     }
-    setEditAdhaarError('');
 
     try {
       setUpdatingPatient(true);
@@ -343,10 +551,19 @@ export function PatientRegistration() {
       console.log('Patient updated successfully for PatientId:', patientId);
 
       await fetchPatients();
+      // Refresh paginated table to show updated patient
+      await refreshPaginatedPatients();
       
       setIsEditDialogOpen(false);
       setEditingPatient(null);
       setEditFormData(null);
+      setEditRegisteredDate(null);
+      setEditAdhaarError('');
+      setEditPhoneError('');
+      setEditPatientNameError('');
+      setEditGenderError('');
+      setEditAgeError('');
+      setEditPanCardError('');
       
       alert('Patient details updated successfully!');
     } catch (err) {
@@ -390,19 +607,29 @@ export function PatientRegistration() {
     if (!searchTerm) {
       filtered = active;
     } else {
-      const searchLower = searchTerm.toLowerCase();
+      const searchLower = searchTerm.toLowerCase().trim();
       filtered = active.filter(patient => {
-        const patientName = `${patient.PatientName || ''} ${patient.LastName || ''}`.toLowerCase();
-        const patientNo = (patient.PatientNo || '').toLowerCase();
-        const phoneNo = (patient.PhoneNo || '').toLowerCase();
-        const patientId = (patient.PatientId || '').toLowerCase();
-        const patientType = (patient.PatientType || '').toLowerCase();
+        // Get patient name - check multiple possible field names
+        const firstName = (patient.PatientName || (patient as any).patientName || '').toLowerCase();
+        const lastName = (patient.LastName || (patient as any).lastName || '').toLowerCase();
+        const patientName = `${firstName} ${lastName}`.trim().toLowerCase();
         
+        // Get patient number - check multiple possible field names
+        const patientNo = ((patient as any).patientNo || patient.PatientNo || '').toLowerCase();
+        
+        // Get phone number
+        const phoneNo = ((patient as any).phoneNo || patient.PhoneNo || '').toLowerCase();
+        
+        // Get aadhaar ID
+        const aadhaarId = ((patient as any).AdhaarId || (patient as any).adhaarID || (patient as any).AdhaarID || patient.AdhaarId || '').toLowerCase();
+        
+        // Search in all fields
         return patientName.includes(searchLower) ||
+               firstName.includes(searchLower) ||
+               lastName.includes(searchLower) ||
                patientNo.includes(searchLower) ||
                phoneNo.includes(searchLower) ||
-               patientId.includes(searchLower) ||
-               patientType.includes(searchLower);
+               aadhaarId.includes(searchLower);
       });
     }
     
@@ -418,6 +645,8 @@ export function PatientRegistration() {
     const patientNo = (patient as any).patientNo || patient.PatientNo || '-';
     const patientName = (patient as any).patientName || patient.PatientName || '';
     const lastName = (patient as any).lastName || patient.LastName || '';
+    const phoneNo = (patient as any).phoneNo || patient.PhoneNo || '-';
+    const aadhaarId = (patient as any).adhaarID || (patient as any).AdhaarId || (patient as any).AdhaarID || patient.AdhaarId || '-';
     const patientType = (patient as any).patientType || patient.PatientType || 'N/A';
     const age = (patient as any).age || patient.Age || '-';
     const status = (patient as any).status || (patient as any).Status || 'Active';
@@ -435,6 +664,12 @@ export function PatientRegistration() {
         </td>
         <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'} whitespace-nowrap min-w-[120px]`}>
           {patientName} {lastName || ''}
+        </td>
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'} whitespace-nowrap`}>
+          {phoneNo}
+        </td>
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'} whitespace-nowrap`}>
+          {aadhaarId}
         </td>
         <td className={`py-3 px-4 whitespace-nowrap ${isInactive ? 'text-gray-400' : ''}`}>
           <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${isInactive ? 'bg-gray-100 text-gray-400' : 'bg-gray-100 text-gray-700'}`}>
@@ -492,6 +727,8 @@ export function PatientRegistration() {
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-3 px-4 text-gray-700">Patient No</th>
                   <th className="text-left py-3 px-4 text-gray-700">Patient Name</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Phone No</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Aadhaar ID</th>
                   <th className="text-left py-3 px-4 text-gray-700">Type</th>
                   <th className="text-left py-3 px-4 text-gray-700">Age</th>
                   <th className="text-left py-3 px-4 text-gray-700">Status</th>
@@ -502,7 +739,7 @@ export function PatientRegistration() {
               <tbody>
                 {filteredPatients.length === 0 && (!searchTerm ? inactivePatients.length === 0 : true) ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12 text-gray-500">
+                    <td colSpan={9} className="text-center py-12 text-gray-500">
                       {searchTerm ? 'No patients found matching your search.' : 'No patients found. Click "Add New Patient" to register a new patient.'}
                     </td>
                   </tr>
@@ -603,20 +840,18 @@ export function PatientRegistration() {
                               id="patientName"
                               required
                               value={formData.patientName}
-                              onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
+                              onChange={(e) => {
+                                setFormData({ ...formData, patientName: e.target.value });
+                                if (patientNameError) {
+                                  setPatientNameError('');
+                                }
+                              }}
                               placeholder="Enter patient's first name"
-                              className="dialog-input-standard"
+                              className={`dialog-input-standard ${patientNameError ? 'border-red-500' : ''}`}
                             />
-                          </div>
-                          <div className="dialog-form-field">
-                            <Label htmlFor="patientNo" className="dialog-label-standard">Patient No (Optional)</Label>
-                            <Input
-                              id="patientNo"
-                              value={formData.patientNo}
-                              onChange={(e) => setFormData({ ...formData, patientNo: e.target.value })}
-                              placeholder="Optional manual patient number"
-                              className="dialog-input-standard"
-                            />
+                            {patientNameError && (
+                              <p className="text-sm text-red-600 mt-1">{patientNameError}</p>
+                            )}
                           </div>
                           <div className="dialog-form-field-grid">
                             <div className="dialog-form-field">
@@ -672,11 +907,34 @@ export function PatientRegistration() {
                               <Input
                                 id="panCard"
                                 value={formData.panCard}
-                                onChange={(e) => setFormData({ ...formData, panCard: e.target.value.toUpperCase() })}
+                                onChange={(e) => {
+                                  const upperValue = e.target.value.toUpperCase();
+                                  setFormData({ ...formData, panCard: upperValue });
+                                  
+                                  // Clear any previous errors when user starts typing
+                                  if (upperValue.length === 0) {
+                                    setPanCardError('');
+                                  } else {
+                                    // Check if PAN Card already exists (only if provided)
+                                    const existingPatient = allPatients.find((patient: any) => {
+                                      const patientPanCard = (patient as any).PANCard || (patient as any).panCard || (patient as any).PanCard || '';
+                                      return patientPanCard && patientPanCard.toString().toUpperCase() === upperValue;
+                                    });
+                                    
+                                    if (existingPatient) {
+                                      setPanCardError('PAN Card already exists for another patient');
+                                    } else {
+                                      setPanCardError('');
+                                    }
+                                  }
+                                }}
                                 placeholder="Enter PAN number"
                                 maxLength={10}
-                                className="dialog-input-standard"
+                                className={`dialog-input-standard ${panCardError ? 'border-red-500' : ''}`}
                               />
+                              {panCardError && (
+                                <p className="text-sm text-red-600 mt-1">{panCardError}</p>
+                              )}
                             </div>
                           </div>
                           <div className="dialog-form-field-grid">
@@ -687,10 +945,13 @@ export function PatientRegistration() {
                                 required
                                 type="tel"
                                 value={formData.phoneNo}
-                                onChange={(e) => setFormData({ ...formData, phoneNo: e.target.value })}
-                                placeholder="Enter phone number"
-                                className="dialog-input-standard"
+                                onChange={(e) => handlePhoneChange(e.target.value)}
+                                placeholder="Enter 10-digit phone number"
+                                className={`dialog-input-standard ${phoneError ? 'border-red-500' : ''}`}
                               />
+                              {phoneError && (
+                                <p className="text-sm text-red-600 mt-1">{phoneError}</p>
+                              )}
                             </div>
                             <div className="dialog-form-field">
                               <Label htmlFor="gender" className="dialog-label-standard">Gender *</Label>
@@ -698,15 +959,23 @@ export function PatientRegistration() {
                                 id="gender"
                                 aria-label="Gender"
                                 required
-                                className="dialog-select-standard"
+                                className={`dialog-select-standard ${genderError ? 'border-red-500' : ''}`}
                                 value={formData.gender}
-                                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                                onChange={(e) => {
+                                  setFormData({ ...formData, gender: e.target.value });
+                                  if (genderError) {
+                                    setGenderError('');
+                                  }
+                                }}
                               >
                                 <option value="">Select gender</option>
                                 <option value="Male">Male</option>
                                 <option value="Female">Female</option>
                                 <option value="Other">Other</option>
                               </select>
+                              {genderError && (
+                                <p className="text-sm text-red-600 mt-1">{genderError}</p>
+                              )}
                             </div>
                           </div>
                           <div className="dialog-form-field-grid">
@@ -719,10 +988,18 @@ export function PatientRegistration() {
                                 min="0"
                                 max="150"
                                 value={formData.age}
-                                onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                                onChange={(e) => {
+                                  setFormData({ ...formData, age: e.target.value });
+                                  if (ageError) {
+                                    setAgeError('');
+                                  }
+                                }}
                                 placeholder="Enter age"
-                                className="dialog-input-standard"
+                                className={`dialog-input-standard ${ageError ? 'border-red-500' : ''}`}
                               />
+                              {ageError && (
+                                <p className="text-sm text-red-600 mt-1">{ageError}</p>
+                              )}
                             </div>
                             <div className="dialog-form-field">
                               <Label htmlFor="address" className="dialog-label-standard">Address</Label>
@@ -766,7 +1043,6 @@ export function PatientRegistration() {
                               onClick={() => {
                                 setIsAddDialogOpen(false);
                                 setFormData({
-                                  patientNo: '',
                                   patientName: '',
                                   patientType: '',
                                   lastName: '',
@@ -782,6 +1058,11 @@ export function PatientRegistration() {
                                   registeredBy: '',
                                 });
                                 setAdhaarError('');
+                                setPhoneError('');
+                                setPatientNameError('');
+                                setGenderError('');
+                                setAgeError('');
+                                setPanCardError('');
                                 setPatientSearchTerm('');
                                 setSelectedPatientId('');
                                 setPatientHighlightIndex(-1);
@@ -814,7 +1095,7 @@ export function PatientRegistration() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                   <Input
-                    placeholder="Search by patient name, patient number, phone number, patient ID, or patient type..."
+                    placeholder="Search by patient name, patient number, phone number, or aadhaar ID..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
@@ -855,19 +1136,27 @@ export function PatientRegistration() {
                       id="editPatientName"
                       required
                       value={editFormData.patientName}
-                      onChange={(e) => setEditFormData({ ...editFormData, patientName: e.target.value })}
+                      onChange={(e) => {
+                        setEditFormData({ ...editFormData, patientName: e.target.value });
+                        if (editPatientNameError) {
+                          setEditPatientNameError('');
+                        }
+                      }}
                       placeholder="Enter patient's first name"
-                      className="dialog-input-standard"
+                      className={`dialog-input-standard ${editPatientNameError ? 'border-red-500' : ''}`}
                     />
+                    {editPatientNameError && (
+                      <p className="text-sm text-red-600 mt-1">{editPatientNameError}</p>
+                    )}
                   </div>
                   <div className="dialog-form-field">
-                    <Label htmlFor="editPatientNo" className="dialog-label-standard">Patient No (Optional)</Label>
+                    <Label htmlFor="editPatientNo" className="dialog-label-standard">Patient No</Label>
                     <Input
                       id="editPatientNo"
-                      value={editFormData.patientNo}
-                      onChange={(e) => setEditFormData({ ...editFormData, patientNo: e.target.value })}
-                      placeholder="Optional manual patient number"
-                      className="dialog-input-standard"
+                      value={editFormData.patientNo || '-'}
+                      readOnly
+                      disabled
+                      className="dialog-input-standard bg-gray-50 cursor-not-allowed"
                     />
                   </div>
                   <div className="dialog-form-field-grid">
@@ -913,10 +1202,29 @@ export function PatientRegistration() {
                           const numericValue = e.target.value.replace(/\D/g, '');
                           const limitedValue = numericValue.slice(0, 12);
                           setEditFormData({ ...editFormData, adhaarID: limitedValue });
-                          if (limitedValue && limitedValue.length !== 12) {
+                          
+                          // Clear any previous errors when user starts typing
+                          if (limitedValue.length === 0) {
+                            setEditAdhaarError('');
+                          } else if (limitedValue.length !== 12) {
                             setEditAdhaarError('Aadhaar ID must be exactly 12 digits');
                           } else {
-                            setEditAdhaarError('');
+                            // Check if Aadhaar ID already exists for a different patient (only if exactly 12 digits)
+                            const currentPatientId = editingPatient?.patientId || editingPatient?.PatientId || editingPatient?.id;
+                            const existingPatient = allPatients.find((patient: any) => {
+                              const patientAdhaarId = (patient as any).AdhaarId || (patient as any).adhaarID || (patient as any).AdhaarID || patient.AdhaarId || '';
+                              const patientId = (patient as any).PatientId || (patient as any).patientId || (patient as any).id;
+                              // Check if Aadhaar ID matches and it's not the current patient being edited
+                              return patientAdhaarId && 
+                                     patientAdhaarId.toString() === limitedValue &&
+                                     patientId !== currentPatientId;
+                            });
+                            
+                            if (existingPatient) {
+                              setEditAdhaarError('Aadhaar ID already exists for another patient');
+                            } else {
+                              setEditAdhaarError('');
+                            }
                           }
                         }}
                         placeholder="Enter 12-digit Aadhaar number"
@@ -932,11 +1240,39 @@ export function PatientRegistration() {
                       <Input
                         id="editPANCard"
                         value={editFormData.panCard}
-                        onChange={(e) => setEditFormData({ ...editFormData, panCard: e.target.value.toUpperCase() })}
+                        onChange={(e) => {
+                          const upperValue = e.target.value.toUpperCase();
+                          setEditFormData({ ...editFormData, panCard: upperValue });
+                          
+                          // Clear any previous errors when user starts typing
+                          if (upperValue.length === 0) {
+                            setEditPanCardError('');
+                          } else {
+                            // Check if PAN Card already exists for a different patient (only if provided)
+                            const currentPatientId = editingPatient?.patientId || editingPatient?.PatientId || editingPatient?.id;
+                            const existingPatient = allPatients.find((patient: any) => {
+                              const patientPanCard = (patient as any).PANCard || (patient as any).panCard || (patient as any).PanCard || '';
+                              const patientId = (patient as any).PatientId || (patient as any).patientId || (patient as any).id;
+                              // Check if PAN Card matches and it's not the current patient being edited
+                              return patientPanCard && 
+                                     patientPanCard.toString().toUpperCase() === upperValue &&
+                                     patientId !== currentPatientId;
+                            });
+                            
+                            if (existingPatient) {
+                              setEditPanCardError('PAN Card already exists for another patient');
+                            } else {
+                              setEditPanCardError('');
+                            }
+                          }
+                        }}
                         placeholder="Enter PAN number"
                         maxLength={10}
-                        className="dialog-input-standard"
+                        className={`dialog-input-standard ${editPanCardError ? 'border-red-500' : ''}`}
                       />
+                      {editPanCardError && (
+                        <p className="text-sm text-red-600 mt-1">{editPanCardError}</p>
+                      )}
                     </div>
                   </div>
                   <div className="dialog-form-field-grid">
@@ -947,10 +1283,13 @@ export function PatientRegistration() {
                         required
                         type="tel"
                         value={editFormData.phoneNo}
-                        onChange={(e) => setEditFormData({ ...editFormData, phoneNo: e.target.value })}
-                        placeholder="Enter phone number"
-                        className="dialog-input-standard"
+                        onChange={(e) => handleEditPhoneChange(e.target.value)}
+                        placeholder="Enter 10-digit phone number"
+                        className={`dialog-input-standard ${editPhoneError ? 'border-red-500' : ''}`}
                       />
+                      {editPhoneError && (
+                        <p className="text-sm text-red-600 mt-1">{editPhoneError}</p>
+                      )}
                     </div>
                     <div className="dialog-form-field">
                       <Label htmlFor="editGender" className="dialog-label-standard">Gender *</Label>
@@ -958,15 +1297,23 @@ export function PatientRegistration() {
                         id="editGender"
                         aria-label="Gender"
                         required
-                        className="dialog-select-standard"
+                        className={`dialog-select-standard ${editGenderError ? 'border-red-500' : ''}`}
                         value={editFormData.gender}
-                        onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value })}
+                        onChange={(e) => {
+                          setEditFormData({ ...editFormData, gender: e.target.value });
+                          if (editGenderError) {
+                            setEditGenderError('');
+                          }
+                        }}
                       >
                         <option value="">Select gender</option>
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                         <option value="Other">Other</option>
                       </select>
+                      {editGenderError && (
+                        <p className="text-sm text-red-600 mt-1">{editGenderError}</p>
+                      )}
                     </div>
                   </div>
                   <div className="dialog-form-field-grid">
@@ -979,10 +1326,18 @@ export function PatientRegistration() {
                         min="0"
                         max="150"
                         value={editFormData.age}
-                        onChange={(e) => setEditFormData({ ...editFormData, age: e.target.value })}
+                        onChange={(e) => {
+                          setEditFormData({ ...editFormData, age: e.target.value });
+                          if (editAgeError) {
+                            setEditAgeError('');
+                          }
+                        }}
                         placeholder="Enter age"
-                        className="dialog-input-standard"
+                        className={`dialog-input-standard ${editAgeError ? 'border-red-500' : ''}`}
                       />
+                      {editAgeError && (
+                        <p className="text-sm text-red-600 mt-1">{editAgeError}</p>
+                      )}
                     </div>
                     <div className="dialog-form-field">
                       <Label htmlFor="editAddress" className="dialog-label-standard">Address</Label>
@@ -1014,34 +1369,6 @@ export function PatientRegistration() {
                       value={editFormData.description}
                       onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
                       placeholder="Enter additional description or notes"
-                    />
-                  </div>
-                  <div className="dialog-form-field">
-                    <Label htmlFor="editRegisteredDate" className="dialog-label-standard">Registered Date</Label>
-                    <DatePicker
-                      id="editRegisteredDate"
-                      selected={editRegisteredDate}
-                      onChange={(date: Date | null) => {
-                        setEditRegisteredDate(date);
-                        if (date) {
-                          const year = date.getFullYear();
-                          const month = String(date.getMonth() + 1).padStart(2, '0');
-                          const day = String(date.getDate()).padStart(2, '0');
-                          const dateStr = `${year}-${month}-${day}`;
-                          setEditFormData({ ...editFormData, registeredDate: dateStr });
-                        } else {
-                          setEditFormData({ ...editFormData, registeredDate: '' });
-                        }
-                      }}
-                      dateFormat="dd-MM-yyyy"
-                      placeholderText="dd-mm-yyyy"
-                      className="dialog-input-standard w-full"
-                      wrapperClassName="w-full"
-                      showYearDropdown
-                      showMonthDropdown
-                      dropdownMode="select"
-                      yearDropdownItemNumber={100}
-                      scrollableYearDropdown
                     />
                   </div>
                   <div className="dialog-form-field">
