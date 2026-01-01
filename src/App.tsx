@@ -40,6 +40,7 @@ const PatientRegistration = lazy(() => import('./components/PatientRegistration'
 const Roles = lazy(() => import('./components/Roles').then(m => ({ default: m.Roles })));
 const Departments = lazy(() => import('./components/Departments').then(m => ({ default: m.Departments })));
 const StaffManagement = lazy(() => import('./components/Staff').then(m => ({ default: m.StaffManagement })));
+const Doctors = lazy(() => import('./components/Doctors').then(m => ({ default: m.Doctors })));
 const RoomBeds = lazy(() => import('./components/RoomBeds').then(m => ({ default: m.RoomBeds })));
 const LabTests = lazy(() => import('./components/LabTests').then(m => ({ default: m.LabTests })));
 const ICUBedsManagement = lazy(() => import('./components/ICUBedsManagement').then(m => ({ default: m.ICUBedsManagement })));
@@ -72,6 +73,7 @@ export default function App() {
     { path: '/frontdesk', label: 'Front Desk', icon: ClipboardList },
     { path: '/patient-registration', label: 'Patient Registration', icon: UserPlus },
     { path: '/consultation', label: 'Doctor Consultation', icon: Stethoscope },
+    { path: '/doctors', label: 'Doctors', icon: Stethoscope },
     { path: '/laboratory', label: 'Laboratory Tests Management', icon: TestTube },
     { path: '/admissions', label: 'Admissions (IPD)', icon: BedDouble },
     { path: '/emergency', label: 'Emergency', icon: Siren },
@@ -317,6 +319,7 @@ export default function App() {
             <Route path="/patient-registration" element={<PatientRegistration />} />
             <Route path="/consultation" element={<DoctorConsultation onManageAppointment={(id) => navigate(`/consultation/${id}`)} />} />
             <Route path="/consultation/:id" element={<ManageConsultationRoute />} />
+            <Route path="/doctors" element={<Doctors />} />
             <Route path="/laboratory" element={<Laboratory />} />
             <Route path="/admissions" element={<Admissions />} />
             <Route path="/emergency" element={<Emergency />} />
