@@ -50,6 +50,7 @@ const ManageICUCase = lazy(() => import('./components/ManageICUCase').then(m => 
 const ICUNurseVisitVitals = lazy(() => import('./components/ICUNurseVisitVitals').then(m => ({ default: m.ICUNurseVisitVitals })));
 const EditAdmission = lazy(() => import('./components/EditAdmission').then(m => ({ default: m.EditAdmission })));
 const Login = lazy(() => import('./components/Login').then(m => ({ default: m.Login })));
+const ResetPassword = lazy(() => import('./components/ResetPassword').then(m => ({ default: m.ResetPassword })));
 
 // Wrapper component to extract route params for ManageConsultation
 function ManageConsultationRoute() {
@@ -181,7 +182,7 @@ export default function App() {
     }
   });
 
-  const isLoginPage = location.pathname === '/login';
+  const isLoginPage = location.pathname === '/login' || location.pathname === '/reset-password';
 
   return (
     <div className="flex h-screen bg-gray-50 relative">
@@ -314,6 +315,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/frontdesk" element={<FrontDesk />} />
             <Route path="/patient-registration" element={<PatientRegistration />} />
