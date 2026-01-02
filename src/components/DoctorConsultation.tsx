@@ -7,7 +7,7 @@ import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
-import { Search, Clock, Stethoscope, CheckCircle2, Hospital, Users, Plus, Edit } from 'lucide-react';
+import { Search, Clock, Stethoscope, CheckCircle2, Hospital, Users, Plus, Edit, X } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { usePatientAppointments } from '../hooks/usePatientAppointments';
 import { useStaff } from '../hooks/useStaff';
@@ -17,6 +17,8 @@ import { patientsApi } from '../api/patients';
 import { apiRequest } from '../api/base';
 import { PatientAppointment, Patient, Doctor } from '../types';
 import { formatDateIST, formatTimeIST, formatDateToDDMMYYYY, formatDateTimeIST, convertToIST } from '../utils/timeUtils';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 interface DoctorConsultationProps {
   onManageAppointment?: (appointmentId: number) => void;
@@ -28,6 +30,23 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
   const { roles } = useRoles();
   const { departments } = useDepartments();
   const [searchTerm, setSearchTerm] = useState('');
+  // Initialize date filter with today's date
+  const [dateFilter, setDateFilter] = useState<Date | null>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
+  const [dateFilterDisplay, setDateFilterDisplay] = useState(() => {
+    // Format today's date for display (dd-mm-yyyy)
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    return `${day}-${month}-${year}`;
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const [activeTab, setActiveTab] = useState('all');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -387,7 +406,7 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
     fetchPatients();
   }, []);
 
-  // Separate active and inactive appointments, and filter based on search term
+  // Separate active and inactive appointments, and filter based on search term and date
   const { activeAppointments, inactiveAppointments, filteredActiveAppointments } = useMemo(() => {
     if (!patientAppointments || patientAppointments.length === 0) {
       return { activeAppointments: [], inactiveAppointments: [], filteredActiveAppointments: [] };
@@ -410,12 +429,33 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
       }
     });
     
+    // Apply date filter if set
+    let dateFilterStr: string | null = null;
+    if (dateFilter) {
+      // Extract date directly from Date object
+      const year = dateFilter.getFullYear();
+      const month = String(dateFilter.getMonth() + 1).padStart(2, '0');
+      const day = String(dateFilter.getDate()).padStart(2, '0');
+      dateFilterStr = `${year}-${month}-${day}`;
+    }
+    
+    const filterByDate = (appointments: PatientAppointment[]): PatientAppointment[] => {
+      if (!dateFilterStr) return appointments;
+      return appointments.filter(appointment => {
+        if (!appointment.appointmentDate) return false;
+        // Compare dates directly (both in YYYY-MM-DD format)
+        return appointment.appointmentDate === dateFilterStr;
+      });
+    };
+    
+    const activeFilteredByDate = filterByDate(active);
+    
     // Filter active appointments by search term (exclude inactive from search)
     let filtered: PatientAppointment[] = [];
     if (!searchTerm) {
-      filtered = active;
+      filtered = activeFilteredByDate;
     } else {
-      filtered = active.filter(appointment => {
+      filtered = activeFilteredByDate.filter(appointment => {
         const patient = patients.find(p => 
           (p as any).patientId === appointment.patientId || 
           (p as any).PatientId === appointment.patientId
@@ -446,16 +486,64 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
       });
     }
     
-    return { activeAppointments: active, inactiveAppointments: inactive, filteredActiveAppointments: filtered };
-  }, [patientAppointments, searchTerm, patients, appointmentDoctors]);
+    return { activeAppointments: activeFilteredByDate, inactiveAppointments: inactive, filteredActiveAppointments: filtered };
+  }, [patientAppointments, searchTerm, dateFilter, patients, appointmentDoctors]);
 
   const filteredAppointments = filteredActiveAppointments;
-
-  // Get all appointments including inactive (for "All Appointments" tab only)
-  const getAllAppointments = () => {
-    if (!searchTerm) {
-      return [...filteredActiveAppointments, ...inactiveAppointments];
+  
+  // Reset to page 1 when search term, date filter, or tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, dateFilter, activeTab]);
+  
+  // Generate page numbers to display
+  const getPageNumbers = (totalPages: number) => {
+    const pages: (number | string)[] = [];
+    const maxVisiblePages = 7;
+    
+    if (totalPages <= maxVisiblePages) {
+      // Show all pages if total pages is less than max visible
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Always show first page
+      pages.push(1);
+      
+      if (currentPage > 3) {
+        pages.push('...');
+      }
+      
+      // Show pages around current page
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      
+      if (currentPage < totalPages - 2) {
+        pages.push('...');
+      }
+      
+      // Always show last page
+      pages.push(totalPages);
     }
+    
+    return pages;
+  };
+  
+  // Paginate appointments
+  const paginateAppointments = (appointments: PatientAppointment[]) => {
+    const totalPages = Math.ceil(appointments.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginated = appointments.slice(startIndex, endIndex);
+    return { paginated, totalPages, startIndex, endIndex };
+  };
+
+  // Get all active appointments only (exclude inactive)
+  const getAllAppointments = () => {
     return filteredActiveAppointments;
   };
 
@@ -465,10 +553,8 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
   };
 
   const getAppointmentsByStatus = (status: PatientAppointment['appointmentStatus']) => {
-    // Include both active and inactive appointments that match the status
-    const activeStatusAppointments = filteredActiveAppointments.filter(a => a.appointmentStatus === status);
-    const inactiveStatusAppointments = inactiveAppointments.filter(a => a.appointmentStatus === status);
-    return [...activeStatusAppointments, ...inactiveStatusAppointments];
+    // Only include active appointments that match the status
+    return filteredActiveAppointments.filter(a => a.appointmentStatus === status);
   };
 
   if (loading) {
@@ -530,7 +616,7 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-500 mb-1">Total Appointments</p>
-                    <h3 className="text-gray-900">{patientAppointments.length}</h3>
+                    <h3 className="text-gray-900">{activeAppointments.length}</h3>
                   </div>
                   <Users className="size-8 text-blue-500" />
                 </div>
@@ -577,23 +663,73 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
             </Card>
           </div>
 
-          {/* Search */}
+          {/* Search and Date Filter */}
           <Card className="mb-6">
             <CardContent className="p-6">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                <Input
-                  placeholder="Search by token no, patient, or doctor..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                  <Input
+                    placeholder="Search by token no, patient, or doctor..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="date-filter" className="whitespace-nowrap text-sm text-gray-700">Filter by Date:</Label>
+                  <div className="relative" style={{ minWidth: '200px' }}>
+                    <DatePicker
+                      id="date-filter"
+                      selected={dateFilter}
+                      onChange={(date: Date | null) => {
+                        setDateFilter(date);
+                        if (date) {
+                          // Extract date directly and format as dd-mm-yyyy for display
+                          const year = date.getFullYear();
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
+                          setDateFilterDisplay(`${day}-${month}-${year}`);
+                        } else {
+                          // Clear date filter to show all records
+                          setDateFilterDisplay('');
+                        }
+                      }}
+                      dateFormat="dd-MM-yyyy"
+                      placeholderText="Select date (dd-mm-yyyy)"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                      wrapperClassName="w-full"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={100}
+                      scrollableYearDropdown
+                      isClearable
+                      clearButtonTitle="Clear date filter"
+                    />
+                  </div>
+                  {dateFilterDisplay && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        // Clear date filter to show all records
+                        setDateFilter(null);
+                        setDateFilterDisplay('');
+                      }}
+                      className="text-gray-500 hover:text-gray-700"
+                      title="Clear date filter to show all records"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Appointments by Status */}
-          <Tabs defaultValue="all" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList>
               <TabsTrigger value="all">All Appointments ({filteredAppointments.length})</TabsTrigger>
               <TabsTrigger value="waiting">Waiting ({getActiveAppointmentsCountByStatus('Waiting')})</TabsTrigger>
@@ -602,11 +738,16 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
             </TabsList>
 
             <TabsContent value="all">
-              <AppointmentList 
-                appointments={getAllAppointments()}
-                doctors={appointmentDoctors} 
-                patients={patients}
-                onManage={(appointment) => {
+              {(() => {
+                const allAppts = getAllAppointments();
+                const { paginated, totalPages, startIndex, endIndex } = paginateAppointments(allAppts);
+                return (
+                  <>
+                    <AppointmentList 
+                      appointments={paginated}
+                      doctors={appointmentDoctors} 
+                      patients={patients}
+                      onManage={(appointment) => {
                   if (onManageAppointment && appointment.id) {
                     onManageAppointment(appointment.id);
                   } else {
@@ -636,10 +777,67 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                   }
                 }}
               />
+              {allAppts.length > itemsPerPage && (
+                <div className="mt-4 flex items-center justify-between px-6 pb-4">
+                  <div className="text-sm text-gray-600">
+                    Showing {startIndex + 1} to {Math.min(endIndex, allAppts.length)} of {allAppts.length} appointments
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    
+                    <div className="flex items-center gap-1">
+                      {getPageNumbers(totalPages).map((page, index) => {
+                        if (page === '...') {
+                          return (
+                            <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                              ...
+                            </span>
+                          );
+                        }
+                        return (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page as number)}
+                            className={currentPage === page ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+                          >
+                            {page}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+                  </>
+                );
+              })()}
             </TabsContent>
             <TabsContent value="waiting">
-              <AppointmentList 
-                appointments={getAppointmentsByStatus('Waiting')} 
+              {(() => {
+                const waitingAppts = getAppointmentsByStatus('Waiting');
+                const { paginated, totalPages, startIndex, endIndex } = paginateAppointments(waitingAppts);
+                return (
+                  <>
+                    <AppointmentList 
+                      appointments={paginated} 
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
@@ -671,10 +869,67 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                   }
                 }}
               />
+              {waitingAppts.length > itemsPerPage && (
+                <div className="mt-4 flex items-center justify-between px-6 pb-4">
+                  <div className="text-sm text-gray-600">
+                    Showing {startIndex + 1} to {Math.min(endIndex, waitingAppts.length)} of {waitingAppts.length} appointments
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    
+                    <div className="flex items-center gap-1">
+                      {getPageNumbers(totalPages).map((page, index) => {
+                        if (page === '...') {
+                          return (
+                            <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                              ...
+                            </span>
+                          );
+                        }
+                        return (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page as number)}
+                            className={currentPage === page ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+                          >
+                            {page}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+                  </>
+                );
+              })()}
             </TabsContent>
             <TabsContent value="consulting">
-              <AppointmentList 
-                appointments={getAppointmentsByStatus('Consulting')} 
+              {(() => {
+                const consultingAppts = getAppointmentsByStatus('Consulting');
+                const { paginated, totalPages, startIndex, endIndex } = paginateAppointments(consultingAppts);
+                return (
+                  <>
+                    <AppointmentList 
+                      appointments={paginated} 
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
@@ -706,10 +961,67 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                   }
                 }}
               />
+              {consultingAppts.length > itemsPerPage && (
+                <div className="mt-4 flex items-center justify-between px-6 pb-4">
+                  <div className="text-sm text-gray-600">
+                    Showing {startIndex + 1} to {Math.min(endIndex, consultingAppts.length)} of {consultingAppts.length} appointments
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    
+                    <div className="flex items-center gap-1">
+                      {getPageNumbers(totalPages).map((page, index) => {
+                        if (page === '...') {
+                          return (
+                            <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                              ...
+                            </span>
+                          );
+                        }
+                        return (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page as number)}
+                            className={currentPage === page ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+                          >
+                            {page}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+                  </>
+                );
+              })()}
             </TabsContent>
             <TabsContent value="completed">
-              <AppointmentList 
-                appointments={getAppointmentsByStatus('Completed')} 
+              {(() => {
+                const completedAppts = getAppointmentsByStatus('Completed');
+                const { paginated, totalPages, startIndex, endIndex } = paginateAppointments(completedAppts);
+                return (
+                  <>
+                    <AppointmentList 
+                      appointments={paginated} 
                 doctors={appointmentDoctors} 
                 patients={patients}
                 onManage={(appointment) => {
@@ -741,6 +1053,58 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                   }
                 }}
               />
+              {completedAppts.length > itemsPerPage && (
+                <div className="mt-4 flex items-center justify-between px-6 pb-4">
+                  <div className="text-sm text-gray-600">
+                    Showing {startIndex + 1} to {Math.min(endIndex, completedAppts.length)} of {completedAppts.length} appointments
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    
+                    <div className="flex items-center gap-1">
+                      {getPageNumbers(totalPages).map((page, index) => {
+                        if (page === '...') {
+                          return (
+                            <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                              ...
+                            </span>
+                          );
+                        }
+                        return (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page as number)}
+                            className={currentPage === page ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+                          >
+                            {page}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+                  </>
+                );
+              })()}
             </TabsContent>
           </Tabs>
         </div>

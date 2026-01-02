@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from './ui/dialog';
-import { Search, Plus, Pencil, Calendar } from 'lucide-react';
+import { Search, Plus, Pencil, Calendar, X } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { usePatients } from '../hooks';
 import { usePatientsPaginated } from '../hooks/usePatientsPaginated';
@@ -26,9 +26,24 @@ import "react-datepicker/dist/react-datepicker.css";
 export function PatientRegistration() {
   // Use paginated hook for table, but keep regular hook for search/forms
   const { patients: allPatients, createPatient, loading: allLoading, error: allError, fetchPatients } = usePatients();
-  const { patients, loading, loadingMore, error, hasMore, total, loadMore, refresh: refreshPaginatedPatients } = usePatientsPaginated(10);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const { patients, loading, loadingMore, error, hasMore, total, loadMore, refresh: refreshPaginatedPatients } = usePatientsPaginated(1000);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const [searchTerm, setSearchTerm] = useState('');
+  // Initialize date filter with today's date
+  const [dateFilter, setDateFilter] = useState<Date | null>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
+  const [dateFilterDisplay, setDateFilterDisplay] = useState(() => {
+    // Format today's date for display (dd-mm-yyyy)
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    return `${day}-${month}-${year}`;
+  });
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [adhaarError, setAdhaarError] = useState('');
   const [phoneError, setPhoneError] = useState('');
@@ -224,7 +239,8 @@ export function PatientRegistration() {
       hasError = true;
     }
     
-    if (!formData.age || formData.age.trim() === '' || parseInt(formData.age) <= 0) {
+    const ageStr = formData.age ? String(formData.age) : '';
+    if (!ageStr || ageStr.trim() === '' || parseInt(ageStr) <= 0) {
       setAgeError('Age is required and must be greater than 0');
       hasError = true;
     }
@@ -361,7 +377,7 @@ export function PatientRegistration() {
         panCard: mappedPatient.panCard || '',
         phoneNo: mappedPatient.phoneNo || '',
         gender: mappedPatient.gender || '',
-        age: mappedPatient.age || '',
+        age: mappedPatient.age ? String(mappedPatient.age) : '',
         address: mappedPatient.address || '',
         chiefComplaint: mappedPatient.chiefComplaint || '',
         description: mappedPatient.description || '',
@@ -471,7 +487,8 @@ export function PatientRegistration() {
       hasError = true;
     }
     
-    if (!editFormData.age || editFormData.age.trim() === '' || parseInt(editFormData.age) <= 0) {
+    const ageStr = editFormData.age ? String(editFormData.age) : '';
+    if (!ageStr || ageStr.trim() === '' || parseInt(ageStr) <= 0) {
       setEditAgeError('Age is required and must be greater than 0');
       hasError = true;
     }
@@ -575,7 +592,7 @@ export function PatientRegistration() {
     }
   };
 
-  // Separate active and inactive patients, and filter based on search term
+  // Separate active and inactive patients, and filter based on search term and date
   // Use paginated patients for table display
   const { activePatients, inactivePatients, filteredActivePatients } = useMemo(() => {
     // Use paginated patients for the table
@@ -602,13 +619,64 @@ export function PatientRegistration() {
       }
     });
     
+    // Apply date filter if set
+    let dateFilterStr: string | null = null;
+    if (dateFilter) {
+      // Extract date directly from Date object
+      const year = dateFilter.getFullYear();
+      const month = String(dateFilter.getMonth() + 1).padStart(2, '0');
+      const day = String(dateFilter.getDate()).padStart(2, '0');
+      dateFilterStr = `${year}-${month}-${day}`;
+    }
+    
+    const filterByDate = (patientList: Patient[]): Patient[] => {
+      if (!dateFilterStr) return patientList;
+      return patientList.filter(patient => {
+        const registeredDate = (patient as any).RegisteredDate || (patient as any).registeredDate;
+        if (!registeredDate) return false;
+        
+        // Handle different date formats
+        let patientDateStr: string = '';
+        if (typeof registeredDate === 'string') {
+          // If it's already in YYYY-MM-DD format
+          if (/^\d{4}-\d{2}-\d{2}$/.test(registeredDate)) {
+            patientDateStr = registeredDate;
+          } else if (registeredDate.includes('T')) {
+            // If it's a datetime string, extract date part
+            patientDateStr = registeredDate.split('T')[0];
+          } else {
+            // Try to parse as date
+            try {
+              const dateObj = new Date(registeredDate);
+              const year = dateObj.getFullYear();
+              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const day = String(dateObj.getDate()).padStart(2, '0');
+              patientDateStr = `${year}-${month}-${day}`;
+            } catch {
+              return false;
+            }
+          }
+        } else if (registeredDate instanceof Date) {
+          const year = registeredDate.getFullYear();
+          const month = String(registeredDate.getMonth() + 1).padStart(2, '0');
+          const day = String(registeredDate.getDate()).padStart(2, '0');
+          patientDateStr = `${year}-${month}-${day}`;
+        }
+        
+        // Compare dates directly (both in YYYY-MM-DD format)
+        return patientDateStr === dateFilterStr;
+      });
+    };
+    
+    const activeFilteredByDate = filterByDate(active);
+    
     // Filter active patients by search term (exclude inactive from search)
     let filtered: Patient[] = [];
     if (!searchTerm) {
-      filtered = active;
+      filtered = activeFilteredByDate;
     } else {
       const searchLower = searchTerm.toLowerCase().trim();
-      filtered = active.filter(patient => {
+      filtered = activeFilteredByDate.filter(patient => {
         // Get patient name - check multiple possible field names
         const firstName = (patient.PatientName || (patient as any).patientName || '').toLowerCase();
         const lastName = (patient.LastName || (patient as any).lastName || '').toLowerCase();
@@ -633,11 +701,59 @@ export function PatientRegistration() {
       });
     }
     
-    return { activePatients: active, inactivePatients: inactive, filteredActivePatients: filtered };
-  }, [patients, searchTerm]);
+    return { activePatients: activeFilteredByDate, inactivePatients: inactive, filteredActivePatients: filtered };
+  }, [patients, searchTerm, dateFilter]);
 
   // For backward compatibility, use filteredActivePatients
   const filteredPatients = filteredActivePatients;
+  
+  // Calculate pagination for filtered patients
+  const totalPages = Math.ceil(filteredPatients.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedPatients = filteredPatients.slice(startIndex, endIndex);
+  
+  // Reset to page 1 when search term or date filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, dateFilter]);
+  
+  // Generate page numbers to display
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisiblePages = 7;
+    
+    if (totalPages <= maxVisiblePages) {
+      // Show all pages if total pages is less than max visible
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Always show first page
+      pages.push(1);
+      
+      if (currentPage > 3) {
+        pages.push('...');
+      }
+      
+      // Show pages around current page
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      
+      if (currentPage < totalPages - 2) {
+        pages.push('...');
+      }
+      
+      // Always show last page
+      pages.push(totalPages);
+    }
+    
+    return pages;
+  };
 
   // Helper function to render patient row
   const renderPatientRow = (patient: Patient, isInactive: boolean = false) => {
@@ -745,25 +861,60 @@ export function PatientRegistration() {
                   </tr>
                 ) : (
                   <>
-                    {patients.map((patient) => renderPatientRow(patient, false))}
-                    {showInactive && inactivePatients.map((patient) => renderPatientRow(patient, true))}
+                    {paginatedPatients.map((patient) => renderPatientRow(patient, false))}
                   </>
                 )}
               </tbody>
             </table>
-            {/* Infinite scroll trigger */}
-            {hasMore && (
-              <div ref={loadMoreRef} className="py-4 text-center">
-                {loadingMore ? (
-                  <div className="text-blue-600">Loading more patients...</div>
-                ) : (
-                  <div className="text-gray-400 text-sm">Scroll for more</div>
-                )}
-              </div>
-            )}
-            {!hasMore && patients.length > 0 && (
-              <div className="py-4 text-center text-gray-500 text-sm">
-                All {total} patients loaded
+            
+            {/* Pagination Controls */}
+            {filteredPatients.length > itemsPerPage && (
+              <div className="mt-6 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredPatients.length)} of {filteredPatients.length} patients
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  
+                  <div className="flex items-center gap-1">
+                    {getPageNumbers().map((page, index) => {
+                      if (page === '...') {
+                        return (
+                          <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                            ...
+                          </span>
+                        );
+                      }
+                      return (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(page as number)}
+                          className={currentPage === page ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+                        >
+                          {page}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -1089,17 +1240,67 @@ export function PatientRegistration() {
             </div>
           </div>
           <div className="px-6 pt-4 pb-4 flex-1">
-            {/* Search */}
+            {/* Search and Date Filter */}
             <Card className="mb-6">
               <CardContent className="p-6">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                  <Input
-                    placeholder="Search by patient name, patient number, phone number, or aadhaar ID..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
+                <div className="flex items-center gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                    <Input
+                      placeholder="Search by patient name, patient number, phone number, or aadhaar ID..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="date-filter" className="whitespace-nowrap text-sm text-gray-700">Filter by Date:</Label>
+                    <div className="relative" style={{ minWidth: '200px' }}>
+                      <DatePicker
+                        id="date-filter"
+                        selected={dateFilter}
+                        onChange={(date: Date | null) => {
+                          setDateFilter(date);
+                          if (date) {
+                            // Extract date directly and format as dd-mm-yyyy for display
+                            const year = date.getFullYear();
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            setDateFilterDisplay(`${day}-${month}-${year}`);
+                          } else {
+                            // Clear date filter to show all records
+                            setDateFilterDisplay('');
+                          }
+                        }}
+                        dateFormat="dd-MM-yyyy"
+                        placeholderText="Select date (dd-mm-yyyy)"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                        wrapperClassName="w-full"
+                        showYearDropdown
+                        showMonthDropdown
+                        dropdownMode="select"
+                        yearDropdownItemNumber={100}
+                        scrollableYearDropdown
+                        isClearable
+                        clearButtonTitle="Clear date filter"
+                      />
+                    </div>
+                    {dateFilterDisplay && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          // Clear date filter to show all records
+                          setDateFilter(null);
+                          setDateFilterDisplay('');
+                        }}
+                        className="text-gray-500 hover:text-gray-700"
+                        title="Clear date filter to show all records"
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
