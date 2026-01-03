@@ -35,7 +35,7 @@ export function Login() {
    
 
     try {
-
+      
       const response = await apiRequest<LoginResponse>(`/auth/login?username=${encodeURIComponent(username.trim())}&password=${encodeURIComponent(password)}`, {
         method: 'GET',
       });

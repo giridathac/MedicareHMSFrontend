@@ -85,5 +85,41 @@ export const staffApi = {
       throw new Error(response.message || 'Failed to delete user');
     }
   },
+
+  async resetPasswordWithNewPassword(id: number, newPassword: string): Promise<void> {
+
+    console.log('Making reset password request for user ID:', id);
+    try {
+      // Make direct fetch call without token for Super Admin password reset
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+      const url = `${API_BASE_URL}/auth/reset-password-for-userid`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ UserId: id, newPassword }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Password reset failed:', errorData.message);
+        throw new Error(errorData.message || 'Failed to reset password');
+      }
+
+      const responseData = await response.json();
+      console.log('AAAAAAAAAAAAAAAAAReceived response from reset password request:', responseData);
+      if (!responseData.success) {
+        console.error('Password reset failed:', responseData.message);
+        throw new Error(responseData.message || 'Failed to reset password');
+      }
+
+      console.log('Password reset successful for user ID:', id);
+    } catch (error) {
+      console.error('Error during password reset request:', error);
+      throw error;
+    }
+  },
 };
 

@@ -50,7 +50,9 @@ const ManageICUCase = lazy(() => import('./components/ManageICUCase').then(m => 
 const ICUNurseVisitVitals = lazy(() => import('./components/ICUNurseVisitVitals').then(m => ({ default: m.ICUNurseVisitVitals })));
 const EditAdmission = lazy(() => import('./components/EditAdmission').then(m => ({ default: m.EditAdmission })));
 const Login = lazy(() => import('./components/Login').then(m => ({ default: m.Login })));
-const ResetPassword = lazy(() => import('./components/ResetPassword').then(m => ({ default: m.ResetPassword })));
+const ForgotPassword = lazy(() => import('./components/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
+
+
 
 // Wrapper component to extract route params for ManageConsultation
 function ManageConsultationRoute() {
@@ -176,18 +178,21 @@ export default function App() {
     } else if (trimmedRole === 'Doctor') {
       // Show only Doctor Consultation menu for Doctor
       return item.path === '/consultation';
+    } else if (trimmedRole === 'Surgeon') {
+      // Show only Doctor Consultation menu for Doctor
+      return item.path === '/consultation';
     } else {
       // Show all menus for SuperAdmin and other roles
       return true;
     }
   });
 
-  const isLoginPage = location.pathname === '/login' || location.pathname === '/reset-password';
+  const hideSidebar = location.pathname === '/login' || location.pathname === '/reset-password';
 
   return (
     <div className="flex h-screen bg-gray-50 relative">
-      {/* Sidebar - Hide on login page */}
-      {!isLoginPage && (
+      {/* Sidebar - Hide on login and reset-password pages */}
+      {!hideSidebar && (
         <aside className={`${isSidebarMinimized ? 'w-0' : 'w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300 relative`} style={{ overflow: 'visible' }}>
           {!isSidebarMinimized && (
             <div className="p-6 border-b border-gray-200">
@@ -276,7 +281,7 @@ export default function App() {
       )}
 
       {/* Toggle Button - When minimized, show at left edge - Round circle to expand (large, more visible) */}
-      {!isLoginPage && isSidebarMinimized && (
+      {!hideSidebar && isSidebarMinimized && (
         <button
           onClick={(e) => {
             e.preventDefault();
@@ -315,7 +320,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/reset-password" element={<ForgotPassword />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/frontdesk" element={<FrontDesk />} />
             <Route path="/patient-registration" element={<PatientRegistration />} />

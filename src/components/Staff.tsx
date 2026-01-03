@@ -131,8 +131,10 @@ function StaffView({
   const allStaff = staff; // staff prop now contains all staff (unfiltered)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [formData, setFormData] = useState<CreateUserDto>({
     RoleId: '',
     UserName: '',
@@ -282,6 +284,28 @@ function StaffView({
       Status: staffMember.Status || 'Active',
     });
     setIsEditDialogOpen(true);
+  };
+
+  const handleResetPassword = (staffMember: Staff) => {
+    setSelectedStaff(staffMember);
+    setNewPassword('');
+    setIsResetPasswordDialogOpen(true);
+  };
+
+  const handleResetPasswordSubmit = async () => {
+    if (!selectedStaff || !selectedStaff.UserId || !newPassword.trim()) return;
+
+    try {
+      const { staffApi } = await import('../api/staff');
+      await staffApi.resetPasswordWithNewPassword(selectedStaff.UserId, newPassword.trim());
+      alert(`Password reset successfully for ${selectedStaff.UserName}`);
+      setIsResetPasswordDialogOpen(false);
+      setSelectedStaff(null);
+      setNewPassword('');
+    } catch (err) {
+      console.error('Failed to reset password:', err);
+      alert('Failed to reset password. Please try again.');
+    }
   };
 
   const getStatusBadgeColor = (status?: string) => {
@@ -695,7 +719,7 @@ function StaffView({
                     </span>
                   </td>
                   <td className="py-4 px-6">
-                    <div className="dashboard-actions-container">
+                    <div className="dashboard-actions-container flex gap-2">
                       <Button
                         size="sm"
                         onClick={() => handleEdit(member)}
@@ -703,6 +727,14 @@ function StaffView({
                         title="Manage Staff"
                       >
                         Manage
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handleResetPassword(member)}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                        title="Reset Password"
+                      >
+                        Reset Password
                       </Button>
                     </div>
                   </td>
@@ -975,6 +1007,41 @@ function StaffView({
             <div className="dialog-footer-standard">
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="dialog-footer-button">Cancel</Button>
               <Button onClick={handleEditSubmit} className="dialog-footer-button">Update Staff</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
+        <DialogContent className="p-0 gap-0 dialog-content-standard">
+          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
+            <DialogHeader className="dialog-header-standard">
+              <DialogTitle className="dialog-title-standard-view">Reset Password</DialogTitle>
+            </DialogHeader>
+            <div className="dialog-body-content-wrapper">
+              <div className="dialog-form-container">
+                <div className="dialog-form-field">
+                  <Label htmlFor="newPassword" className="dialog-label-standard">New Password *</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    placeholder="Enter new password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="dialog-input-standard"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="dialog-footer-standard">
+              <Button variant="outline" onClick={() => {
+                setIsResetPasswordDialogOpen(false);
+                setSelectedStaff(null);
+                setNewPassword('');
+              }} className="dialog-footer-button">Cancel</Button>
+              <Button onClick={handleResetPasswordSubmit} className="dialog-footer-button">Reset Password</Button>
             </div>
           </div>
         </DialogContent>
