@@ -9,7 +9,7 @@ import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
-import { ArrowLeft, UserCheck, FileText, TestTube, Clock } from 'lucide-react';
+import { ArrowLeft, UserCheck, FileText, TestTube, Clock, Stethoscope } from 'lucide-react';
 import { apiRequest } from '../api/base';
 import { patientsApi } from '../api/patients';
 import { patientAppointmentsApi } from '../api/patientAppointments';
@@ -645,19 +645,44 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
 
   return (
     <div className="p-8">
-      <div className="flex items-center gap-4 mb-8">
-        <Button variant="outline" onClick={onBack} className="flex items-center gap-2">
-          <ArrowLeft className="size-4" />
-          Back
-        </Button>
-        <div>
-          <h1 className="text-gray-900 mb-2">
-            Doctor Consultation - {doctorData ? doctorData.name : 'Loading...'}
-          </h1>
-          <p className="text-gray-500">
-            {doctorData ? doctorData.specialty : 'Loading...'} Department
-          </p>
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={onBack} className="flex items-center gap-2">
+            <ArrowLeft className="size-4" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-gray-900 mb-2">
+              Doctor Consultation - {doctorData ? doctorData.name : 'Loading...'}
+            </h1>
+            <p className="text-gray-500">
+              {doctorData ? doctorData.specialty : 'Loading...'} Department
+            </p>
+          </div>
         </div>
+        <Button 
+          onClick={async () => {
+            if (!appointmentId) {
+              alert('Appointment ID is missing. Cannot update status.');
+              return;
+            }
+            try {
+              await patientAppointmentsApi.update({
+                id: appointmentId,
+                appointmentStatus: 'Consulting',
+              });
+              alert('Appointment status updated to Consulting');
+            } catch (err) {
+              console.error('Failed to update appointment status:', err);
+              alert('Failed to update appointment status. Please try again.');
+            }
+          }}
+          className="gap-2"
+          disabled={appointmentData?.appointmentStatus === 'Consulting' || appointmentData?.AppointmentStatus === 'Consulting'}
+        >
+          <Stethoscope className="size-4" />
+          Mark Consulting
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
