@@ -348,18 +348,77 @@ export const patientAppointmentsApi = {
       
       console.log('Backend request (PascalCase):', backendRequest);
       
-      const response = await apiRequest<ApiResponse>('/patient-appointments', {
+      const response = await apiRequest<any>('/patient-appointments', {
         method: 'POST',
         body: JSON.stringify(backendRequest),
       });
       
       console.log('Patient appointment creation response:', response);
+      console.log('Response type:', typeof response);
+      console.log('Response keys:', response ? Object.keys(response) : 'null/undefined');
       
-      if (!response.success || !response.data) {
-        throw new Error(response.message || 'Failed to create patient appointment');
+      // Handle different response structures:
+      // 1. { success: true, data: {...} } - standard wrapped response
+      // 2. { success: false, data: {...} } - success is false but data exists (appointment created)
+      // 3. { ... } - data directly in response (not wrapped)
+      // 4. Array response (shouldn't happen for create, but handle it)
+      let backendData: CreatePatientAppointmentResponseDto | null = null;
+      
+      // Helper function to check if an object looks like an appointment response
+      const looksLikeAppointment = (obj: any): boolean => {
+        if (!obj || typeof obj !== 'object') return false;
+        // Check for any of the key appointment fields (case-insensitive check)
+        const keys = Object.keys(obj).map(k => k.toLowerCase());
+        return keys.includes('patientappointmentid') || 
+               keys.includes('patientid') || 
+               keys.includes('doctorid') ||
+               keys.includes('appointmentdate') ||
+               keys.includes('tokenno');
+      };
+      
+      if (response) {
+        // Check if response is an array (unlikely for create, but handle it)
+        if (Array.isArray(response) && response.length > 0) {
+          const firstItem = response[0];
+          if (looksLikeAppointment(firstItem)) {
+            backendData = firstItem as CreatePatientAppointmentResponseDto;
+          }
+        }
+        // Check if data is wrapped in response.data
+        else if (response.data && typeof response.data === 'object') {
+          // Check if response.data has the appointment structure
+          if (looksLikeAppointment(response.data)) {
+            backendData = response.data as CreatePatientAppointmentResponseDto;
+          }
+          // Check if response.data is an array
+          else if (Array.isArray(response.data) && response.data.length > 0) {
+            const firstItem = response.data[0];
+            if (looksLikeAppointment(firstItem)) {
+              backendData = firstItem as CreatePatientAppointmentResponseDto;
+            }
+          }
+        }
+        // Check if response itself has the appointment data structure
+        else if (typeof response === 'object' && looksLikeAppointment(response)) {
+          backendData = response as CreatePatientAppointmentResponseDto;
+        }
       }
       
-      const backendData = response.data;
+      // If we couldn't extract the data, but response exists
+      // Since apiRequest only returns if HTTP status is 200-299, the request succeeded
+      // So if we can't parse the response, the appointment might still have been created
+      if (!backendData) {
+        if (response) {
+          console.warn('Could not extract appointment data from response, but HTTP request succeeded. Response:', response);
+          console.warn('This might indicate the appointment was created but response structure is unexpected.');
+          // Since HTTP request succeeded (we got here without ApiError), 
+          // the appointment was likely created - throw a specific error that the UI can handle
+          throw new Error('APPOINTMENT_LIKELY_CREATED: Response structure unexpected, but HTTP request succeeded. Please refresh to verify.');
+        } else {
+          // No response at all - this is a real error
+          throw new Error('Failed to create patient appointment: No response from server');
+        }
+      }
       
       // Map backend response (PascalCase) to frontend PatientAppointment type (camelCase)
       const appointment: PatientAppointment = {

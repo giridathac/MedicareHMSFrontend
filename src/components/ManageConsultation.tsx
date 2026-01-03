@@ -1,5 +1,5 @@
 // Manage Consultation Component - Full page matching the design
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -15,6 +15,7 @@ import { patientsApi } from '../api/patients';
 import { patientAppointmentsApi } from '../api/patientAppointments';
 import { doctorsApi } from '../api/doctors';
 import { formatDateToDDMMYYYY } from '../utils/timeUtils';
+import { uploadFiles } from '../utils/fileUpload';
 
 interface ManageConsultationProps {
   appointmentId: number;
@@ -67,6 +68,32 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
   const [labTestsLoading, setLabTestsLoading] = useState(false);
   const [appointmentData, setAppointmentData] = useState<any>(null);
   const [doctorData, setDoctorData] = useState<{ name: string; specialty: string } | null>(null);
+  
+  // File upload state for prescriptions
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadedDocumentUrls, setUploadedDocumentUrls] = useState<string[]>([]);
+
+  // Track object URLs to properly clean them up
+  const fileObjectUrlsRef = useRef<string[]>([]);
+
+  // Create object URLs for selected files (for preview)
+  const fileObjectUrls = useMemo(() => {
+    // Revoke old URLs before creating new ones
+    fileObjectUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    // Create new URLs for current files
+    const newUrls = selectedFiles.map(file => URL.createObjectURL(file));
+    fileObjectUrlsRef.current = newUrls;
+    return newUrls;
+  }, [selectedFiles]);
+
+  // Cleanup object URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      // Revoke all object URLs when component unmounts
+      fileObjectUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+      fileObjectUrlsRef.current = [];
+    };
+  }, []);
 
   // Fetch appointment data to get patientId
   useEffect(() => {
@@ -85,7 +112,17 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
           // Initialize diagnosis from appointment data
           setDiagnosis(appointment.diagnosis || appointment.Diagnosis || '');
           // Initialize prescriptionsUrl from appointment data
-          setPrescriptionsUrl(appointment.prescriptionsUrl || appointment.PrescriptionsUrl || '');
+          const prescriptionsUrlValue = appointment.prescriptionsUrl || appointment.PrescriptionsUrl || '';
+          setPrescriptionsUrl(prescriptionsUrlValue);
+          // If prescriptionsUrl exists and contains file URLs, parse them
+          if (prescriptionsUrlValue) {
+            // If it's a comma-separated list of URLs, split them
+            if (prescriptionsUrlValue.includes(',')) {
+              setUploadedDocumentUrls(prescriptionsUrlValue.split(',').map(u => u.trim()).filter(u => u));
+            } else if (prescriptionsUrlValue) {
+              setUploadedDocumentUrls([prescriptionsUrlValue]);
+            }
+          }
           // Initialize followUp from appointment data
           setFollowUp(appointment.followUpDetails || appointment.FollowUpDetails || '');
           // Initialize consultationCharge from appointment data
@@ -554,6 +591,33 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
       }
     }
 
+    // Upload prescription documents if any files are selected
+    let finalPrescriptionsUrl = prescriptionsUrl;
+    let documentUrls: string[] = [...uploadedDocumentUrls];
+    
+    if (selectedFiles.length > 0) {
+      try {
+        const patientId = appointmentData?.patientId || appointmentData?.PatientId;
+        if (!patientId) {
+          throw new Error('Patient ID is required for file upload');
+        }
+        const newUrls = await uploadFiles(selectedFiles, patientId, 'prescriptions');
+        documentUrls = [...documentUrls, ...newUrls];
+        // Update prescriptionsUrl with the folder URL or concatenated URLs
+        if (newUrls.length > 0) {
+          // If backend returns a folder URL, use it; otherwise use comma-separated URLs
+          const folderUrl = newUrls[0].substring(0, newUrls[0].lastIndexOf('/'));
+          finalPrescriptionsUrl = documentUrls.length > 1 ? documentUrls.join(',') : (folderUrl || documentUrls[0]);
+        }
+        setUploadedDocumentUrls(documentUrls);
+        setSelectedFiles([]); // Clear selected files after upload
+      } catch (error) {
+        console.error('Error uploading files:', error);
+        alert(`Failed to upload files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return; // Don't proceed with saving if upload fails
+      }
+    }
+
     // Update appointment with diagnosis, consultationCharge, followUp, prescriptionsUrl, etc.
     try {
       await patientAppointmentsApi.update({
@@ -561,7 +625,7 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
         diagnosis: diagnosis || undefined,
         consultationCharge: consultationCharge || undefined,
         followUpDetails: followUp || undefined,
-        prescriptionsUrl: prescriptionsUrl || undefined,
+        prescriptionsUrl: finalPrescriptionsUrl || undefined,
         referToAnotherDoctor: referToAnotherDoctor,
         referredDoctorId: referToAnotherDoctor && referredDoctorId ? referredDoctorId : undefined,
         transferToIPDOTICU: transferToIPDOTICU,
@@ -795,6 +859,81 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
                     className="mt-1"
                   />
                   <p className="text-xs text-gray-500 mt-1">Folder URL - multiple prescriptions should be saved</p>
+                </div>
+                
+                <div>
+                  <Label htmlFor="prescriptionsDocuments">Upload Prescription Documents</Label>
+                  <Input
+                    id="prescriptionsDocuments"
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      setSelectedFiles(prev => [...prev, ...files]);
+                      // Reset the input so the same file can be selected again
+                      e.target.value = '';
+                    }}
+                    className="mt-1"
+                  />
+                  {selectedFiles.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-sm text-gray-600 font-medium">New Files to Upload:</p>
+                      {selectedFiles.map((file, index) => {
+                        const fileUrl = fileObjectUrls[index];
+                        return (
+                          <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-blue-50 p-2 rounded">
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                                title="Click to view file"
+                              >
+                                <FileText className="size-3" />
+                                {file.name}
+                              </a>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                // Remove file - useMemo will handle URL cleanup
+                                setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                              }}
+                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                              title="Remove file"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {uploadedDocumentUrls.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-sm text-gray-600 font-medium">Uploaded Documents:</p>
+                      {uploadedDocumentUrls.map((url, index) => {
+                        const fileName = url.split('/').pop() || `Document ${index + 1}`;
+                        return (
+                          <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 underline"
+                            >
+                              {fileName}
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Save Consultation"</p>
                 </div>
               </TabsContent>
 
