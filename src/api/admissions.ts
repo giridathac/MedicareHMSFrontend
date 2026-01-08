@@ -66,8 +66,8 @@ export interface CreateAdmissionDto {
   doctorId?: string;
   admittedByDoctorId?: string;
   roomAllocationDate?: string;
-  roomvacantDate?: string;
-  shiftedToAnotherRoom?: boolean | string;
+  roomVacantDate?: string;
+  shiftToAnotherRoom?: boolean | string;
   shiftedToDetails?: string;
   caseSheet?: string;
   caseSheetDetails?: string;
@@ -1094,11 +1094,46 @@ export const admissionsApi = {
     }
   },
 
+  async createAdmissionWithCurrentUser(data: CreateAdmissionDto): Promise<Admission> {
+    // Get current user ID from token
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    let currentUserId = '';
+    if (token) {
+      try {
+        const payloadToken = JSON.parse(atob(token.split('.')[1]));
+        currentUserId = payloadToken.userId || payloadToken.id || payloadToken.user_id || '';
+      } catch (error) {
+        console.error('Error decoding token:', error);
+      }
+    }
+
+    // Ensure allocatedBy is set to the current user ID
+    const admissionDataWithAllocatedBy = {
+      ...data,
+      allocatedBy: currentUserId,
+    };
+
+    // Call the existing create function with the modified data
+    return this.create(admissionDataWithAllocatedBy);
+  },
+
   async create(data: CreateAdmissionDto): Promise<Admission> {
     try {
       // Validate required fields
       if (!data.patientId || !data.patientName || !data.bedNumber || !data.admittedBy) {
         throw new Error('PatientId, PatientName, BedNumber, and AdmittedBy are required');
+      }
+
+      // Get current user ID from token
+      const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+      let currentUserId = '';
+      if (token) {
+        try {
+          const payloadToken = JSON.parse(atob(token.split('.')[1]));
+          currentUserId = payloadToken.userId || payloadToken.id || payloadToken.user_id || '';
+        } catch (error) {
+          console.error('Error decoding token:', error);
+        }
       }
 
       // Convert camelCase to PascalCase for backend API
@@ -1132,8 +1167,7 @@ export const admissionsApi = {
        otAdmissionId: data.otAdmissionId,
        icuAdmissionId: data.icuAdmissionId,
        billId: data.billId,
-       allocatedBy: data.allocatedBy,
-       allocatedAt: data.allocatedAt
+       allocatedBy: currentUserId,
       };
       
       if (data.status !== undefined && data.status !== null) {
@@ -1170,9 +1204,7 @@ export const admissionsApi = {
       if ((data as any).roomVacantDate !== undefined) {
         backendData.roomVacantDate = (data as any).roomVacantDate.trim();
       }
-
-      console.log('@@@@@@@@@@@@@@@@@@@@@@@', backendData);
-
+      
       // Call the actual API endpoint
       const response = await apiRequest<any>('/room-admissions', {
         method: 'POST',
@@ -1729,6 +1761,11 @@ export const admissionsApi = {
           'totalAdmissions', 'TotalAdmissions', 'total_admissions', 'Total_Admissions',
           'totalAdmission', 'TotalAdmission', 'total_admission', 'Total_Admission',
           'admissions', 'Admissions', 'admissionCount', 'AdmissionCount', 'admission_count', 'Admission_Count'
+        ], 0),
+        totalBeds: extractValue(metricsData, [
+          'totalBeds', 'TotalBeds', 'total_beds', 'Total_Beds',
+          'totalCapacity', 'TotalCapacity', 'total_capacity', 'Total_Capacity',
+          'capacity', 'Capacity', 'bedCapacity', 'BedCapacity', 'bed_capacity', 'Bed_Capacity'
         ], 0),
         activePatients: extractValue(metricsData, [
           'activePatients', 'ActivePatients', 'active_patients', 'Active_Patients',

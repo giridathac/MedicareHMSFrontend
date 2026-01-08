@@ -25,6 +25,7 @@ import { Switch } from './ui/switch';
 import { convertToIST, formatDateTimeIST } from '../utils/timeUtils';
 import { uploadFiles as uploadFilesUtil } from '../utils/fileUpload';
 import { getCurrentIST } from '../config/timezone';
+import { getCurrentUserId } from '../utils/authUtils';
 import ISTDatePicker from './ui/ISTDatePicker';
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -861,7 +862,7 @@ export function Laboratory() {
         'avgTurnaroundTimeFormatted', 'AvgTurnaroundTimeFormatted'
       ], '');
       
-      console.log('&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&AvgTATFormattedRaw:', avgTATFormattedRaw);
+      console.log('AvgTATFormattedRaw:', avgTATFormattedRaw);
       let avgTATFormatted = 'N/A';
       if (avgTATFormattedRaw && typeof avgTATFormattedRaw === 'string' && avgTATFormattedRaw.trim() !== '') {
         avgTATFormatted = avgTATFormattedRaw;
@@ -872,7 +873,7 @@ export function Laboratory() {
       }
       
       const avgTAT = safeNumber(extractField(summary, ['avgTAT','avgTAT', 'AvgTAT', 'avg_tat', 'averageTAT', 'AverageTAT', 'averageTurnaroundTime', 'avgTurnaroundTime'], 0));
-      console.log('&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&setDailySummary:', setDailySummary.avgTAT, '++++++++', setDailySummary.avgTATFormatted);
+      console.log('setDailySummary:', dailySummary.avgTAT, '++++++++', dailySummary.avgTATFormatted);
       setDailySummary({
         totalTests,
         pending,
@@ -1337,18 +1338,32 @@ export function Laboratory() {
         }
       }
 
-      // Combine all document URLs (JSON array)
-      const combinedReportsUrl = documentUrls.length > 0 ? JSON.stringify(documentUrls) : null;
+    // Combine all document URLs (JSON array)
+    const combinedReportsUrl = documentUrls.length > 0 ? JSON.stringify(documentUrls) : null;
 
-      const payload: any = {
-        PatientId: editFormData.patientId,
-        LabTestId: Number(editFormData.labTestId),
-        PatientType: editFormData.patientType,
-        Priority: editFormData.priority,
-        TestStatus: editFormData.testStatus,
-        LabTestDone: editFormData.labTestDone,
-        Status: editFormData.status || 'Active',
-      };
+    // Get current user ID from token
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    let currentUserId = getCurrentUserId(); // fallback
+    if (token) {
+      try {
+        const payloadToken = JSON.parse(atob(token.split('.')[1]));
+        currentUserId = payloadToken.userId || payloadToken.id || payloadToken.user_id || currentUserId;
+      } catch (error) {
+        console.error('Error decoding token:', error);
+      }
+    }
+
+    
+    const payload: any = {
+      PatientId: editFormData.patientId,
+      LabTestId: Number(editFormData.labTestId),
+      PatientType: editFormData.patientType,
+      Priority: editFormData.priority,
+      TestStatus: editFormData.testStatus,
+      LabTestDone: editFormData.labTestDone,
+      Status: editFormData.status || 'Active',
+      CreatedBy: currentUserId,
+    };
 
       if (combinedReportsUrl) {
         payload.ReportsUrl = combinedReportsUrl;
@@ -1377,7 +1392,10 @@ export function Laboratory() {
       if (editFormData.billId) {
         payload.BillId = Number(editFormData.billId);
       }
-
+      if (editFormData.CreatedBy) {
+        payload.Createdby = Number(currentUserId);
+      }
+      
       console.log('Saving edit with payload:', payload);
       const updateResponse = await apiRequest(`/patient-lab-tests/${patientLabTestsId}`, {
         method: 'PUT',
@@ -1678,7 +1696,8 @@ export function Laboratory() {
         TestStatus: newLabOrderFormData.testStatus,
         LabTestDone: newLabOrderFormData.labTestDone,
         OrderedByDoctorId: Number(newLabOrderFormData.orderedByDoctorId),
-        OrderedDate: new Date().toISOString().split('T')[0]
+        OrderedDate: new Date().toISOString().split('T')[0],
+        CreatedBy: getCurrentUserId()
       };
 
       // Add conditional fields based on PatientType
@@ -1735,8 +1754,8 @@ export function Laboratory() {
         payload.TestDoneDateTime = testDoneDateTime.toISOString();
       }
       
-
-      console.log('Saving new lab order with payload:', payload);
+      console.log('HELLLLLLLLLLLOOOOOOOOOOOOOOO');
+      console.log('AAAAAAAAAAAAAAAAAAAAAAAAAASaving new lab order with payload:', payload);
       await apiRequest('/patient-lab-tests', {
         method: 'POST',
         body: JSON.stringify(payload)
@@ -3053,10 +3072,10 @@ export function Laboratory() {
                   </div>
                   <div className="dialog-field-single-column">
                     <Label htmlFor="editTestDoneDateTime" className="dialog-label-standard">TestDoneDateTime</Label>
-                    <DatePicker
+                    <ISTDatePicker
                       id="editTestDoneDateTime"
                       selected={editTestDoneDateTime}
-                      onChange={(date: Date | null) => {
+                      onChange={(dateStr, date) => {
                         setEditTestDoneDateTime(date);
                       }}
                       showTimeSelect
