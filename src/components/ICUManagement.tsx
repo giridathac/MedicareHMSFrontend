@@ -136,7 +136,7 @@ export function ICUManagement() {
     icuId: '',
     icuBedId: '',
     icuBedNo: '',
-    icuPatientStatus: '',
+    icuPatientStatus: 'Stable',
     icuAllocationFromDate: '',
     icuAllocationToDate: '',
     diagnosis: '',
@@ -177,7 +177,7 @@ export function ICUManagement() {
     icuId: '',
     icuBedId: '',
     icuBedNo: '',
-    icuPatientStatus: '',
+    icuPatientStatus: 'Stable',
     icuAllocationFromDate: '',
     icuAllocationToDate: '',
     diagnosis: '',
@@ -486,6 +486,12 @@ export function ICUManagement() {
             'allocationFromDate', 'AllocationFromDate', 'allocation_from_date', 'Allocation_From_Date'
           ], admissionDate); // Default to admissionDate if not found
 
+          const icuAllocationToDate = extractField(admission, [
+            'icuAllocationToDate', 'ICUAllocationToDate', 'icu_allocation_from_date', 'ICU_Allocation_To_Date',
+            'allocationToDate', 'AllocationToDate', 'allocation_from_date', 'Allocation_To_Date'
+          ], admissionDate); // Default to admissionDate if not found
+
+
           return {
             id: patientICUAdmissionId || admission.id || admission.Id || admission.roomAdmissionId || admission.RoomAdmissionId || (index + 1),
             patientICUAdmissionId: patientICUAdmissionId, // Store the UUID separately
@@ -498,6 +504,7 @@ export function ICUManagement() {
             admissionDate,
             admissionTime,
             icuAllocationFromDate,
+            icuAllocationToDate,
             condition,
             icuPatientStatus: icuPatientStatus,
             icuAdmissionStatus: icuAdmissionStatus,
@@ -2213,11 +2220,11 @@ export function ICUManagement() {
                     value={addICUAdmissionForm.icuPatientStatus || ''}
                     onChange={(e) => setAddICUAdmissionForm(prev => ({ ...prev, icuPatientStatus: e.target.value }))}
                   >
-                    <option value="">Select ICU patient status</option>
+                    <option value="Stable">Stable</option>
                     <option value="Serious">Serious</option>
                     {/* <option value="Available">Available</option> */}
                     <option value="Critical">Critical</option>
-                    <option value="Stable">Stable</option>
+                    
                   </select>
                 </div>
                 <div>
@@ -2702,6 +2709,7 @@ export function ICUManagement() {
                       <th className="dashboard-table-header-cell">Patient</th>
                       <th className="dashboard-table-header-cell">Condition</th>
                       <th className="dashboard-table-header-cell">ICU Allocation From Date</th>
+                      <th className="dashboard-table-header-cell">ICU Allocation To Date</th>
                       <th className="dashboard-table-header-cell">Doctor</th>
                       <th className="dashboard-table-header-cell">Ventilator</th>
                       <th className="dashboard-table-header-cell">Patient Type</th>
@@ -2729,6 +2737,7 @@ export function ICUManagement() {
                         </td>
                         <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.condition}</td>
                         <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.icuAllocationFromDate}</td>
+                        <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.icuAllocationToDate}</td>
                         <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.attendingDoctor}</td>
                         <td className="dashboard-table-body-cell">
                           {patient.ventilatorSupport ? (
