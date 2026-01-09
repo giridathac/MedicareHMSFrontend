@@ -178,13 +178,25 @@ export function Reports() {
   // PDF Export function
   const exportToPDF = async () => {
     try {
-      // Get the current tab content - target the visible TabsContent
-      const activeTabContent = document.querySelector('[data-state="active"]')?.parentElement?.nextElementSibling as HTMLElement;
-      const reportContent = activeTabContent || document.querySelector('.reports-scrollable') as HTMLElement;
+      // Check if any data is still loading
+      const isLoading = loadingDoctorStats || loadingIpdStats || loadingIpdSummary ||
+                       loadingOtStats || loadingIcuStats || loadingOpdStats ||
+                       loadingWeeklyOPD || loadingDepartmentAdmissions ||
+                       loadingICUBeds || loadingActiveICUBeds;
 
-      if (!reportContent) {
-        console.error('Report content not found');
-        alert('Report content not found. Please try again.');
+      if (isLoading) {
+        alert('Please wait for all data to load before exporting PDF.');
+        return;
+      }
+
+      // Check if there's any error in the current data
+      const hasErrors = doctorStatsError || ipdStatsError || ipdSummaryError ||
+                       otStatsError || icuStatsError || opdStatsError ||
+                       weeklyOPDError || departmentAdmissionsError ||
+                       icuBedsError || activeICUBedsError;
+
+      if (hasErrors) {
+        alert('Some data failed to load. Please refresh the page and try again.');
         return;
       }
 
@@ -193,55 +205,159 @@ export function Reports() {
       loadingAlert.innerHTML = '<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999;">Generating PDF... Please wait.</div>';
       document.body.appendChild(loadingAlert);
 
-      // Add a small delay to ensure content is fully rendered
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Improved content selection with multiple fallback strategies
+      let reportContent: HTMLElement | null = null;
 
-      // Create canvas from the report content with improved settings
+      // Strategy 1: Try to get the active tab content directly
+      const activeTabTrigger = document.querySelector('[data-state="active"]') as HTMLElement;
+      if (activeTabTrigger) {
+        const tabValue = activeTabTrigger.getAttribute('data-value') || activeTabTrigger.textContent?.trim();
+        if (tabValue) {
+          reportContent = document.querySelector(`[data-value="${tabValue}"]`) as HTMLElement;
+        }
+      }
+
+      // Strategy 2: Fallback to finding visible TabsContent
+      if (!reportContent) {
+        const visibleTabsContent = document.querySelector('[data-state="active"][data-value]') as HTMLElement;
+        if (visibleTabsContent) {
+          const tabValue = visibleTabsContent.getAttribute('data-value');
+          reportContent = document.querySelector(`[value="${tabValue}"]`) as HTMLElement;
+        }
+      }
+
+      // Strategy 3: Find any visible TabsContent by checking display/computed style
+      if (!reportContent) {
+        const allTabsContent = document.querySelectorAll('[role="tabpanel"]');
+        for (const content of allTabsContent) {
+          const style = window.getComputedStyle(content);
+          if (style.display !== 'none' && content.clientHeight > 0) {
+            reportContent = content as HTMLElement;
+            break;
+          }
+        }
+      }
+
+      // Strategy 4: Ultimate fallback to the scrollable container
+      if (!reportContent) {
+        reportContent = document.querySelector('.reports-scrollable') as HTMLElement;
+      }
+
+      if (!reportContent) {
+        document.body.removeChild(loadingAlert);
+        console.error('Report content not found');
+        alert('Report content not found. Please try again.');
+        return;
+      }
+
+      // Enhanced content readiness check with retry mechanism
+      const checkContentReady = (element: HTMLElement): boolean => {
+        return element.scrollWidth > 0 && element.scrollHeight > 0 &&
+               element.clientWidth > 0 && element.clientHeight > 0;
+      };
+
+      // Wait for content to be fully rendered with progressive delays
+      let isReady = checkContentReady(reportContent);
+      let attempts = 0;
+      const maxAttempts = 5;
+
+      while (!isReady && attempts < maxAttempts) {
+        attempts++;
+        const delay = Math.min(500 * attempts, 2000); // Progressive delay: 500ms, 1000ms, 1500ms, 2000ms, 2000ms
+        console.log(`Waiting for content to be ready... Attempt ${attempts}/${maxAttempts}, delay: ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        // Force layout recalculation
+        reportContent.style.display = 'none';
+        reportContent.offsetHeight; // Trigger reflow
+        reportContent.style.display = '';
+
+        isReady = checkContentReady(reportContent);
+      }
+
+      if (!isReady) {
+        document.body.removeChild(loadingAlert);
+        alert('Report content is not properly loaded. Please wait a moment and try again.');
+        return;
+      }
+
+      // Additional stability check - ensure content dimensions are consistent
+      const initialWidth = reportContent.scrollWidth;
+      const initialHeight = reportContent.scrollHeight;
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      if (reportContent.scrollWidth !== initialWidth || reportContent.scrollHeight !== initialHeight) {
+        console.log('Content dimensions changed, waiting for stabilization...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      // Final readiness check
+      if (!checkContentReady(reportContent)) {
+        document.body.removeChild(loadingAlert);
+        alert('Report content became unavailable during preparation. Please try again.');
+        return;
+      }
+
+      // Create canvas from the report content with optimized settings
       const canvas = await html2canvas(reportContent, {
-        scale: 1.5, // Higher scale for better quality
+        scale: 1.2, // Slightly lower scale for better performance while maintaining quality
         useCORS: true,
-        allowTaint: true, // Enable to handle unsupported CSS
+        allowTaint: true,
         backgroundColor: '#ffffff',
-        width: reportContent.scrollWidth, // Use full width instead of limiting to 1200
+        width: reportContent.scrollWidth,
         height: reportContent.scrollHeight,
-        logging: false, // Disable logging for cleaner output
-        imageTimeout: 20000, // Increase timeout for images
-        removeContainer: true, // Clean up after rendering
-        foreignObjectRendering: true, // Enable for better rendering
-        // Less aggressive ignoreElements - only exclude truly problematic elements
+        logging: false,
+        imageTimeout: 15000, // Reasonable timeout
+        removeContainer: true,
+        foreignObjectRendering: true,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: reportContent.scrollWidth,
+        windowHeight: reportContent.scrollHeight,
+        // More selective ignoreElements - only exclude problematic elements
         ignoreElements: (element) => {
-          // Only skip elements that are known to cause canvas rendering issues
-          return element.tagName === 'IFRAME' ||
-                 element.tagName === 'VIDEO' ||
-                 element.tagName === 'AUDIO' ||
-                 (element.tagName === 'INPUT' && (element as HTMLInputElement).type === 'password') ||
-                 element.classList.contains('pdf-ignore'); // Add this class to elements you want to exclude
+          // Ignore loading indicators, alerts, and other dynamic elements
+          return element.classList.contains('loading') ||
+                 element.id === 'loading-alert' ||
+                 element.closest('[style*="position: fixed"]') !== null ||
+                 element.tagName.toLowerCase() === 'button' && element.textContent?.includes('Export PDF');
+        },
+        // Additional options for better rendering
+        letterRendering: true,
+        onclone: (clonedDoc) => {
+          // Ensure all elements are visible in the cloned document
+          const clonedContent = clonedDoc.querySelector('.reports-scrollable') || clonedDoc.body;
+          if (clonedContent) {
+            (clonedContent as HTMLElement).style.overflow = 'visible';
+            (clonedContent as HTMLElement).style.height = 'auto';
+            (clonedContent as HTMLElement).style.maxHeight = 'none';
+          }
         }
       });
 
       // Remove loading indicator
       document.body.removeChild(loadingAlert);
 
-      // Check if canvas has content
-      if (canvas.width === 0 || canvas.height === 0) {
-        throw new Error('Canvas capture resulted in empty image');
+      // Validate canvas
+      if (!canvas || canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Failed to capture report content. Canvas is empty.');
       }
 
-      // Create PDF with better settings
+      // Create PDF with optimized settings
       const pdf = new jsPDF({
         orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
         unit: 'mm',
         format: 'a4',
-        compress: true // Enable compression
+        compress: true
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95); // Use JPEG for smaller file size
+      const imgData = canvas.toDataURL('image/jpeg', 0.9); // Slightly higher compression for smaller files
       const imgWidth = 210; // A4 width in mm
       const pageHeight = 295; // A4 height in mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       const totalPages = Math.ceil(imgHeight / pageHeight);
 
-      // Add pages
+      // Add pages with better image positioning
       for (let i = 0; i < totalPages; i++) {
         if (i > 0) {
           pdf.addPage();
@@ -269,7 +385,7 @@ export function Reports() {
       // Provide more specific error messages
       let errorMessage = 'Failed to generate PDF. Please try again.';
       if (error instanceof Error) {
-        if (error.message.includes('Canvas') || error.message.includes('empty image')) {
+        if (error.message.includes('Canvas') || error.message.includes('empty')) {
           errorMessage = 'Failed to capture report content. The report may be empty or not fully loaded.';
         } else if (error.message.includes('CORS') || error.message.includes('taint')) {
           errorMessage = 'Content security issue. Some elements cannot be exported to PDF.';
@@ -578,6 +694,11 @@ export function Reports() {
             extractedPeakHours = '10 AM - 1 PM';
           }
         } else if (typeof extractedPeakHours !== 'string') {
+          extractedPeakHours = '10 AM - 1 PM';
+        }
+
+        // Ensure extractedPeakHours is always a string
+        if (!extractedPeakHours || typeof extractedPeakHours !== 'string') {
           extractedPeakHours = '10 AM - 1 PM';
         }
 
@@ -2282,7 +2403,7 @@ export function Reports() {
                     <p className="text-sm text-gray-500 mb-1">Total ICU Patients</p>
                     <h3 className="text-2xl font-bold text-gray-900">{icuStats.totalPatients}/{totalICUBeds}</h3>
                     <p className="text-xs text-gray-500">
-                      {icuStats.totalPatients > 0 ? `${Math.round((icuStats.totalPatients / totalICUBeds) * 100)}% occupancy` : '0% occupancy'}
+                      {icuStats.totalPatients > 0 && totalICUBeds > 0 ? `${Math.round((icuStats.totalPatients / totalICUBeds) * 100)}% occupancy` : '0% occupancy'}
                     </p>
                   </CardContent>
                 </Card>
