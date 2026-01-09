@@ -517,19 +517,48 @@ export const patientAppointmentsApi = {
       
       console.log('Backend update request:', backendRequest);
       
-      const response = await apiRequest<ApiResponse>(`/patient-appointments/${data.id}`, {
+      const response = await apiRequest<any>(`/patient-appointments/${data.id}`, {
         method: 'PUT',
         body: JSON.stringify(backendRequest),
       });
       
       console.log('Patient appointment update response:', response);
-      
-      if (!response.success) {
-        throw new Error(response.message || 'Failed to update patient appointment');
+
+      // Handle different response structures from backend:
+      // 1) { success: true, data: {...} }
+      // 2) { data: {...} }
+      // 3) { ... } (appointment object directly)
+      // 4) 204 No Content -> apiRequest returns undefined
+      const looksLikeAppointment = (obj: any): boolean => {
+        if (!obj || typeof obj !== 'object') return false;
+        const keys = Object.keys(obj).map(k => k.toLowerCase());
+        return keys.includes('patientappointmentid') ||
+               keys.includes('patientid') ||
+               keys.includes('doctorid') ||
+               keys.includes('appointmentdate') ||
+               keys.includes('tokenno');
+      };
+
+      let backendData: any = null;
+
+      if (response) {
+        if (response.data && typeof response.data === 'object' && looksLikeAppointment(response.data)) {
+          backendData = response.data;
+        } else if (looksLikeAppointment(response)) {
+          backendData = response;
+        } else if (response.success === false) {
+          throw new Error(response.message || 'Failed to update patient appointment');
+        }
       }
-      
-      // Map backend response to frontend format
-      const appointment = mapPatientAppointmentFromBackend(response.data);
+
+      // If backend doesn't return a body (e.g., 204), refetch by id
+      if (!backendData) {
+        const refreshed = await patientAppointmentsApi.getById(Number(data.id));
+        console.log('Refetched patient appointment after update:', refreshed);
+        return refreshed;
+      }
+
+      const appointment = mapPatientAppointmentFromBackend(backendData);
       console.log('Mapped updated patient appointment:', appointment);
       return appointment;
     } catch (error) {

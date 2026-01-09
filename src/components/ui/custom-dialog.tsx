@@ -10,6 +10,7 @@ interface CustomDialogProps {
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  closeOnOutsideClick?: boolean;
 }
 
 interface CustomDialogContentProps {
@@ -34,7 +35,7 @@ interface CustomDialogTriggerProps {
   onClick?: () => void;
 }
 
-export function CustomDialog({ open, onOpenChange, children, className, style }: CustomDialogProps) {
+export function CustomDialog({ open, onOpenChange, children, className, style, closeOnOutsideClick = false }: CustomDialogProps) {
   React.useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden';
@@ -48,18 +49,32 @@ export function CustomDialog({ open, onOpenChange, children, className, style }:
 
   if (!open) return null;
 
+  const handleOverlayClick = () => {
+    if (closeOnOutsideClick) {
+      onOpenChange(false);
+    }
+  };
+
   return (
     <div className={cn("fixed inset-0 z-50", className)} style={style}>
+      <CustomDialogOverlay onClick={handleOverlayClick} closeOnOutsideClick={closeOnOutsideClick} />
       {children}
     </div>
   );
 }
 
-export function CustomDialogOverlay({ onClick }: { onClick?: () => void }) {
+export function CustomDialogOverlay({ onClick, closeOnOutsideClick }: { onClick?: () => void; closeOnOutsideClick?: boolean }) {
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50"
-      onClick={onClick}
+      className={cn(
+        "fixed inset-0 bg-black/50 z-50",
+        !closeOnOutsideClick && "pointer-events-none"
+      )}
+      onClick={() => {
+        if (closeOnOutsideClick && onClick) {
+          onClick();
+        }
+      }}
     />
   );
 }

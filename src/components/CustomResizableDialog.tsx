@@ -16,6 +16,7 @@ interface CustomResizableDialogProps {
   minHeight?: number;
   maxWidth?: number;
   maxHeight?: number;
+  closeOnOutsideClick?: boolean;
 }
 
 export function CustomResizableDialog({
@@ -29,6 +30,7 @@ export function CustomResizableDialog({
   minHeight = 400,
   maxWidth = typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800,
   maxHeight = 95,
+  closeOnOutsideClick = false,
 }: CustomResizableDialogProps) {
   const dialogRef = React.useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = React.useState({
@@ -121,8 +123,15 @@ export function CustomResizableDialog({
     <div className="fixed inset-0 z-[100]">
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/50"
-        onClick={() => onOpenChange(false)}
+        className={cn(
+          "fixed inset-0 bg-black/50",
+          !closeOnOutsideClick && "pointer-events-none"
+        )}
+        onClick={() => {
+          if (closeOnOutsideClick) {
+            onOpenChange(false);
+          }
+        }}
       />
       
       {/* Dialog - Always centered */}

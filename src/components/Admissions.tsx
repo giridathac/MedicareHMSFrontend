@@ -21,6 +21,7 @@ import { DialogFooter } from './ui/dialog';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { formatDateTimeIST } from '../utils/timeUtils';
+import ISTDatePicker from './ui/ISTDatePicker';
 
 // Fallback room capacity data (used when API data is not available)
 const fallbackRoomCapacity: RoomCapacityOverview = {
@@ -32,6 +33,18 @@ const fallbackRoomCapacity: RoomCapacityOverview = {
 export default function Admissions() {
   const { admissions, roomCapacity, dashboardMetrics, loading, capacityLoading, metricsLoading, fetchRoomCapacityOverview, fetchDashboardMetrics, updateAdmission, fetchAdmissions } = useAdmissions();
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Date filter state - default to today's date
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [dateFilter, setDateFilter] = useState<Date | null>(today);
+  const [dateFilterDisplay, setDateFilterDisplay] = useState<string>(() => {
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${day}-${month}-${year}`;
+  });
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [schedulingOT, setSchedulingOT] = useState<number | null>(null); // Track which admission is being scheduled
   const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
@@ -622,6 +635,10 @@ export default function Admissions() {
       roomAdmissionId: ''
     });
 
+    // Clear search terms to prevent residual dropdowns
+    setRoomBedSearchTerm('');
+    setDoctorSearchTerm('');
+
     // Clear conditional data if no patient type selected
     if (!patientType) {
       setAvailableAppointments([]);
@@ -1164,8 +1181,11 @@ export default function Admissions() {
   }, [isDialogOpen]);
 
   const filteredAdmissions = admissions.filter(admission =>
-    admission.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    admission.bedNumber.toLowerCase().includes(searchTerm.toLowerCase())
+    // Text search filter
+    (admission.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    admission.bedNumber.toLowerCase().includes(searchTerm.toLowerCase())) &&
+    // Date filter
+    (!dateFilter || (admission.admissionDate && new Date(admission.admissionDate).toDateString() === dateFilter.toDateString()))
   );
 
   const getAdmissionsByStatus = (status: string) => {
@@ -1270,24 +1290,42 @@ export default function Admissions() {
             </DialogHeader>
             <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0 bg-white">
             <div className="space-y-4 py-4">
-                {/* Patient Selection - Same pattern as Front Desk */}
+                {/* Patient Type - First Field */}
+                <div>
+                  <Label htmlFor="patientType">Patient Type *</Label>
+                  <select
+                    id="patientType"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                    value={addAdmissionForm.patientType}
+                    onChange={(e) => handlePatientTypeChange(e.target.value)}
+                    required
+                  >
+                    <option value="">Select Patient Type</option>
+                    <option value="OPD">OPD</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Direct">Direct</option>
+                  </select>
+                </div>
+
+                {/* Patient Selection - Same pattern as Front Desk - Disabled until Patient Type is selected */}
                 <div>
                   <Label htmlFor="patient-search">Patient *</Label>
                   <div className="relative mb-2">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                     <Input
                       id="patient-search"
-                      placeholder="Search by Patient ID, Name, or Mobile Number..."
+                      placeholder={addAdmissionForm.patientType ? "Search by Patient ID, Name, or Mobile Number..." : "Please select Patient Type first"}
                       value={patientSearchTerm}
                       onChange={(e) => {
                         const newValue = e.target.value;
                         setPatientSearchTerm(newValue);
-                        // Don't clear patient selection when user edits - allow them to search and replace
                       }}
-                      className="pl-10"
+                      disabled={!addAdmissionForm.patientType}
+                      className={`pl-10 ${!addAdmissionForm.patientType ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     />
-                </div>
-                  {patientSearchTerm && (
+                  </div>
+                  {/* Patient Selection Dropdown - Show when searching, patient type selected, and no patient yet */}
+                  {addAdmissionForm.patientType && !addAdmissionForm.patientId && patientSearchTerm && patientOptions.length > 0 && (
                     <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
                       <table className="w-full">
                         <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
@@ -1343,7 +1381,6 @@ export default function Admissions() {
                                     } else if (updatedForm.patientType === 'IPD' && patientId) {
                                       await fetchPatientIPDAdmissions(patientId);
                                     }
-                                    // Keep dropdown open to allow selecting a different patient
                                   }}
                                   className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
                                 >
@@ -1381,23 +1418,6 @@ export default function Admissions() {
                       )}
                     </div>
                   )}
-                </div>
-
-                {/* Patient Type */}
-                <div>
-                  <Label htmlFor="patientType">Patient Type *</Label>
-                  <select
-                    id="patientType"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                    value={addAdmissionForm.patientType}
-                    onChange={(e) => handlePatientTypeChange(e.target.value)}
-                    required
-                  >
-                    <option value="">Select Patient Type</option>
-                    <option value="OPD">OPD</option>
-                    <option value="Emergency">Emergency</option>
-                    <option value="Direct">Direct</option>
-                  </select>
                 </div>
 
                 {/* Conditional Fields based on PatientType */}
@@ -1517,13 +1537,14 @@ export default function Admissions() {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                     <Input
                       id="room-bed-search"
-                      placeholder="Search by Room No, Bed No, Room Type, or Category..."
+                      placeholder={addAdmissionForm.patientType ? "Search by Room No, Bed No, Room Type, or Category..." : "Please select Patient Type first"}
                       value={roomBedSearchTerm}
                       onChange={(e) => setRoomBedSearchTerm(e.target.value)}
-                      className="pl-10"
+                      disabled={!addAdmissionForm.patientType}
+                      className={`pl-10 ${!addAdmissionForm.patientType ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     />
                 </div>
-                  {roomBedSearchTerm && (
+                  {roomBedSearchTerm && !addAdmissionForm.roomBedId && (
                     <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
                       <table className="w-full">
                         <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
@@ -1617,13 +1638,14 @@ export default function Admissions() {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                     <Input
                       id="doctor-search"
-                      placeholder="Search by Doctor Name, ID, or Specialty..."
+                      placeholder={addAdmissionForm.patientType ? "Search by Doctor Name, ID, or Specialty..." : "Please select Patient Type first"}
                       value={doctorSearchTerm}
                       onChange={(e) => setDoctorSearchTerm(e.target.value)}
-                      className="pl-10"
+                      disabled={!addAdmissionForm.patientType}
+                      className={`pl-10 ${!addAdmissionForm.patientType ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     />
                   </div>
-                  {doctorSearchTerm && (
+                  {doctorSearchTerm && !addAdmissionForm.admittedByDoctorId && (
                     <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
                       <table className="w-full">
                         <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
@@ -2494,17 +2516,72 @@ export default function Admissions() {
       {/* Search */}
           <Card className="dashboard-search-card">
             <CardContent className="dashboard-search-card-content">
-              <div className="dashboard-search-input-wrapper">
-                <Search className="dashboard-search-icon" />
-            <Input
-              placeholder="Search by patient name or bed number..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-                  className="dashboard-search-input"
-            />
-          </div>
-        </CardContent>
-      </Card>
+              <div className="flex items-center gap-4">
+                <div className="dashboard-search-input-wrapper flex-1">
+                  <Search className="dashboard-search-icon" />
+                  <Input
+                    placeholder="Search by patient name or bed number..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="dashboard-search-input"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="date-filter" className="whitespace-nowrap text-sm text-gray-700">Filter by Date:</Label>
+                  <div className="flex-1 relative">
+                    <ISTDatePicker
+                      id="date-filter"
+                      selected={dateFilter}
+                      onChange={(dateStr, date) => {
+                        setDateFilter(date);
+                        if (date) {
+                          // Extract date directly and format as dd-mm-yyyy for display
+                          const year = date.getFullYear();
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
+                          setDateFilterDisplay(`${day}-${month}-${year}`);
+                        } else {
+                          // Clear date filter to show all records
+                          setDateFilterDisplay('');
+                        }
+                      }}
+                      dateFormat="dd-MM-yyyy"
+                      placeholderText="Select date (dd-mm-yyyy)"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                      wrapperClassName="w-full"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={100}
+                      scrollableYearDropdown
+                      isClearable
+                      clearButtonTitle="Clear date filter"
+                    />
+                  </div>
+                  {dateFilterDisplay && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        // Clear date filter to show all records
+                        setDateFilter(null);
+                        setDateFilterDisplay('');
+                      }}
+                      className="text-gray-500 hover:text-gray-700"
+                      title="Clear date filter to show all records"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {dateFilterDisplay && (
+                <div className="mt-2 text-sm text-gray-600">
+                  Showing admissions for: <span className="font-medium">{dateFilterDisplay}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
       {/* Admissions List */}
       {loading ? (

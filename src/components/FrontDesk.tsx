@@ -1021,18 +1021,38 @@ export function FrontDesk() {
     const patientPhone = patient 
       ? (patient as any).PhoneNo || (patient as any).phoneNo || (patient as any).phone || '-'
       : '-';
-    const patientAadhar = appointment.aadharId || (appointment as any).AadharId || (appointment as any).patientAadhar || (appointment as any).PatientAadhar || (appointment as any).aadharId || 
-      (appointment as any).PatientAdhaarId || (appointment as any).patient?.AdhaarId || (appointment as any).patient?.aadharId || (appointment as any).patient?.AadharId ||
-      (appointment as any).adhaarId || (appointment as any).PatientAdhaar ||
-      (patient 
-        ? (patient as any).AdhaarId || (patient as any).aadharId || (patient as any).AadharId || '-'
-        : '-');
-    
-    return (
-      <tr 
-        key={appointment.id} 
-        className={`border-b border-gray-100 hover:bg-gray-50 ${isInactive ? 'opacity-50 bg-gray-50' : ''}`}
-      >
+    const patientAadhar = (() => {
+      const fields = [
+        appointment.aadharId,
+        (appointment as any).AadharId,
+        (appointment as any).patientAadhar,
+        (appointment as any).PatientAadhar,
+        (appointment as any).aadharId,
+        (appointment as any).PatientAdhaarId,
+        (appointment as any).patient?.AdhaarId,
+        (appointment as any).patient?.aadharId,
+        (appointment as any).patient?.AadharId,
+        (appointment as any).adhaarId,
+        (appointment as any).PatientAdhaar,
+        ...(patient ? [
+          (patient as any).AdhaarId,
+          (patient as any).aadharId,
+          (patient as any).AadharId
+        ] : [])
+      ];
+
+      for (const field of fields) {
+        if (field !== undefined && field !== null && field !== '' && field !== 'undefined') {
+          return field;
+        }
+      }
+    return '-';
+  })();
+  return (
+    <tr
+      key={appointment.id}
+      className={`border-b border-gray-100 hover:bg-gray-50 ${isInactive ? 'opacity-50 bg-gray-50' : ''}`}
+    >
         <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : ''}`}>
           <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded">
             {appointment.tokenNo}
@@ -1213,11 +1233,11 @@ export function FrontDesk() {
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-3 px-4 text-gray-700">Token #</th>
                   <th className="text-left py-3 px-4 text-gray-700">Patient Name</th>
-                  <th className="text-left py-3 px-4 text-gray-700">Aadhar Card</th>
                   <th className="text-left py-3 px-4 text-gray-700">Phone</th>
-                  <th className="text-left py-3 px-4 text-gray-700">Appointment Date</th>
                   <th className="text-left py-3 px-4 text-gray-700">Doctor</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Appointment Date</th>
                   <th className="text-left py-3 px-4 text-gray-700">Time</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Aadhar Card</th>
                   <th className="text-left py-3 px-4 text-gray-700">Status</th>
                   <th className="text-left py-3 px-4 text-gray-700">Actions</th>
                 </tr>

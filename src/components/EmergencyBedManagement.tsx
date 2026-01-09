@@ -128,14 +128,49 @@ export function EmergencyBedManagement() {
       return;
     }
     try {
-      await handleUpdateEmergencyBed(selectedEmergencyBed.id, {
-        emergencyBedNo: formData.emergencyBedNo || undefined,
-        emergencyRoomNameNo: formData.emergencyRoomNameNo || undefined,
-        emergencyRoomDescription: formData.emergencyRoomDescription || undefined,
-        chargesPerDay: parseFloat(formData.chargesPerDay),
-        createdBy: formData.createdBy ? parseInt(formData.createdBy, 10) : undefined,
-        status: formData.status,
-      });
+      // Parse chargesPerDay and validate
+      const chargesPerDayNum = parseFloat(formData.chargesPerDay);
+      if (isNaN(chargesPerDayNum) || chargesPerDayNum < 0) {
+        alert('Charges Per Day must be a valid positive number.');
+        return;
+      }
+
+      // Parse createdBy and validate
+      let createdByNum: number | undefined = undefined;
+      if (formData.createdBy && formData.createdBy.trim() !== '') {
+        const parsed = parseInt(formData.createdBy.trim(), 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          createdByNum = parsed;
+        }
+      }
+
+      // Build update payload with proper values
+      const updateData: Partial<{
+        emergencyBedNo?: string;
+        emergencyRoomNameNo?: string;
+        emergencyRoomDescription?: string;
+        chargesPerDay?: number;
+        createdBy?: number;
+        status?: 'active' | 'inactive';
+      }> = {
+        emergencyBedNo: formData.emergencyBedNo.trim() || undefined,
+        chargesPerDay: chargesPerDayNum,
+        status: formData.status || 'active',
+      };
+
+      // Add optional fields only if they have values
+      if (formData.emergencyRoomNameNo && formData.emergencyRoomNameNo.trim() !== '') {
+        updateData.emergencyRoomNameNo = formData.emergencyRoomNameNo.trim();
+      }
+      if (formData.emergencyRoomDescription && formData.emergencyRoomDescription.trim() !== '') {
+        updateData.emergencyRoomDescription = formData.emergencyRoomDescription.trim();
+      }
+      if (createdByNum !== undefined) {
+        updateData.createdBy = createdByNum;
+      }
+
+      console.log('Updating emergency bed with data:', updateData);
+      await handleUpdateEmergencyBed(selectedEmergencyBed.id, updateData);
       setIsEditDialogOpen(false);
       setSelectedEmergencyBed(null);
       setFormData({
@@ -147,8 +182,11 @@ export function EmergencyBedManagement() {
         status: 'active',
         bedStatus: 'Unoccupied',
       });
+      // Refresh the list after update
+      fetchEmergencyBeds();
     } catch (err) {
-      // Error handled in parent
+      console.error('Error updating emergency bed:', err);
+      alert(err instanceof Error ? err.message : 'Failed to update emergency bed. Please check the console for details.');
     }
   };
 
@@ -159,9 +197,9 @@ export function EmergencyBedManagement() {
       emergencyBedNo: emergencyBed.emergencyBedNo || '',
       emergencyRoomNameNo: emergencyBed.emergencyRoomNameNo || '',
       emergencyRoomDescription: emergencyBed.emergencyRoomDescription || '',
-      chargesPerDay: emergencyBed.chargesPerDay.toString(),
-      createdBy: emergencyBed.createdBy,
-      status: emergencyBed.status,
+      chargesPerDay: emergencyBed.chargesPerDay ? emergencyBed.chargesPerDay.toString() : '',
+      createdBy: emergencyBed.createdBy || '1',
+      status: emergencyBed.status || 'active',
       bedStatus: isOccupied ? 'Occupied' : 'Unoccupied',
     });
     setIsEditDialogOpen(true);

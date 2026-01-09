@@ -10,7 +10,6 @@ import { ResizableDialogContent } from './ResizableDialogContent';
 import { Plus, Trash2, Edit, TestTube, Tag, CheckCircle2, XCircle, FileText, Search } from 'lucide-react';
 import { useLabTests } from '../hooks/useLabTests';
 import { LabTest } from '../types';
-import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 
 interface LabTestsViewProps {

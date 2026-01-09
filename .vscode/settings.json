@@ -1,0 +1,11 @@
+{
+  // Close all editors when making changes
+  "workbench.editor.closeEmptyGroups": true,
+  "workbench.editor.enablePreview": false,
+  "workbench.editor.enablePreviewFromQuickOpen": false,
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 1000,
+  "workbench.editor.showTabs": "multiple",
+  "window.closeTabsWhenOpeningUsing": "always"
+}
+

@@ -22,9 +22,7 @@ import { LabTest as LabTestType, Doctor } from '../types';
 import { Textarea } from './ui/textarea';
 import { DialogFooter } from './ui/dialog';
 import { Switch } from './ui/switch';
-import { convertToIST, formatDateTimeIST } from '../utils/timeUtils';
 import { uploadFiles as uploadFilesUtil } from '../utils/fileUpload';
-import { getCurrentIST } from '../config/timezone';
 import { getCurrentUserId } from '../utils/authUtils';
 import ISTDatePicker from './ui/ISTDatePicker';
 import "react-datepicker/dist/react-datepicker.css";
@@ -73,9 +71,58 @@ interface TestStatusCounts {
   [key: string]: number | undefined; // Allow for other status variations
 }
 
+// Helper function to format date/time string for display (no timezone conversion)
+const formatDateTimeString = (dateTime: string | null | undefined): string => {
+  if (!dateTime) return 'N/A';
+  try {
+    const date = new Date(dateTime);
+    if (isNaN(date.getTime())) return 'N/A';
+    // Format as: DD-MM-YYYY HH:MM:SS
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+  } catch {
+    return 'N/A';
+  }
+};
+
+// Helper function to format date string for display (no timezone conversion)
+const formatDateString = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return 'N/A';
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return 'N/A';
+    // Format as: DD-MM-YYYY
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch {
+    return 'N/A';
+  }
+};
+
 export function Laboratory() {
   const [tests, setTests] = useState<LabTest[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  // Initialize date filter with today's date
+  const [dateFilter, setDateFilter] = useState<Date | null>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
+  const [dateFilterDisplay, setDateFilterDisplay] = useState(() => {
+    // Format today's date for display (dd-mm-yyyy)
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    return `${day}-${month}-${year}`;
+  });
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedTest, setSelectedTest] = useState<LabTest | null>(null);
   const [showReportsDialog, setShowReportsDialog] = useState(false);
@@ -143,7 +190,7 @@ export function Laboratory() {
   const [editSubmitError, setEditSubmitError] = useState<string | null>(null);
   const [editSelectedFiles, setEditSelectedFiles] = useState<File[]>([]);
   const [editUploadedDocumentUrls, setEditUploadedDocumentUrls] = useState<string[]>([]);
-  const [editTestDoneDateTime, setEditTestDoneDateTime] = useState<Date | null>(null);
+  const [editTestDoneDate, setEditTestDoneDate] = useState<Date | null>(null);
 
   // New Lab Order Dialog State
   const [newLabOrderTestDoneDate, setNewLabOrderTestDoneDate] = useState<Date | null>(null);
@@ -1230,15 +1277,34 @@ export function Laboratory() {
     setIsViewPatientLabTestDialogOpen(true);
   };
 
-  // Helper function to convert date string to Date object for DatePicker
+  // Helper function to convert date string to Date object for DatePicker (no timezone conversion)
   const getDateFromTestDoneDateTime = (dateTime: string | null | undefined): Date | null => {
     if (!dateTime) return null;
     try {
       const date = new Date(dateTime);
-      return isNaN(date.getTime()) ? null : convertToIST(date);
+      return isNaN(date.getTime()) ? null : date;
     } catch {
       return null;
     }
+  };
+
+  // Normalize TestStatus to match API expectations
+  const normalizeTestStatus = (status: string | null | undefined): 'Pending' | 'InProgress' | 'Completed' => {
+    if (!status) return 'Pending';
+    const statusLower = String(status).toLowerCase().trim();
+    if (statusLower === 'pending') return 'Pending';
+    if (statusLower === 'inprogress' || statusLower === 'in_progress' || statusLower === 'in progress') return 'InProgress';
+    if (statusLower === 'completed' || statusLower === 'done') return 'Completed';
+    return 'Pending'; // Default fallback
+  };
+
+  // Normalize Priority to match API expectations
+  const normalizePriority = (priority: string | null | undefined): 'Normal' | 'Urgent' => {
+    if (!priority) return 'Normal';
+    const priorityLower = String(priority).toLowerCase().trim();
+    if (priorityLower === 'normal' || priorityLower === 'routine') return 'Normal';
+    if (priorityLower === 'urgent' || priorityLower === 'emergency') return 'Urgent';
+    return 'Normal'; // Default fallback
   };
 
   // Handle editing PatientLabTest
@@ -1246,7 +1312,11 @@ export function Laboratory() {
     console.log('Edit Patient Lab Test - test object:', test);
     setEditingPatientLabTest(test);
     const testDoneDateTime = getDateFromTestDoneDateTime(test.testDoneDateTime);
-    setEditTestDoneDateTime(testDoneDateTime);
+    setEditTestDoneDate(testDoneDateTime);
+    // Normalize priority and testStatus when loading data
+    const rawPriority = test.priority || (test as any).Priority || 'Normal';
+    const rawTestStatus = test.testStatus || test.status || (test as any).TestStatus || 'Pending';
+    
     setEditFormData({
       patientLabTestsId: test.patientLabTestsId || test.id,
       patientId: test.patientId || '',
@@ -1254,8 +1324,8 @@ export function Laboratory() {
       labTestId: test.labTestId || '',
       testName: test.testName || test.labTestName || (test as any).TestName || (test as any).LabTest?.TestName || '',
       patientType: test.patientType || 'OPD',
-      priority: test.priority || 'Normal',
-      testStatus: test.testStatus || test.status || 'Pending',
+      priority: normalizePriority(rawPriority),
+      testStatus: normalizeTestStatus(rawTestStatus),
       labTestDone: test.labTestDone === 'Yes' || test.labTestDone === true ? 'Yes' : 'No',
       reportsUrl: test.reportsUrl || '',
       testDoneDateTime: test.testDoneDateTime || '',
@@ -1263,7 +1333,8 @@ export function Laboratory() {
       emergencyBedSlotId: test.emergencyBedSlotId || '',
       billId: test.billId || '',
       status: (test as any).statusValue || test.status || 'Active',
-      charges: test.charges || 0
+      charges: test.charges || 0,
+      orderedBy: test.orderedBy || (test as any).OrderedBy || (test as any).orderedByDoctorName || 'N/A'
     });
     
     // Parse existing documents from reportsUrl field
@@ -1353,13 +1424,16 @@ export function Laboratory() {
       }
     }
 
+    // Normalize values to match API expectations
+    const normalizedPriority = normalizePriority(editFormData.priority);
+    const normalizedTestStatus = normalizeTestStatus(editFormData.testStatus);
     
     const payload: any = {
       PatientId: editFormData.patientId,
       LabTestId: Number(editFormData.labTestId),
       PatientType: editFormData.patientType,
-      Priority: editFormData.priority,
-      TestStatus: editFormData.testStatus,
+      Priority: normalizedPriority,
+      TestStatus: normalizedTestStatus,
       LabTestDone: editFormData.labTestDone,
       Status: editFormData.status || 'Active',
       CreatedBy: currentUserId,
@@ -1369,16 +1443,12 @@ export function Laboratory() {
         payload.ReportsUrl = combinedReportsUrl;
       }
 
-      if (editTestDoneDateTime) {
-        // Format date to YYYY-MM-DD HH:MM:SS format
-        const istDate = convertToIST(editTestDoneDateTime);
-        const year = istDate.getUTCFullYear();
-        const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(istDate.getUTCDate()).padStart(2, '0');
-        const hours = String(istDate.getUTCHours()).padStart(2, '0');
-        const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
-        const seconds = String(istDate.getUTCSeconds()).padStart(2, '0');
-        payload.TestDoneDateTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      if (editTestDoneDate) {
+        // Format date to YYYY-MM-DD format (no timezone conversion)
+        const year = editTestDoneDate.getFullYear();
+        const month = String(editTestDoneDate.getMonth() + 1).padStart(2, '0');
+        const day = String(editTestDoneDate.getDate()).padStart(2, '0');
+        payload.TestDoneDateTime = `${year}-${month}-${day}`;
       }
 
       if (editFormData.roomAdmissionId) {
@@ -1414,7 +1484,7 @@ export function Laboratory() {
       setEditFormData(null);
       setEditSelectedFiles([]);
       setEditUploadedDocumentUrls([]);
-      setEditTestDoneDateTime(null);
+      setEditTestDoneDate(null);
     } catch (err) {
       console.error('Error saving edit:', err);
       setEditSubmitError(err instanceof Error ? err.message : 'Failed to save changes');
@@ -1423,11 +1493,41 @@ export function Laboratory() {
     }
   };
 
-  const filteredTests = tests.filter(test =>
-    test.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    test.testId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    test.testName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTests = tests.filter(test => {
+    // Text search filter
+    const matchesSearch = !searchTerm ||
+      test.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      test.testId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      test.testName.toLowerCase().includes(searchTerm.toLowerCase());
+
+    // Date filter - compare dates with respect to server time
+    const matchesDate = !dateFilter ||
+      ((test as any).createdDate && (() => {
+        try {
+          // Parse server date string (assumes server time format)
+          const testDate = new Date((test as any).createdDate);
+          const filterDate = new Date(dateFilter);
+          
+          // Compare dates using UTC to avoid timezone issues
+          // This ensures comparison is done with respect to server time
+          const testYear = testDate.getUTCFullYear();
+          const testMonth = testDate.getUTCMonth();
+          const testDay = testDate.getUTCDate();
+          
+          const filterYear = filterDate.getUTCFullYear();
+          const filterMonth = filterDate.getUTCMonth();
+          const filterDay = filterDate.getUTCDate();
+          
+          return testYear === filterYear &&
+                 testMonth === filterMonth &&
+                 testDay === filterDay;
+        } catch {
+          return false;
+        }
+      })());
+
+    return matchesSearch && matchesDate;
+  });
 
   const getTestsByStatus = (status: string) => {
     return filteredTests.filter(t => t.status === status);
@@ -1800,7 +1900,7 @@ export function Laboratory() {
 
   return (
     <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden min-h-0 dashboard-scrollable" style={{ maxHeight: '100vh', minHeight: 0 }}>
-      <div className="overflow-y-auto overflow-x-hidden flex-1 flex flex-col min-h-0">
+      <div className="overflow-y-auto flex-1 flex flex-col min-h-0">
         <div className="px-6 pt-6 pb-0 flex-shrink-0">
           <div className="flex items-center justify-between mb-4 flex-shrink-0">
             <div>
@@ -1808,727 +1908,773 @@ export function Laboratory() {
               <p className="text-gray-500">Manage lab tests, samples, and reports</p>
             </div>
             <div className="flex items-center gap-4">
-            <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => setShowReportsDialog(true)}>
-            <FileText className="size-4" />
-            View Reports
-          </Button>
-          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
-            setIsAddDialogOpen(open);
-            if (open) {
-              handleOpenNewLabOrderDialog();
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button className="dialog-trigger-button" onClick={handleOpenNewLabOrderDialog}>
-                <TestTube className="size-4" />
-                New Lab Order
-              </Button>
-            </DialogTrigger>
-            <ResizableDialogContent className="p-0 gap-0 large-dialog max-w-4xl dialog-content-standard">
-              <div className="dialog-scrollable-wrapper dialog-content-scrollable">
-                <DialogHeader className="dialog-header-standard">
-                  <DialogTitle className="dialog-title-standard">New Lab Order</DialogTitle>
-                </DialogHeader>
-                <div className="dialog-body-content-wrapper">
-                  <div className="dialog-form-container">
-                  {/* Patient Selection - Searchable */}
-                  <div className="dialog-form-field">
-                    <Label htmlFor="patientId" className="dialog-label-standard">Patient *</Label>
-                    <div className="relative">
-                      <Input
-                        id="patientId"
-                        placeholder="Search patient by name, ID, or phone..."
-                        value={patientSearchTerm}
-                        onChange={(e) => {
-                          setPatientSearchTerm(e.target.value);
-                          setShowPatientList(true);
-                        }}
-                        onFocus={() => setShowPatientList(true)}
-                        className="dialog-input-standard"
-                      />
-                      {showPatientList && availablePatients.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 dialog-dropdown-container shadow-lg max-h-60 overflow-y-auto">
-                          <div className="dialog-table-container">
-                            <table className="dialog-table">
-                              <thead>
-                                <tr className="dialog-table-header-row">
-                                  <th className="dialog-table-header-cell">Patient No</th>
-                                  <th className="dialog-table-header-cell">Name</th>
-                                  <th className="dialog-table-header-cell">Phone</th>
-                                </tr>
-                              </thead>
-                              <tbody className="dialog-table-body">
-                                {availablePatients.filter((patient: any) => {
-                                  if (!patientSearchTerm) return true;
-                                  const searchLower = patientSearchTerm.toLowerCase();
-                                  const patientId = (patient as any).patientId || (patient as any).PatientId || '';
-                                  const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
-                                  const patientName = (patient as any).patientName || (patient as any).PatientName || '';
-                                  const lastName = (patient as any).lastName || (patient as any).LastName || '';
-                                  const fullName = `${patientName} ${lastName}`.trim();
-                                  const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
-                                  return (
-                                    patientId.toLowerCase().includes(searchLower) ||
-                                    patientNo.toLowerCase().includes(searchLower) ||
-                                    fullName.toLowerCase().includes(searchLower) ||
-                                    phoneNo.includes(patientSearchTerm)
-                                  );
-                                }).map((patient: any) => {
-                                  const patientId = (patient as any).patientId || (patient as any).PatientId || '';
-                                  const patientNo = (patient as any).patientNo || (patient as any).PatientNo || patientId.substring(0, 8);
-                                  const patientName = (patient as any).patientName || (patient as any).PatientName || '';
-                                  const lastName = (patient as any).lastName || (patient as any).LastName || '';
-                                  const fullName = `${patientName} ${lastName}`.trim();
-                                  const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
-                                  const isSelected = newLabOrderFormData.patientId === patientId;
-                                  return (
-                                    <tr
-                                      key={patientId}
-                                      onClick={async () => {
-                                        const updatedFormData = { ...newLabOrderFormData, patientId };
-                                        setNewLabOrderFormData(updatedFormData);
-                                        setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
-                                        setShowPatientList(false);
-                                        
-                                        // If PatientType is OPD, fetch appointments for this patient
-                                        if (updatedFormData.patientType === 'OPD' && patientId) {
-                                          await fetchPatientAppointments(patientId);
-                                        }
-                                        // If PatientType is IPD, fetch room admissions for this patient
-                                        if (updatedFormData.patientType === 'IPD' && patientId) {
-                                          await fetchPatientRoomAdmissions(patientId);
-                                        }
-                                        // If PatientType is Emergency, fetch emergency admissions for this patient
-                                        if (updatedFormData.patientType === 'Emergency' && patientId) {
-                                          await fetchPatientEmergencyAdmissions(patientId);
-                                        }
-                                      }}
-                                      className={`dialog-table-body-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
-                                    >
-                                      <td className="dialog-table-body-cell dialog-table-body-cell-primary font-mono">{patientNo}</td>
-                                      <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{fullName || 'Unknown'}</td>
-                                      <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{phoneNo || '-'}</td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="gap-2" onClick={() => setShowReportsDialog(true)}>
+                  <FileText className="size-4" />
+                  View Reports
+                </Button>
+                <Button size="sm" className="dashboard-manage-button" onClick={() => { setIsAddDialogOpen(true); handleOpenNewLabOrderDialog(); }}>
+                  <TestTube className="size-4" />
+                  New Lab Order
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="px-6 pt-4 pb-6 flex-1 min-h-0">
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <Card className="gap-0">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Total Tests Today</p>
+                    {countsLoading ? (
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-gray-200 rounded w-16"></div>
+                      </div>
+                    ) : (
+                      <h3 className="text-gray-900">{totalCount}</h3>
+                    )}
                   </div>
+                  <TestTube className="size-8 text-blue-500" />
+                </div>
+              </CardContent>
+            </Card>
 
-                  {/* Lab Test Selection - Searchable */}
-                  <div className="dialog-form-field">
-                    <Label htmlFor="labTestId" className="dialog-label-standard">Lab Test *</Label>
-                    <div className="relative">
-                      <Input
-                        id="labTestId"
-                        placeholder="Search lab test by Display Test ID, name, or category..."
-                        value={labTestSearchTerm}
-                        onChange={(e) => {
-                          setLabTestSearchTerm(e.target.value);
-                          setShowLabTestList(true);
-                        }}
-                        onFocus={() => setShowLabTestList(true)}
-                        className="dialog-input-standard"
-                      />
-                      {showLabTestList && availableLabTests.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 dialog-dropdown-container shadow-lg max-h-60 overflow-y-auto">
-                          <div className="dialog-table-container">
-                            <table className="dialog-table">
-                              <thead>
-                                <tr className="dialog-table-header-row">
-                                  <th className="dialog-table-header-cell">Display Test ID</th>
-                                  <th className="dialog-table-header-cell">Test Name</th>
-                                  <th className="dialog-table-header-cell">Category</th>
-                                </tr>
-                              </thead>
-                              <tbody className="dialog-table-body">
-                                {availableLabTests.filter((test: any) => {
-                                  if (!labTestSearchTerm) return true;
-                                  const searchLower = labTestSearchTerm.toLowerCase();
-                                  const displayTestId = test.displayTestId || test.DisplayTestId || test.displayTestID || test.DisplayTestID || '';
-                                  const testName = test.testName || test.TestName || test.labTestName || test.LabTestName || test.name || test.Name || '';
-                                  const category = test.testCategory || test.TestCategory || test.category || test.Category || '';
-                                  return displayTestId.toLowerCase().includes(searchLower) ||
-                                         testName.toLowerCase().includes(searchLower) ||
-                                         category.toLowerCase().includes(searchLower);
-                                }).map((test: any) => {
-                                  const testId = test.labTestId || test.LabTestId || test.id || test.Id || '';
-                                  const displayTestId = test.displayTestId || test.DisplayTestId || test.displayTestID || test.DisplayTestID || '';
-                                  const testName = test.testName || test.TestName || test.labTestName || test.LabTestName || test.name || test.Name || '';
-                                  const category = test.testCategory || test.TestCategory || test.category || test.Category || '';
-                                  const isSelected = newLabOrderFormData.labTestId === String(testId);
-                                  const displayText = `${displayTestId}, ${testName} (${category})`;
-                                  return (
-                                    <tr
-                                      key={testId}
-                                      onClick={() => {
-                                        setNewLabOrderFormData({ ...newLabOrderFormData, labTestId: String(testId) });
-                                        setLabTestSearchTerm(displayText);
-                                        setShowLabTestList(false);
-                                      }}
-                                      className={`dialog-table-body-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
-                                    >
-                                      <td className="dialog-table-body-cell dialog-table-body-cell-primary font-mono">{displayTestId || '-'}</td>
-                                      <td className="dialog-table-body-cell dialog-table-body-cell-primary">{testName || '-'}</td>
-                                      <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{category || '-'}</td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+            <Card className="gap-0">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Pending</p>
+                    {countsLoading ? (
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-gray-200 rounded w-16"></div>
+                      </div>
+                    ) : (
+                      <h3 className="text-gray-900">{pendingCount}</h3>
+                    )}
                   </div>
+                  <Clock className="size-8 text-orange-500" />
+                </div>
+              </CardContent>
+            </Card>
 
-                  {/* Patient Type */}
-                  <div className="dialog-form-field">
-                    <Label htmlFor="patientType" className="dialog-label-standard">Patient Type *</Label>
-                    <select
-                      id="patientType"
-                      className="dialog-select-standard"
-                      value={newLabOrderFormData.patientType}
-                      onChange={(e) => handlePatientTypeChange(e.target.value as 'IPD' | 'OPD' | 'Emergency' | 'Direct' | '')}
-                    >
-                      <option value="">Select Patient Type</option>
-                      <option value="OPD">OPD</option>
-                      <option value="IPD">IPD</option>
-                      <option value="Emergency">Emergency</option>
-                      <option value="Direct">Direct</option>
-                    </select>
+            <Card className="gap-0">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">In Progress</p>
+                    {countsLoading ? (
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-gray-200 rounded w-16"></div>
+                      </div>
+                    ) : (
+                      <h3 className="text-gray-900">{inProgressCount}</h3>
+                    )}
                   </div>
+                  <AlertCircle className="size-8 text-blue-500" />
+                </div>
+              </CardContent>
+            </Card>
 
-                  {/* Conditional Fields based on PatientType */}
-                  {newLabOrderFormData.patientType === 'IPD' && (
-                    <div className="dialog-form-field">
-                      <Label htmlFor="roomAdmissionId" className="dialog-label-standard">Room Admission ID (BedNo_RoomAllocationDate) *</Label>
-                      <select
-                        id="roomAdmissionId"
-                        className="dialog-select-standard"
-                        value={newLabOrderFormData.roomAdmissionId}
-                        onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, roomAdmissionId: e.target.value })}
-                      >
-                        <option value="">Select Room Admission</option>
-                        {availableAdmissions.map((admission: any) => {
-                          const admissionId = admission.roomAdmissionId || admission.admissionId || admission.id || admission.RoomAdmissionId || '';
-                          
-                          // Extract room allocation date
-                          const roomAllocationDate = admission.roomAllocationDate || 
-                                                     admission.RoomAllocationDate || 
-                                                     admission.room_allocation_date ||
-                                                     admission.date ||
-                                                     admission.Date || '';
-                          
-                          // Format date: Extract YYYY-MM-DD from date string or Date object
-                          let formattedDate = '';
-                          if (roomAllocationDate) {
-                            try {
-                              if (typeof roomAllocationDate === 'string') {
-                                // If it's a string, extract date part (before 'T' if present)
-                                formattedDate = roomAllocationDate.split('T')[0];
-                              } else {
-                                // If it's a Date object, convert to ISO string and extract date part
-                                formattedDate = new Date(roomAllocationDate).toISOString().split('T')[0];
-                              }
-                            } catch {
-                              formattedDate = String(roomAllocationDate).split('T')[0] || 'N/A';
-                            }
-                          } else {
-                            formattedDate = 'N/A';
-                          }
-                          
-                          // Build display text: RoomAdmissionId_RoomAllocationDate
-                          const displayText = `${admissionId || 'N/A'}_${formattedDate}`;
-                          
-                          return (
-                            <option key={admissionId} value={String(admissionId)}>
-                              {displayText}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-                  )}
-
-                  {newLabOrderFormData.patientType === 'OPD' && (
-                    <div className="dialog-form-field">
-                      <Label htmlFor="appointmentId" className="dialog-label-standard">Appointment ID (TokenNo_AppointmentDateTime) *</Label>
-                      <select
-                        id="appointmentId"
-                        className="dialog-select-standard"
-                        value={newLabOrderFormData.appointmentId}
-                        onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, appointmentId: e.target.value })}
-                      >
-                        <option value="">Select Appointment</option>
-                        {availableAppointments.map((appointment: any) => {
-                          const appointmentId = appointment.id || appointment.patientAppointmentId || appointment.PatientAppointmentId || '';
-                          const tokenNo = appointment.tokenNo || appointment.TokenNo || '';
-                          
-                          // Extract appointment date (handle both camelCase and PascalCase)
-                          const appointmentDate = appointment.appointmentDate || appointment.AppointmentDate || '';
-                          
-                          // Extract appointment time (handle both camelCase and PascalCase)
-                          const appointmentTime = appointment.appointmentTime || appointment.AppointmentTime || '';
-                          
-                          // Format date: Extract YYYY-MM-DD from date string or Date object
-                          let formattedDate = '';
-                          if (appointmentDate) {
-                            try {
-                              if (typeof appointmentDate === 'string') {
-                                // If it's a string, extract date part (before 'T' if present)
-                                formattedDate = appointmentDate.split('T')[0];
-                              } else {
-                                // If it's a Date object, convert to ISO string and extract date part
-                                formattedDate = new Date(appointmentDate).toISOString().split('T')[0];
-                              }
-                            } catch {
-                              formattedDate = String(appointmentDate).split('T')[0] || 'N/A';
-                            }
-                          } else {
-                            formattedDate = 'N/A';
-                          }
-                          
-                          // Format time: Extract HH:MM from time string
-                          let formattedTime = '';
-                          if (appointmentTime) {
-                            try {
-                              const timeStr = String(appointmentTime);
-                              // If it's already in HH:MM:SS or HH:MM format, extract HH:MM
-                              if (timeStr.match(/^\d{2}:\d{2}/)) {
-                                formattedTime = timeStr.substring(0, 5); // HH:MM format
-                              } else if (timeStr.includes('T')) {
-                                // If it's a datetime string, extract time part
-                                formattedTime = timeStr.split('T')[1]?.substring(0, 5) || '';
-                              } else {
-                                formattedTime = timeStr.substring(0, 5) || 'N/A';
-                              }
-                            } catch {
-                              formattedTime = 'N/A';
-                            }
-                          } else {
-                            formattedTime = 'N/A';
-                          }
-                          
-                          // Build display text: TokenNo_AppointmentDate_AppointmentTime
-                          const displayText = `${tokenNo || 'N/A'}_${formattedDate}_${formattedTime}`;
-                          
-                          return (
-                            <option key={appointmentId} value={String(appointmentId)}>
-                              {displayText}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-                  )}
-
-                  {newLabOrderFormData.patientType === 'Emergency' && (
-                    <div className="dialog-form-field">
-                      <Label htmlFor="emergencyBedSlotId" className="dialog-label-standard"> (SlotNo_EmergencyAdmissionDateTime) *</Label>
-                      <select
-                        id="emergencyBedSlotId"
-                        className="dialog-select-standard"
-                        value={newLabOrderFormData.emergencyBedSlotId}
-                        onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, emergencyBedSlotId: e.target.value })}
-                      >
-                        <option value="">Select Emergency Bed Slot</option>
-                        {availableEmergencyBedSlots.map((admission: any) => {
-                          // Extract emergency admission ID
-                          const emergencyAdmissionId = admission.emergencyAdmissionId || 
-                                                         admission.EmergencyAdmissionId || 
-                                                         admission.emergency_admission_id ||
-                                                         admission.id ||
-                                                         admission.Id || '';
-                          
-                          // Extract emergency admission date
-                          const emergencyAdmissionDate = admission.emergencyAdmissionDate || 
-                                                          admission.EmergencyAdmissionDate || 
-                                                          admission.emergency_admission_date ||
-                                                          admission.date ||
-                                                          admission.Date || '';
-                          
-                          // Format date: Extract YYYY-MM-DD from date string or Date object
-                          let formattedDate = '';
-                          if (emergencyAdmissionDate) {
-                            try {
-                              if (typeof emergencyAdmissionDate === 'string') {
-                                // If it's a string, extract date part (before 'T' if present)
-                                formattedDate = emergencyAdmissionDate.split('T')[0];
-                              } else {
-                                // If it's a Date object, convert to ISO string and extract date part
-                                formattedDate = new Date(emergencyAdmissionDate).toISOString().split('T')[0];
-                              }
-                            } catch {
-                              formattedDate = String(emergencyAdmissionDate).split('T')[0] || 'N/A';
-                            }
-                          } else {
-                            formattedDate = 'N/A';
-                          }
-                          
-                          // Build display text: EmergencyAdmissionId_EmergencyAdmissionDate
-                          const displayText = `${emergencyAdmissionId || 'N/A'}_${formattedDate}`;
-                          
-                          // Use emergencyAdmissionId as the value, fallback to other IDs
-                          const valueId = emergencyAdmissionId || 
-                                         admission.emergencyBedSlotId || 
-                                         admission.id || 
-                                         admission.EmergencyBedSlotId || '';
-                          
-                          return (
-                            <option key={valueId} value={String(valueId)}>
-                              {displayText}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Priority */}
-                  <div className="dialog-form-field">
-                    <Label htmlFor="priority" className="dialog-label-standard">Priority *</Label>
-                    <select
-                      id="priority"
-                      className="dialog-select-standard"
-                      value={newLabOrderFormData.priority}
-                      onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, priority: e.target.value as 'Normal' | 'Urgent' })}
-                    >
-                      <option value="Normal">Normal</option>
-                      <option value="Urgent">Urgent</option>
-                    </select>
+            <Card className="gap-0">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Completed</p>
+                    {countsLoading ? (
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-gray-200 rounded w-16"></div>
+                      </div>
+                    ) : (
+                      <h3 className="text-gray-900">{completedCount}</h3>
+                    )}
                   </div>
-
-                  {/* Test Status */}
-                  <div className="dialog-form-field">
-                    <Label htmlFor="testStatus" className="dialog-label-standard">Test Status *</Label>
-                    <select
-                      id="testStatus"
-                      className="dialog-select-standard"
-                      value={newLabOrderFormData.testStatus}
-                      onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, testStatus: e.target.value as 'Pending' | 'InProgress' | 'Completed' })}
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="InProgress">InProgress</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                  </div>
-
-                  {/* Lab Test Done */}
-                  <div className="dialog-form-field">
-                    <Label htmlFor="labTestDone" className="dialog-label-standard">Lab Test Done *</Label>
-                    <select
-                      id="labTestDone"
-                      className="dialog-select-standard"
-                      value={newLabOrderFormData.labTestDone}
-                      onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, labTestDone: e.target.value as 'Yes' | 'No' })}
-                    >
-                      <option value="No">No</option>
-                      <option value="Yes">Yes</option>
-                    </select>
-                  </div>
-
-                  {/* Test Done Date */}
-                  <div className="dialog-form-field">
-                    <Label htmlFor="testDoneDate">Test Done Date</Label>
+                  <CheckCircle className="size-8 text-green-500" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          {/* Search */}
+          <Card className="dashboard-search-card">
+            <CardContent className="dashboard-search-card-content">
+              <div className="flex items-center gap-4">
+                <div className="dashboard-search-input-wrapper flex-1">
+                  <Search className="dashboard-search-icon" />
+                  <Input
+                    placeholder="Search by patient name, test ID, or test name..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="dashboard-search-input"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="date-filter" className="whitespace-nowrap text-sm text-gray-700">Filter by Date:</Label>
+                  <div className="flex-1 relative">
                     <ISTDatePicker
-                      id="testDoneDate"
-                      selected={newLabOrderFormData.testDoneDate || null}
+                      id="date-filter"
+                      selected={dateFilter}
                       onChange={(dateStr, date) => {
-                        setNewLabOrderTestDoneDate(date);
-                        setNewLabOrderFormData({ ...newLabOrderFormData, testDoneDate: dateStr || '' });
+                        setDateFilter(date);
+                        if (date) {
+                          // Extract date directly and format as dd-mm-yyyy for display
+                          const year = date.getFullYear();
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
+                          setDateFilterDisplay(`${day}-${month}-${year}`);
+                        } else {
+                          // Clear date filter to show all records
+                          setDateFilterDisplay('');
+                        }
                       }}
                       dateFormat="dd-MM-yyyy"
-                      placeholderText="dd-mm-yyyy"
-                      className="dialog-input-standard w-full"
+                      placeholderText="Select date (dd-mm-yyyy)"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
                       wrapperClassName="w-full"
                       showYearDropdown
                       showMonthDropdown
                       dropdownMode="select"
                       yearDropdownItemNumber={100}
                       scrollableYearDropdown
+                      isClearable
+                      clearButtonTitle="Clear date filter"
                     />
                   </div>
-
-                  {/* Reports URL with File Upload (similar to OT Documents) */}
-                  <div className="dialog-form-field">
-                    <Label htmlFor="add-reportsUrl" className="dialog-label-standard">Reports URL</Label>
-                    <Input
-                      id="add-reportsUrl"
-                      type="file"
-                      multiple
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        setSelectedFiles(prev => [...prev, ...files]);
+                  {dateFilterDisplay && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        // Clear date filter to show all records
+                        setDateFilter(null);
+                        setDateFilterDisplay('');
                       }}
-                      className="dialog-input-standard"
-                    />
-                    {selectedFiles.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {selectedFiles.map((file, index) => (
-                          <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 p-2 rounded">
-                            <span>{file.name}</span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-                              }}
-                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                            >
-                              ×
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Save Lab Order"</p>
-                  </div>
-
-                  {/* Ordered By Doctor - Searchable */}
-                  <div className="dialog-form-field">
-                    <Label htmlFor="orderedByDoctorId" className="dialog-label-standard">Ordered By Doctor *</Label>
-                    <div className="relative">
-                      <Input
-                        id="orderedByDoctorId"
-                        placeholder="Search doctor by name..."
-                        value={doctorSearchTerm}
-                        onChange={(e) => {
-                          setDoctorSearchTerm(e.target.value);
-                          setShowDoctorList(true);
-                        }}
-                        onFocus={() => setShowDoctorList(true)}
-                        className="dialog-input-standard"
-                      />
-                      {showDoctorList && availableDoctors.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 dialog-dropdown-container shadow-lg max-h-60 overflow-y-auto">
-                          <div className="dialog-table-container">
-                            <table className="dialog-table">
-                              <thead>
-                                <tr className="dialog-table-header-row">
-                                  <th className="dialog-table-header-cell">Doctor Name</th>
-                                  <th className="dialog-table-header-cell">Specialization</th>
-                                </tr>
-                              </thead>
-                              <tbody className="dialog-table-body">
-                                {availableDoctors.filter((doctor: any) => {
-                                  if (!doctorSearchTerm) return true;
-                                  const searchLower = doctorSearchTerm.toLowerCase();
-                                  const doctorName = doctor.name || doctor.Name || doctor.doctorName || doctor.DoctorName || '';
-                                  const specialization = doctor.specialization || doctor.Specialization || doctor.speciality || doctor.Speciality || '';
-                                  return (
-                                    doctorName.toLowerCase().includes(searchLower) ||
-                                    specialization.toLowerCase().includes(searchLower)
-                                  );
-                                }).map((doctor: any) => {
-                                  const doctorId = doctor.id || doctor.Id || doctor.doctorId || doctor.DoctorId || '';
-                                  const doctorName = doctor.name || doctor.Name || doctor.doctorName || doctor.DoctorName || '';
-                                  const specialization = doctor.specialization || doctor.Specialization || doctor.speciality || doctor.Speciality || '';
-                                  const isSelected = newLabOrderFormData.orderedByDoctorId === String(doctorId);
-                                  return (
-                                    <tr
-                                      key={doctorId}
-                                      onClick={() => {
-                                        setNewLabOrderFormData({ ...newLabOrderFormData, orderedByDoctorId: String(doctorId) });
-                                        setDoctorSearchTerm(doctorName);
-                                        setShowDoctorList(false);
-                                      }}
-                                      className={`dialog-table-body-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
-                                    >
-                                      <td className="dialog-table-body-cell dialog-table-body-cell-primary">{doctorName}</td>
-                                      <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{specialization || '-'}</td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Error Message */}
-                  {newLabOrderSubmitError && (
-                    <div className="dialog-error-message">
-                      {newLabOrderSubmitError}
-                    </div>
+                      className="text-gray-500 hover:text-gray-700"
+                      title="Clear date filter to show all records"
+                    >
+                      <X className="size-4" />
+                    </Button>
                   )}
-                  </div>
                 </div>
-                <DialogFooter className="dialog-footer-standard">
-                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="dialog-footer-button">
-                    Cancel
-                  </Button>
-                  <Button onClick={handleSaveNewLabOrder} disabled={newLabOrderSubmitting} className="dialog-footer-button">
-                    {newLabOrderSubmitting ? 'Saving...' : 'Save Lab Order'}
-                  </Button>
-                </DialogFooter>
               </div>
-            </ResizableDialogContent>
-          </Dialog>
-            </div>
-          </div>
+              {dateFilterDisplay && (
+                <div className="mt-2 text-sm text-gray-600">
+                  Showing lab tests for: <span className="font-medium">{dateFilterDisplay}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Tests List */}
+          {testsLoading ? (
+            <Card className="mb-4">
+              <CardContent className="p-6">
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-gray-500">Loading lab tests...</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : testsError ? (
+            <Card className="mb-4">
+              <CardContent className="p-6">
+                <div className="text-center py-12">
+                  <p className="text-red-600 mb-2">{testsError}</p>
+                  <Button variant="outline" onClick={() => window.location.reload()}>
+                    Retry
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Tabs defaultValue="all" className="space-y-6">
+              <TabsList>
+                <TabsTrigger value="all">All Tests ({filteredTests.length})</TabsTrigger>
+                <TabsTrigger value="pending">Pending ({getTestsByStatus('Pending').length})</TabsTrigger>
+                <TabsTrigger value="progress">In Progress ({getTestsByStatus('In Progress').length + getTestsByStatus('Sample Collected').length})</TabsTrigger>
+                <TabsTrigger value="completed">Completed ({getTestsByStatus('Completed').length + getTestsByStatus('Reported').length})</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="all">
+                <TestsList
+                  tests={filteredTests}
+                  onSelectTest={setSelectedTest}
+                  onEditTest={handleEditPatientLabTest}
+                />
+              </TabsContent>
+              <TabsContent value="pending">
+                <TestsList
+                  tests={getTestsByStatus('Pending')}
+                  onSelectTest={setSelectedTest}
+                  onEditTest={handleEditPatientLabTest}
+                />
+              </TabsContent>
+              <TabsContent value="progress">
+                <TestsList
+                  tests={[...getTestsByStatus('In Progress'), ...getTestsByStatus('Sample Collected')]}
+                  onSelectTest={setSelectedTest}
+                  onEditTest={handleEditPatientLabTest}
+                />
+              </TabsContent>
+              <TabsContent value="completed">
+                <TestsList
+                  tests={[...getTestsByStatus('Completed'), ...getTestsByStatus('Reported')]}
+                  onSelectTest={setSelectedTest}
+                  onEditTest={handleEditPatientLabTest}
+                />
+              </TabsContent>
+            </Tabs>
+          )}
         </div>
-        <div className="px-6 pt-4 pb-4 flex-1">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card className="gap-0">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Total Tests Today</p>
-                {countsLoading ? (
-                  <div className="animate-pulse">
-                    <div className="h-6 bg-gray-200 rounded w-16"></div>
-                  </div>
-                ) : (
-                  <h3 className="text-gray-900">{totalCount}</h3>
-                )}
-              </div>
-              <TestTube className="size-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="gap-0">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Pending</p>
-                {countsLoading ? (
-                  <div className="animate-pulse">
-                    <div className="h-6 bg-gray-200 rounded w-16"></div>
-                  </div>
-                ) : (
-                  <h3 className="text-gray-900">{pendingCount}</h3>
-                )}
-              </div>
-              <Clock className="size-8 text-orange-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="gap-0">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">In Progress</p>
-                {countsLoading ? (
-                  <div className="animate-pulse">
-                    <div className="h-6 bg-gray-200 rounded w-16"></div>
-                  </div>
-                ) : (
-                  <h3 className="text-gray-900">{inProgressCount}</h3>
-                )}
-              </div>
-              <AlertCircle className="size-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="gap-0">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Completed</p>
-                {countsLoading ? (
-                  <div className="animate-pulse">
-                    <div className="h-6 bg-gray-200 rounded w-16"></div>
-                  </div>
-                ) : (
-                  <h3 className="text-gray-900">{completedCount}</h3>
-                )}
-              </div>
-              <CheckCircle className="size-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Search */}
-      <Card className="dashboard-search-card">
-        <CardContent className="dashboard-search-card-content">
-          <div className="dashboard-search-input-wrapper">
-            <Search className="dashboard-search-icon" />
-            <Input
-              placeholder="Search by patient name, test ID, or test name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="dashboard-search-input"
-            />
-          </div>
-        </CardContent>
-      </Card>
+        <CustomResizableDialog
+            open={isAddDialogOpen}
+            onOpenChange={(open) => {
+              setIsAddDialogOpen(open);
+              if (!open) {
+                setNewLabOrderFormData({
+                  patientId: '',
+                  labTestId: '',
+                  patientType: '',
+                  roomAdmissionId: '',
+                  appointmentId: '',
+                  emergencyBedSlotId: '',
+                  priority: 'Normal',
+                  testStatus: 'Pending',
+                  labTestDone: 'No',
+                  testDoneDate: '',
+                  reportsUrl: '',
+                  orderedByDoctorId: ''
+                });
+                setNewLabOrderTestDoneDate(null);
+                setPatientSearchTerm('');
+                setLabTestSearchTerm('');
+                setDoctorSearchTerm('');
+                setShowPatientList(false);
+                setShowLabTestList(false);
+                setShowDoctorList(false);
+                setNewLabOrderSubmitError(null);
+                setSelectedFiles([]);
+              }
+            }}
+            className="p-0 gap-0"
+            initialWidth={550}
+            maxWidth={typeof window !== 'undefined' ? window.innerWidth - 40 : 1800}
+          >
+            <CustomResizableDialogClose onClick={() => setIsAddDialogOpen(false)} />
+            <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+              <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+                <CustomResizableDialogTitle className="dialog-title-standard">New Lab Order</CustomResizableDialogTitle>
+              </CustomResizableDialogHeader>
+              <div className="dialog-body-content-wrapper">
+                <div className="dialog-form-container space-y-4">
+                {/* Patient Selection - Searchable */}
+                <div className="dialog-form-field">
+                  <Label htmlFor="patientId" className="dialog-label-standard">Patient *</Label>
+                  <div className="relative">
+                    <Input
+                      id="patientId"
+                      placeholder="Search patient by name, ID, or phone..."
+                      value={patientSearchTerm}
+                      onChange={(e) => {
+                        setPatientSearchTerm(e.target.value);
+                        setShowPatientList(true);
+                      }}
+                      onFocus={() => setShowPatientList(true)}
+                      className="dialog-input-standard"
+                    />
+                    {showPatientList && availablePatients.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 dialog-dropdown-container shadow-lg max-h-60 overflow-y-auto">
+                        <div className="dialog-table-container">
+                          <table className="dialog-table">
+                            <thead>
+                              <tr className="dialog-table-header-row">
+                                <th className="dialog-table-header-cell">Patient No</th>
+                                <th className="dialog-table-header-cell">Name</th>
+                                <th className="dialog-table-header-cell">Phone</th>
+                              </tr>
+                            </thead>
+                            <tbody className="dialog-table-body">
+                              {availablePatients.filter((patient: any) => {
+                                if (!patientSearchTerm) return true;
+                                const searchLower = patientSearchTerm.toLowerCase();
+                                const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                const fullName = `${patientName} ${lastName}`.trim();
+                                const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                return (
+                                  patientId.toLowerCase().includes(searchLower) ||
+                                  patientNo.toLowerCase().includes(searchLower) ||
+                                  fullName.toLowerCase().includes(searchLower) ||
+                                  phoneNo.includes(patientSearchTerm)
+                                );
+                              }).map((patient: any) => {
+                                const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                const patientNo = (patient as any).patientNo || (patient as any).PatientNo || patientId.substring(0, 8);
+                                const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                const fullName = `${patientName} ${lastName}`.trim();
+                                const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                const isSelected = newLabOrderFormData.patientId === patientId;
+                                return (
+                                  <tr
+                                    key={patientId}
+                                    onClick={async () => {
+                                      const updatedFormData = { ...newLabOrderFormData, patientId };
+                                      setNewLabOrderFormData(updatedFormData);
+                                      setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                                      setShowPatientList(false);
+                                      
+                                      // If PatientType is OPD, fetch appointments for this patient
+                                      if (updatedFormData.patientType === 'OPD' && patientId) {
+                                        await fetchPatientAppointments(patientId);
+                                      }
+                                      // If PatientType is IPD, fetch room admissions for this patient
+                                      if (updatedFormData.patientType === 'IPD' && patientId) {
+                                        await fetchPatientRoomAdmissions(patientId);
+                                      }
+                                      // If PatientType is Emergency, fetch emergency admissions for this patient
+                                      if (updatedFormData.patientType === 'Emergency' && patientId) {
+                                        await fetchPatientEmergencyAdmissions(patientId);
+                                      }
+                                    }}
+                                    className={`dialog-table-body-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
+                                  >
+                                    <td className="dialog-table-body-cell dialog-table-body-cell-primary font-mono">{patientNo}</td>
+                                    <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{fullName || 'Unknown'}</td>
+                                    <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{phoneNo || '-'}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-      {/* Tests List */}
-      {testsLoading ? (
-        <Card className="mb-4">
-          <CardContent className="p-6">
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-              <p className="text-gray-500">Loading lab tests...</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : testsError ? (
-        <Card className="mb-4">
-          <CardContent className="p-6">
-            <div className="text-center py-12">
-              <p className="text-red-600 mb-2">{testsError}</p>
-              <Button variant="outline" onClick={() => window.location.reload()}>
-                Retry
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Tabs defaultValue="all" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="all">All Tests ({filteredTests.length})</TabsTrigger>
-            <TabsTrigger value="pending">Pending ({getTestsByStatus('Pending').length})</TabsTrigger>
-            <TabsTrigger value="progress">In Progress ({getTestsByStatus('In Progress').length + getTestsByStatus('Sample Collected').length})</TabsTrigger>
-            <TabsTrigger value="completed">Completed ({getTestsByStatus('Completed').length + getTestsByStatus('Reported').length})</TabsTrigger>
-          </TabsList>
+                {/* Lab Test Selection - Searchable */}
+                <div className="dialog-form-field">
+                  <Label htmlFor="labTestId" className="dialog-label-standard">Lab Test *</Label>
+                  <div className="relative">
+                    <Input
+                      id="labTestId"
+                      placeholder="Search lab test by Display Test ID, name, or category..."
+                      value={labTestSearchTerm}
+                      onChange={(e) => {
+                        setLabTestSearchTerm(e.target.value);
+                        setShowLabTestList(true);
+                      }}
+                      onFocus={() => setShowLabTestList(true)}
+                      className="dialog-input-standard"
+                    />
+                    {showLabTestList && availableLabTests.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 dialog-dropdown-container shadow-lg max-h-60 overflow-y-auto">
+                        <div className="dialog-table-container">
+                          <table className="dialog-table">
+                            <thead>
+                              <tr className="dialog-table-header-row">
+                                <th className="dialog-table-header-cell">Display Test ID</th>
+                                <th className="dialog-table-header-cell">Test Name</th>
+                                <th className="dialog-table-header-cell">Category</th>
+                              </tr>
+                            </thead>
+                            <tbody className="dialog-table-body">
+                              {availableLabTests.filter((test: any) => {
+                                if (!labTestSearchTerm) return true;
+                                const searchLower = labTestSearchTerm.toLowerCase();
+                                const displayTestId = test.displayTestId || test.DisplayTestId || test.displayTestID || test.DisplayTestID || '';
+                                const testName = test.testName || test.TestName || test.labTestName || test.LabTestName || test.name || test.Name || '';
+                                const category = test.testCategory || test.TestCategory || test.category || test.Category || '';
+                                return displayTestId.toLowerCase().includes(searchLower) ||
+                                       testName.toLowerCase().includes(searchLower) ||
+                                       category.toLowerCase().includes(searchLower);
+                              }).map((test: any) => {
+                                const testId = test.labTestId || test.LabTestId || test.id || test.Id || '';
+                                const displayTestId = test.displayTestId || test.DisplayTestId || test.displayTestID || test.DisplayTestID || '';
+                                const testName = test.testName || test.TestName || test.labTestName || test.LabTestName || test.name || test.Name || '';
+                                const category = test.testCategory || test.TestCategory || test.category || test.Category || '';
+                                const isSelected = newLabOrderFormData.labTestId === String(testId);
+                                const displayText = `${displayTestId}, ${testName} (${category})`;
+                                return (
+                                  <tr
+                                    key={testId}
+                                    onClick={() => {
+                                      setNewLabOrderFormData({ ...newLabOrderFormData, labTestId: String(testId) });
+                                      setLabTestSearchTerm(displayText);
+                                      setShowLabTestList(false);
+                                    }}
+                                    className={`dialog-table-body-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
+                                  >
+                                    <td className="dialog-table-body-cell dialog-table-body-cell-primary font-mono">{displayTestId || '-'}</td>
+                                    <td className="dialog-table-body-cell dialog-table-body-cell-primary">{testName || '-'}</td>
+                                    <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{category || '-'}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-          <TabsContent value="all">
-            <TestsList
-              tests={filteredTests}
-              onSelectTest={setSelectedTest}
-              onEditTest={handleEditPatientLabTest}
-            />
-          </TabsContent>
-          <TabsContent value="pending">
-            <TestsList
-              tests={getTestsByStatus('Pending')}
-              onSelectTest={setSelectedTest}
-              onEditTest={handleEditPatientLabTest}
-            />
-          </TabsContent>
-          <TabsContent value="progress">
-            <TestsList
-              tests={[...getTestsByStatus('In Progress'), ...getTestsByStatus('Sample Collected')]}
-              onSelectTest={setSelectedTest}
-              onEditTest={handleEditPatientLabTest}
-            />
-          </TabsContent>
-          <TabsContent value="completed">
-            <TestsList
-              tests={[...getTestsByStatus('Completed'), ...getTestsByStatus('Reported')]}
-              onSelectTest={setSelectedTest}
-              onEditTest={handleEditPatientLabTest}
-            />
-          </TabsContent>
-        </Tabs>
-      )}
-        </div>
+                {/* Patient Type */}
+                <div className="dialog-form-field">
+                  <Label htmlFor="patientType" className="dialog-label-standard">Patient Type *</Label>
+                  <select
+                    id="patientType"
+                    className="dialog-select-standard"
+                    value={newLabOrderFormData.patientType}
+                    onChange={(e) => handlePatientTypeChange(e.target.value as 'IPD' | 'OPD' | 'Emergency' | 'Direct' | '')}
+                  >
+                    <option value="">Select Patient Type</option>
+                    <option value="OPD">OPD</option>
+                    <option value="IPD">IPD</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Direct">Direct</option>
+                  </select>
+                </div>
+
+                {/* Conditional Fields based on PatientType */}
+                {newLabOrderFormData.patientType === 'IPD' && (
+                  <div className="dialog-form-field">
+                    <Label htmlFor="roomAdmissionId" className="dialog-label-standard">Room Admission ID (BedNo_RoomAllocationDate) *</Label>
+                    <select
+                      id="roomAdmissionId"
+                      className="dialog-select-standard"
+                      value={newLabOrderFormData.roomAdmissionId}
+                      onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, roomAdmissionId: e.target.value })}
+                    >
+                      <option value="">Select Room Admission</option>
+                      {availableAdmissions.map((admission: any) => {
+                        const admissionId = admission.roomAdmissionId || admission.admissionId || admission.id || admission.RoomAdmissionId || '';
+                        
+                        // Extract room allocation date
+                        const roomAllocationDate = admission.roomAllocationDate || 
+                                                   admission.RoomAllocationDate || 
+                                                   admission.room_allocation_date ||
+                                                   admission.date ||
+                                                   admission.Date || '';
+                        
+                        // Format date: Extract YYYY-MM-DD from date string or Date object
+                        let formattedDate = '';
+                        if (roomAllocationDate) {
+                          try {
+                            if (typeof roomAllocationDate === 'string') {
+                              // If it's a string, extract date part (before 'T' if present)
+                              formattedDate = roomAllocationDate.split('T')[0];
+                            } else {
+                              // If it's a Date object, convert to ISO string and extract date part
+                              formattedDate = new Date(roomAllocationDate).toISOString().split('T')[0];
+                            }
+                          } catch {
+                            formattedDate = String(roomAllocationDate).split('T')[0] || 'N/A';
+                          }
+                        } else {
+                          formattedDate = 'N/A';
+                        }
+                        
+                        return (
+                          <option key={admissionId} value={admissionId}>
+                            {admissionId} ({formattedDate})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+                
+                {/* Conditional Fields based on PatientType - OPD */}
+                {newLabOrderFormData.patientType === 'OPD' && (
+                  <div className="dialog-form-field">
+                    <Label htmlFor="appointmentId" className="dialog-label-standard">Appointment ID (AppointmentDate) *</Label>
+                    <select
+                      id="appointmentId"
+                      className="dialog-select-standard"
+                      value={newLabOrderFormData.appointmentId}
+                      onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, appointmentId: e.target.value })}
+                    >
+                      <option value="">Select Appointment</option>
+                      {availableAppointments.map((appointment: any) => {
+                        const appointmentId = appointment.appointmentId || appointment.appointmentID || appointment.id || appointment.AppointmentId || appointment.AppointmentID || '';
+                        
+                        // Extract appointment date
+                        const appointmentDateTime = appointment.appointmentDateTime || 
+                                                     appointment.AppointmentDateTime || 
+                                                     appointment.appointmentDate ||
+                                                     appointment.AppointmentDate ||
+                                                     appointment.date ||
+                             appointment.Date || '';
+                        
+                        // Format date: Extract YYYY-MM-DD from date string or Date object
+                        let formattedDate = '';
+                        if (appointmentDateTime) {
+                          try {
+                            if (typeof appointmentDateTime === 'string') {
+                              formattedDate = appointmentDateTime.split('T')[0];
+                            } else {
+                              formattedDate = new Date(appointmentDateTime).toISOString().split('T')[0];
+                            }
+                          } catch {
+                            formattedDate = String(appointmentDateTime).split('T')[0] || 'N/A';
+                          }
+                        } else {
+                          formattedDate = 'N/A';
+                        }
+                        
+                        return (
+                          <option key={appointmentId} value={appointmentId}>
+                            {appointmentId} ({formattedDate})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+                
+                {/* Conditional Fields based on PatientType - Emergency */}
+                {newLabOrderFormData.patientType === 'Emergency' && (
+                  <div className="dialog-form-field">
+                    <Label htmlFor="emergencyBedSlotId" className="dialog-label-standard">Emergency Bed Slot ID (AllocationDate) *</Label>
+                    <select
+                      id="emergencyBedSlotId"
+                      className="dialog-select-standard"
+                      value={newLabOrderFormData.emergencyBedSlotId}
+                      onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, emergencyBedSlotId: e.target.value })}
+                    >
+                      <option value="">Select Emergency Bed Slot</option>
+                      {availableEmergencyBedSlots.map((slot: any) => {
+                        const slotId = slot.emergencyBedSlotId || slot.slotId || slot.id || slot.EmergencyBedSlotId || slot.SlotId || '';
+                        
+                        // Extract allocation date
+                        const allocationDate = slot.allocationDate || 
+                                                slot.AllocationDate || 
+                                                slot.allocatedDate ||
+                                                slot.AllocatedDate ||
+                                                slot.date ||
+                                                slot.Date || '';
+                        
+                        // Format date: Extract YYYY-MM-DD from date string or Date object
+                        let formattedDate = '';
+                        if (allocationDate) {
+                          try {
+                            if (typeof allocationDate === 'string') {
+                              formattedDate = allocationDate.split('T')[0];
+                            } else {
+                              formattedDate = new Date(allocationDate).toISOString().split('T')[0];
+                            }
+                          } catch {
+                            formattedDate = String(allocationDate).split('T')[0] || 'N/A';
+                          }
+                        } else {
+                          formattedDate = 'N/A';
+                        }
+                        
+                        return (
+                          <option key={slotId} value={slotId}>
+                            {slotId} ({formattedDate})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+
+                {/* Priority */}
+                <div className="dialog-form-field">
+                  <Label htmlFor="priority" className="dialog-label-standard">Priority *</Label>
+                  <select
+                    id="priority"
+                    className="dialog-select-standard"
+                    value={newLabOrderFormData.priority}
+                    onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, priority: e.target.value as 'Normal' | 'Urgent' })}
+                  >
+                    <option value="Normal">Normal</option>
+                    <option value="Urgent">Urgent</option>
+                  </select>
+                </div>
+
+                {/* Test Status */}
+                <div className="dialog-form-field">
+                  <Label htmlFor="testStatus" className="dialog-label-standard">TestStatus *</Label>
+                  <select
+                    id="testStatus"
+                    className="dialog-select-standard"
+                    value={newLabOrderFormData.testStatus}
+                    onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, testStatus: e.target.value as 'Pending' | 'InProgress' | 'Completed' })}
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="InProgress">InProgress</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+
+                {/* Lab Test Done */}
+                <div className="dialog-form-field">
+                  <Label htmlFor="labTestDone" className="dialog-label-standard">LabTestDone *</Label>
+                  <select
+                    id="labTestDone"
+                    className="dialog-select-standard"
+                    value={newLabOrderFormData.labTestDone}
+                    onChange={(e) => setNewLabOrderFormData({ ...newLabOrderFormData, labTestDone: e.target.value as 'Yes' | 'No' })}
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+
+                {/* Test Done Date */}
+                <div className="dialog-form-field">
+                  <Label htmlFor="testDoneDate" className="dialog-label-standard">TestDoneDate</Label>
+                  <ISTDatePicker
+                    id="testDoneDate"
+                    selected={newLabOrderTestDoneDate}
+                    onChange={(dateStr, date) => {
+                      setNewLabOrderTestDoneDate(date);
+                      setNewLabOrderFormData({ ...newLabOrderFormData, testDoneDate: dateStr || '' });
+                    }}
+                    dateFormat="dd-MM-yyyy"
+                    placeholderText="dd-mm-yyyy"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
+                    isClearable
+                    clearButtonTitle="Clear test done date"
+                  />
+                </div>
+
+                {/* Ordered By Doctor - Searchable */}
+                <div className="dialog-form-field">
+                  <Label htmlFor="orderedByDoctorId" className="dialog-label-standard">Ordered By Doctor *</Label>
+                  <div className="relative">
+                    <Input
+                      id="orderedByDoctorId"
+                      placeholder="Search doctor by name or ID..."
+                      value={doctorSearchTerm}
+                      onChange={(e) => {
+                        setDoctorSearchTerm(e.target.value);
+                        setShowDoctorList(true);
+                      }}
+                      onFocus={() => setShowDoctorList(true)}
+                      className="dialog-input-standard"
+                    />
+                    {showDoctorList && availableDoctors.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 dialog-dropdown-container shadow-lg max-h-60 overflow-y-auto">
+                        <div className="dialog-table-container">
+                          <table className="dialog-table">
+                            <thead>
+                              <tr className="dialog-table-header-row">
+                                <th className="dialog-table-header-cell">Name</th>
+                                <th className="dialog-table-header-cell">Specialty</th>
+                              </tr>
+                            </thead>
+                            <tbody className="dialog-table-body">
+                              {availableDoctors.filter((doctor: any) => {
+                                if (!doctorSearchTerm) return true;
+                                const searchLower = doctorSearchTerm.toLowerCase();
+                                // Use Doctor interface fields: id (number) and name (string)
+                                const doctorId = doctor.id || doctor.Id || 0;
+                                const doctorName = doctor.name || doctor.Name || '';
+                                const specialty = doctor.specialty || doctor.Specialty || '';
+                                // Convert doctorId to string for comparison
+                                const doctorIdStr = String(doctorId);
+                                return (
+                                  doctorIdStr.toLowerCase().includes(searchLower) ||
+                                  doctorName.toLowerCase().includes(searchLower) ||
+                                  specialty.toLowerCase().includes(searchLower)
+                                );
+                              }).map((doctor: any) => {
+                                // Use Doctor interface fields: id (number) and name (string)
+                                const doctorId = doctor.id || doctor.Id || 0;
+                                const doctorName = doctor.name || doctor.Name || '';
+                                const specialty = doctor.specialty || doctor.Specialty || '';
+                                const doctorIdStr = String(doctorId);
+                                const isSelected = newLabOrderFormData.orderedByDoctorId === doctorIdStr;
+                                return (
+                                  <tr
+                                    key={doctorId}
+                                    onClick={() => {
+                                      setNewLabOrderFormData({ ...newLabOrderFormData, orderedByDoctorId: doctorIdStr });
+                                      // Display only doctor name, not ID
+                                      setDoctorSearchTerm(doctorName || 'Unknown Doctor');
+                                      setShowDoctorList(false);
+                                    }}
+                                    className={`dialog-table-body-row ${isSelected ? 'dialog-dropdown-row-selected' : ''}`}
+                                  >
+                                    <td className="dialog-table-body-cell dialog-table-body-cell-primary">{doctorName || 'Unknown'}</td>
+                                    <td className="dialog-table-body-cell dialog-table-body-cell-secondary">{specialty || '-'}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* File Upload for ReportsUrl */}
+                <div className="dialog-form-field" style={{ gridColumn: '1 / -1', width: '100%' }}>
+                  <Label htmlFor="reportsUrl" className="dialog-label-standard">ReportsUrl (Optional)</Label>
+                  <Input
+                    id="reportsUrl"
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      setSelectedFiles(prev => [...prev, ...files]);
+                      e.target.value = '';
+                    }}
+                    className="dialog-input-standard w-full"
+                  />
+                  {selectedFiles.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {selectedFiles.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between text-sm text-gray-600 bg-blue-50 p-2 rounded">
+                          <span>{file.name}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                            }}
+                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+                </div>
+              </div>
+              <div className="dialog-footer-standard flex justify-end gap-2 px-6 py-3 flex-shrink-0 border-t">
+                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="dialog-footer-button">
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveNewLabOrder} disabled={newLabOrderSubmitting} className="dialog-footer-button">
+                  {newLabOrderSubmitting ? 'Saving...' : 'Save Lab Order'}
+                </Button>
+              </div>            
+        </CustomResizableDialog>
 
       {/* Test Details Dialog */}
       <Dialog open={!!selectedTest} onOpenChange={() => setSelectedTest(null)}>
@@ -2647,7 +2793,7 @@ export function Laboratory() {
             </DialogHeader>
             <div className="dialog-body-content-wrapper">
             <div className="space-y-6 py-4">
-              <Tabs value={activeReportTab} onValueChange={(value) => setActiveReportTab(value as 'daily' | 'weekly')}>
+              <Tabs value={activeReportTab} onValueChange={(value: string) => setActiveReportTab(value as 'daily' | 'weekly')}>
                 <TabsList>
                   <TabsTrigger value="daily">Daily Report</TabsTrigger>
                   <TabsTrigger value="weekly">Weekly Report</TabsTrigger>
@@ -2930,7 +3076,7 @@ export function Laboratory() {
                   <div>
                     <Label className="text-sm font-semibold text-gray-700">TestDoneDateTime</Label>
                     <p className="text-gray-900">
-                      {viewingPatientLabTest.testDoneDateTime ? new Date(viewingPatientLabTest.testDoneDateTime).toLocaleString() : 'N/A'}
+                      {formatDateTimeString(viewingPatientLabTest.testDoneDateTime)}
                     </p>
                   </div>
                   <div>
@@ -2948,7 +3094,7 @@ export function Laboratory() {
                   <div>
                     <Label className="text-sm font-semibold text-gray-700">CreatedDate</Label>
                     <p className="text-gray-900">
-                      {viewingPatientLabTest.createdDate ? new Date(viewingPatientLabTest.createdDate).toLocaleDateString() : 'N/A'}
+                      {formatDateString(viewingPatientLabTest.createdDate)}
                     </p>
                   </div>
                 </div>
@@ -2973,7 +3119,7 @@ export function Laboratory() {
             setEditFormData(null);
             setEditSelectedFiles([]);
             setEditUploadedDocumentUrls([]);
-            setEditTestDoneDateTime(null);
+            setEditTestDoneDate(null);
           }
         }}
         className="p-0 gap-0"
@@ -3009,6 +3155,16 @@ export function Laboratory() {
                     <Input
                       id="editTestName"
                       value={editFormData?.testName ? String(editFormData.testName) : 'N/A'}
+                      disabled
+                      className="dialog-input-standard"
+                      style={{ fontWeight: 'normal' }}
+                    />
+                  </div>
+                  <div className="dialog-field-single-column">
+                    <Label htmlFor="editOrderedBy" className="dialog-label-standard">Ordered By Doctor</Label>
+                    <Input
+                      id="editOrderedBy"
+                      value={editFormData?.orderedBy ? String(editFormData.orderedBy) : 'N/A'}
                       disabled
                       className="dialog-input-standard"
                       style={{ fontWeight: 'normal' }}
@@ -3071,19 +3227,15 @@ export function Laboratory() {
                     </select>
                   </div>
                   <div className="dialog-field-single-column">
-                    <Label htmlFor="editTestDoneDateTime" className="dialog-label-standard">TestDoneDateTime</Label>
+                    <Label htmlFor="editTestDoneDate" className="dialog-label-standard">TestDoneDate</Label>
                     <ISTDatePicker
-                      id="editTestDoneDateTime"
-                      selected={editTestDoneDateTime}
+                      id="editTestDoneDate"
+                      selected={editTestDoneDate}
                       onChange={(dateStr, date) => {
-                        setEditTestDoneDateTime(date);
+                        setEditTestDoneDate(date);
                       }}
-                      showTimeSelect
-                      timeIntervals={1}
-                      timeCaption="Time"
-                      timeFormat="hh:mm aa"
-                      dateFormat="dd-MM-yyyy hh:mm aa"
-                      placeholderText="dd-mm-yyyy HH:MM AM/PM"
+                      dateFormat="dd-MM-yyyy"
+                      placeholderText="dd-mm-yyyy"
                       className="dialog-input-standard w-full"
                       wrapperClassName="w-full"
                       showYearDropdown
@@ -3176,7 +3328,7 @@ export function Laboratory() {
                         <Switch
                           id="edit-status"
                           checked={editFormData.status === 'Active' || editFormData.status === 'active' || editFormData.status === undefined}
-                          onCheckedChange={(checked) => setEditFormData({ ...editFormData, status: checked ? 'Active' : 'Inactive' })}
+                          onCheckedChange={(checked: boolean) => setEditFormData({ ...editFormData, status: checked ? 'Active' : 'Inactive' })}
                           className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
                           style={{
                             width: '2.5rem',
@@ -3208,27 +3360,27 @@ export function Laboratory() {
             </Button>
           </div>
         </div>
+        
       </CustomResizableDialog>
-      </div>
-      </div>
     </div>
-  );
+  )
 }
-
+      
 function TestsList({ 
   tests, 
   onSelectTest,
   onEditTest
-}: { 
-  tests: LabTest[]; 
+}: {
+  tests: LabTest[];
   onSelectTest: (test: LabTest) => void;
   onEditTest: (test: any) => void;
 }) {
   return (
     <Card className="mb-4 bg-white border border-gray-200 shadow-sm rounded-lg">
       <CardContent className="p-0">
-        <div className="overflow-x-auto border border-gray-200 rounded">
-          <table className="w-full">
+        <div className="overflow-x-auto overflow-y-visible border border-gray-200 rounded" style={{ maxWidth: '100%', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ minWidth: 'max-content', paddingBottom: '4px' }}>
+            <table className="w-full" style={{ minWidth: 'max-content' }}>
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="border-b border-gray-200">
                 <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">PatientNo</th>
@@ -3288,7 +3440,7 @@ function TestsList({
                         </span>
                       </td>
                       <td className="py-4 px-6 text-gray-600 whitespace-nowrap">
-                        {test.testDoneDateTime ? formatDateTimeIST(test.testDoneDateTime) : 'N/A'}
+                        {test.testDoneDateTime ? formatDateTimeString(test.testDoneDateTime) : 'N/A'}
                       </td>
                       <td className="py-4 px-6 whitespace-nowrap">
                         <Button
@@ -3306,6 +3458,7 @@ function TestsList({
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -1312,15 +1312,21 @@ export function PatientRegistration() {
       </div>
 
       {/* Edit Patient Details Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <ResizableDialogContent className="p-0 gap-0 large-dialog dialog-content-standard">
-          <div className="dialog-scrollable-wrapper dialog-content-scrollable">
-            <DialogHeader className="dialog-header-standard">
-              <DialogTitle className="dialog-title-standard flex items-center gap-2">
-                <Pencil className="size-5" />
-                Edit Patient Details
-              </DialogTitle>
-            </DialogHeader>
+      <CustomResizableDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        className="p-0 gap-0"
+        initialWidth={550}
+        maxWidth={typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : 1800}
+      >
+        <CustomResizableDialogClose onClick={() => setIsEditDialogOpen(false)} />
+        <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
+          <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
+            <CustomResizableDialogTitle className="dialog-title-standard">
+              <Pencil className="size-5 mr-2" />
+              Edit Patient Details
+            </CustomResizableDialogTitle>
+          </CustomResizableDialogHeader>
             <div className="dialog-body-content-wrapper">
               {loadingEditPatient ? (
                 <div className="flex items-center justify-center py-12">
@@ -1594,19 +1600,19 @@ export function PatientRegistration() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex justify-end gap-2 mt-4">
-                    <Button 
+                  <div className="dialog-footer-buttons">
+                    <Button
                       type="button"
-                      variant="outline" 
+                      variant="outline"
                       onClick={handleCancelEdit}
                       disabled={updatingPatient}
                       className="dialog-footer-button"
                     >
                       Cancel
                     </Button>
-                    <Button 
+                    <Button
                       type="submit"
-                      disabled={updatingPatient} 
+                      disabled={updatingPatient}
                       className="dialog-footer-button"
                     >
                       {updatingPatient ? 'Updating...' : 'Update Patient'}
@@ -1619,9 +1625,8 @@ export function PatientRegistration() {
                 </div>
               )}
             </div>
-          </div>
-        </ResizableDialogContent>
-      </Dialog>
+        </div>
+      </CustomResizableDialog>
     </>
   );
 }

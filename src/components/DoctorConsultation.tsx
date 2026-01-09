@@ -743,10 +743,12 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 const { paginated, totalPages, startIndex, endIndex } = paginateAppointments(allAppts);
                 return (
                   <>
-                    <AppointmentList 
+                    <AppointmentList
                       appointments={paginated}
-                      doctors={appointmentDoctors} 
+                      doctors={appointmentDoctors}
                       patients={patients}
+                      formatDateToDisplay={formatDateToDisplay}
+                      formatTimeToDisplay={formatTimeToDisplay}
                       onManage={(appointment) => {
                   if (onManageAppointment && appointment.id) {
                     onManageAppointment(appointment.id);
@@ -836,10 +838,12 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 const { paginated, totalPages, startIndex, endIndex } = paginateAppointments(waitingAppts);
                 return (
                   <>
-                    <AppointmentList 
-                      appointments={paginated} 
-                doctors={appointmentDoctors} 
+                    <AppointmentList
+                      appointments={paginated}
+                doctors={appointmentDoctors}
                 patients={patients}
+                formatDateToDisplay={formatDateToDisplay}
+                formatTimeToDisplay={formatTimeToDisplay}
                 onManage={(appointment) => {
                   if (onManageAppointment && appointment.id) {
                     onManageAppointment(appointment.id);
@@ -928,10 +932,12 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 const { paginated, totalPages, startIndex, endIndex } = paginateAppointments(consultingAppts);
                 return (
                   <>
-                    <AppointmentList 
-                      appointments={paginated} 
-                doctors={appointmentDoctors} 
+                    <AppointmentList
+                      appointments={paginated}
+                doctors={appointmentDoctors}
                 patients={patients}
+                formatDateToDisplay={formatDateToDisplay}
+                formatTimeToDisplay={formatTimeToDisplay}
                 onManage={(appointment) => {
                   if (onManageAppointment && appointment.id) {
                     onManageAppointment(appointment.id);
@@ -1020,10 +1026,12 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                 const { paginated, totalPages, startIndex, endIndex } = paginateAppointments(completedAppts);
                 return (
                   <>
-                    <AppointmentList 
-                      appointments={paginated} 
-                doctors={appointmentDoctors} 
+                    <AppointmentList
+                      appointments={paginated}
+                doctors={appointmentDoctors}
                 patients={patients}
+                formatDateToDisplay={formatDateToDisplay}
+                formatTimeToDisplay={formatTimeToDisplay}
                 onManage={(appointment) => {
                   if (onManageAppointment && appointment.id) {
                     onManageAppointment(appointment.id);
@@ -1619,9 +1627,9 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                     <div className="space-y-4 py-4">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-semibold text-gray-700">Lab Tests for Appointment</h3>
-                        <Button 
+                        <Button
                           onClick={() => setIsAddLabTestDialogOpen(true)}
-                          className="flex items-center gap-2"
+                          className="dialog-manage-button flex items-center gap-2"
                         >
                           <Plus className="size-4" />
                           Add Lab Test
@@ -1798,7 +1806,7 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                           appointmentTime: editFormData.appointmentTime,
                           appointmentStatus: editFormData.appointmentStatus,
                           consultationCharge: editFormData.consultationCharge,
-                          diagnosis: editFormData.diagnosis || undefined,
+                          diagnosis: editFormData.diagnosis.trim() || undefined,
                           followUpDetails: editFormData.followUpDetails || undefined,
                           prescriptionsUrl: editFormData.prescriptionsUrl || undefined,
                           toBeAdmitted: editFormData.toBeAdmitted,
@@ -2091,7 +2099,7 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
                           <Switch
                             id="manage-status"
                             checked={manageLabTestFormData.status === 'Active' || manageLabTestFormData.status === undefined}
-                            onCheckedChange={(checked) => setManageLabTestFormData({ ...manageLabTestFormData, status: checked ? 'Active' : 'Inactive' })}
+                            onCheckedChange={(checked: boolean) => setManageLabTestFormData({ ...manageLabTestFormData, status: checked ? 'Active' : 'Inactive' })}
                             className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
                             style={{
                               width: '2.5rem',
@@ -2224,15 +2232,19 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
   );
 }
 
-function AppointmentList({ 
-  appointments, 
-  doctors, 
+function AppointmentList({
+  appointments,
+  doctors,
   patients,
+  formatDateToDisplay,
+  formatTimeToDisplay,
   onManage
-}: { 
-  appointments: PatientAppointment[]; 
-  doctors: Doctor[]; 
+}: {
+  appointments: PatientAppointment[];
+  doctors: Doctor[];
   patients: Patient[];
+  formatDateToDisplay: (dateStr: string) => string;
+  formatTimeToDisplay: (timeStr: string) => string;
   onManage: (appointment: PatientAppointment) => void;
 }) {
   const getStatusBadge = (status: PatientAppointment['appointmentStatus']) => {
@@ -2255,11 +2267,13 @@ function AppointmentList({
           <table className="w-full table-fixed">
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Patient ID</th>
-                <th className="text-left py-3 px-3 text-gray-700 bg-white">Patient</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Token #</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white">Patient Name</th>
                 <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Phone</th>
                 <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Doctor</th>
                 <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Status</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Appointment Date</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Time</th>
                 <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Admission</th>
                 <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Actions</th>
               </tr>
@@ -2267,7 +2281,7 @@ function AppointmentList({
             <tbody>
               {appointments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-8 text-gray-500">
+                  <td colSpan={9} className="text-center py-8 text-gray-500">
                     No appointments found
                   </td>
                 </tr>
@@ -2300,11 +2314,13 @@ function AppointmentList({
                     
                     return (
                       <tr key={appointment.id} className={`border-b border-gray-100 hover:bg-gray-50 ${isInactive ? 'opacity-50 bg-gray-50' : ''}`}>
-                        <td className={`py-3 px-3 font-mono font-medium whitespace-nowrap ${isInactive ? 'text-gray-400' : 'text-gray-900'}`}>{patientId}</td>
+                        <td className={`py-3 px-3 whitespace-nowrap ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{appointment.tokenNo}</td>
                         <td className={`py-3 px-3 break-words min-w-0 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{patientName}</td>
                         <td className={`py-3 px-3 whitespace-nowrap ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{patientPhone}</td>
                         <td className={`py-3 px-3 whitespace-nowrap ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{doctorName}</td>
                         <td className={`py-3 px-3 ${isInactive ? 'opacity-50' : ''}`}>{getStatusBadge(appointment.appointmentStatus)}</td>
+                        <td className={`py-3 px-3 whitespace-nowrap ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{formatDateToDisplay(appointment.appointmentDate)}</td>
+                        <td className={`py-3 px-3 whitespace-nowrap ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{formatTimeToDisplay(appointment.appointmentTime)}</td>
                         <td className="py-3 px-3">
                           {appointment.toBeAdmitted ? (
                             <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300">

@@ -118,7 +118,7 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
           if (prescriptionsUrlValue) {
             // If it's a comma-separated list of URLs, split them
             if (prescriptionsUrlValue.includes(',')) {
-              setUploadedDocumentUrls(prescriptionsUrlValue.split(',').map(u => u.trim()).filter(u => u));
+              setUploadedDocumentUrls(prescriptionsUrlValue.split(',').map((u: string) => u.trim()).filter((u: string) => u));
             } else if (prescriptionsUrlValue) {
               setUploadedDocumentUrls([prescriptionsUrlValue]);
             }
@@ -183,7 +183,7 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
       }
 
       try {
-        const patient = await patientsApi.getById(patientId);
+        const patient: any = await patientsApi.getById(patientId);
         
         // Extract token number from appointment
         const tokenNumber = appointmentData.tokenNo || appointmentData.TokenNo || 'N/A';
@@ -282,7 +282,7 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
         const queuePatients: QueuePatient[] = await Promise.all(
           sortedWaitingAppointments.map(async (appointment) => {
             try {
-              const patient = await patientsApi.getById(appointment.patientId);
+              const patient: any = await patientsApi.getById(appointment.patientId);
               const tokenNumber = appointment.tokenNo || 'N/A';
               const patientName = patient.PatientName || patient.patientName || patient.name || 'N/A';
               const chiefComplaint = patient.ChiefComplaint || patient.chiefComplaint || 'N/A';
@@ -402,7 +402,11 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
         
         console.log('ManageConsultation - Mapped Prescribed Lab Tests:', prescribedTests);
         // Store prescribed tests separately (not in labTests array)
-        setPrescribedLabTests(prescribedTests.filter((test: any) => test.patientLabTestsId !== undefined));
+        const testsWithIds = prescribedTests.filter(
+          (test: any): test is { testName: string; labTestId: number; patientLabTestsId: number } =>
+            test.patientLabTestsId !== undefined
+        );
+        setPrescribedLabTests(testsWithIds);
       } catch (err) {
         console.error('Failed to fetch prescribed lab tests:', err);
         setPrescribedLabTests([]);
@@ -622,7 +626,7 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
     try {
       await patientAppointmentsApi.update({
         id: appointmentId,
-        diagnosis: diagnosis || undefined,
+        diagnosis: diagnosis.trim(),
         consultationCharge: consultationCharge || undefined,
         followUpDetails: followUp || undefined,
         prescriptionsUrl: finalPrescriptionsUrl || undefined,

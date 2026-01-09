@@ -258,7 +258,7 @@ export function Emergency() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
-  const [addEmergencyAdmissionDate, setAddEmergencyAdmissionDate] = useState<Date | null>(null);
+  const [addEmergencyAdmissionDateTime, setAddEmergencyAdmissionDateTime] = useState<Date | null>(null);
   const [editEmergencyAdmissionDate, setEditEmergencyAdmissionDate] = useState<Date | null>(null);
   const [editEmergencyAdmissionDateTime, setEditEmergencyAdmissionDateTime] = useState<Date | null>(null);
   const [editEmergencyAdmissionDateTimeDisplay, setEditEmergencyAdmissionDateTimeDisplay] = useState('');
@@ -635,9 +635,9 @@ export function Emergency() {
   useEffect(() => {
     if (emergencyFormData.emergencyAdmissionDate) {
       const dateObj = getDateFromDDMMYYYY(emergencyFormData.emergencyAdmissionDate);
-      setAddEmergencyAdmissionDate(dateObj || null);
+      setAddEmergencyAdmissionDateTime(dateObj || null);
     } else {
-      setAddEmergencyAdmissionDate(null);
+      setAddEmergencyAdmissionDateTime(null);
     }
   }, [emergencyFormData.emergencyAdmissionDate, getDateFromDDMMYYYY]);
 
@@ -651,15 +651,17 @@ export function Emergency() {
     }
   }, [editFormData.emergencyAdmissionDate, getDateFromDDMMYYYY]);
 
-  // Set default date when Add dialog opens (using IST)
+  // Set default date/time when Add dialog opens (using current date/time)
   useEffect(() => {
     if (isAddDialogOpen) {
-      // Use IST for today's date
-      const todayIST = getTodayIST();
-      const [year, month, day] = todayIST.split('-');
+      // Set current date and time
+      const now = new Date();
+      setAddEmergencyAdmissionDateTime(now);
+      // Also set in form data for compatibility
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
       const formattedDate = `${day}-${month}-${year}`;
-      const todayDate = convertToIST(new Date());
-      setAddEmergencyAdmissionDate(todayDate);
       setEmergencyFormData(prev => ({
         ...prev,
         emergencyAdmissionDate: formattedDate,
@@ -854,44 +856,66 @@ export function Emergency() {
       }
       
       // Set datetime value for edit dialog DatePicker
-      // Try to get datetime from API response, or use date with default time
+      // Parse date/time from backend string in format "dd-mm-yyyy hh:mm AM/PM"
       let dateTimeValue: Date | null = null;
       if (fullAdmission.emergencyAdmissionDate) {
         try {
-          // Check if the date string includes time
-          const originalDate = typeof fullAdmission.emergencyAdmissionDate === 'string' 
+          const dateStr = typeof fullAdmission.emergencyAdmissionDate === 'string' 
             ? fullAdmission.emergencyAdmissionDate 
-            : new Date(fullAdmission.emergencyAdmissionDate).toISOString();
+            : String(fullAdmission.emergencyAdmissionDate);
           
-          // If it's a full datetime string, use it; otherwise append default time
-          if (originalDate.includes('T') || originalDate.includes(' ')) {
-            // Has time component
-            const dateObj = new Date(originalDate);
-            if (!isNaN(dateObj.getTime())) {
-              // Convert to IST for DatePicker
-              dateTimeValue = convertToIST(dateObj);
+          // Try to parse "dd-mm-yyyy hh:mm AM/PM" format
+          const dateTimeRegex = /^(\d{2})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i;
+          const match = dateStr.match(dateTimeRegex);
+          
+          if (match) {
+            const [, day, month, year, hourStr, minute, ampm] = match;
+            let hours = parseInt(hourStr, 10);
+            if (ampm.toUpperCase() === 'PM' && hours !== 12) {
+              hours += 12;
+            } else if (ampm.toUpperCase() === 'AM' && hours === 12) {
+              hours = 0;
             }
+            dateTimeValue = new Date(
+              parseInt(year, 10),
+              parseInt(month, 10) - 1,
+              parseInt(day, 10),
+              hours,
+              parseInt(minute, 10)
+            );
           } else {
-            // Only date, append default time (00:00)
-            const dateObj = new Date(originalDate);
+            // Fallback: try standard Date parsing
+            const dateObj = new Date(dateStr);
             if (!isNaN(dateObj.getTime())) {
-              const istDate = convertToIST(dateObj);
-              // Set time to 00:00:00
-              istDate.setUTCHours(0, 0, 0, 0);
-              dateTimeValue = istDate;
+              dateTimeValue = dateObj;
+            } else {
+              // Fallback to current date/time if parsing fails
+              dateTimeValue = new Date();
             }
           }
         } catch {
           // Fallback to current date/time
-          dateTimeValue = getCurrentIST();
+          dateTimeValue = new Date();
         }
       } else {
         // No date, use current date/time
-        dateTimeValue = getCurrentIST();
+        dateTimeValue = new Date();
       }
       setEditEmergencyAdmissionDateTime(dateTimeValue);
-      // Format date/time for display in custom format
-      setEditEmergencyAdmissionDateTimeDisplay(formatDateTimeForInput(dateTimeValue || fullAdmission.emergencyAdmissionDate));
+      // Format date/time for display
+      if (dateTimeValue) {
+        const day = String(dateTimeValue.getDate()).padStart(2, '0');
+        const month = String(dateTimeValue.getMonth() + 1).padStart(2, '0');
+        const year = dateTimeValue.getFullYear();
+        const hours = dateTimeValue.getHours();
+        const minutes = String(dateTimeValue.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const hours12 = hours % 12 || 12;
+        const hoursStr = String(hours12).padStart(2, '0');
+        setEditEmergencyAdmissionDateTimeDisplay(`${day}-${month}-${year}, ${hoursStr}:${minutes} ${ampm}`);
+      } else {
+        setEditEmergencyAdmissionDateTimeDisplay('');
+      }
       
       // Fetch vitals for this admission
       fetchVitals(fullAdmission.emergencyAdmissionId);
@@ -1240,27 +1264,29 @@ export function Emergency() {
                   </div>
 
                   <div className="dialog-form-field">
-                    <Label htmlFor="add-emergencyAdmissionDate" className="dialog-label-standard">Emergency Admission Date *</Label>
-                    <ISTDatePicker
-                      id="add-emergencyAdmissionDate"
-                      selected={emergencyFormData.emergencyAdmissionDate ? (() => {
-                        // Convert DD-MM-YYYY to YYYY-MM-DD for ISTDatePicker
-                        const [day, month, year] = emergencyFormData.emergencyAdmissionDate.split('-');
-                        return `${year}-${month}-${day}`;
-                      })() : null}
-                      onChange={(dateStr, date) => {
-                        setAddEmergencyAdmissionDate(date);
-                        // Convert YYYY-MM-DD to DD-MM-YYYY for form data
-                        if (dateStr) {
-                          const [year, month, day] = dateStr.split('-');
-                          const formattedDate = `${day}-${month}-${year}`;
-                          setEmergencyFormData({ ...emergencyFormData, emergencyAdmissionDate: formattedDate });
+                    <Label htmlFor="add-emergencyAdmissionDateTime" className="dialog-label-standard">Emergency Admission Date & Time *</Label>
+                    <DatePicker
+                      id="add-emergencyAdmissionDateTime"
+                      selected={addEmergencyAdmissionDateTime}
+                      onChange={(date: Date | null) => {
+                        setAddEmergencyAdmissionDateTime(date);
+                        if (date) {
+                          // Also store in DD-MM-YYYY format for display compatibility
+                          const day = String(date.getDate()).padStart(2, '0');
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const year = date.getFullYear();
+                          const displayDate = `${day}-${month}-${year}`;
+                          setEmergencyFormData({ ...emergencyFormData, emergencyAdmissionDate: displayDate });
                         } else {
                           setEmergencyFormData({ ...emergencyFormData, emergencyAdmissionDate: '' });
                         }
                       }}
-                      dateFormat="dd-MM-yyyy"
-                      placeholderText="dd-mm-yyyy"
+                      showTimeSelect
+                      timeIntervals={1}
+                      timeCaption="Time"
+                      timeFormat="hh:mm aa"
+                      dateFormat="dd-MM-yyyy hh:mm aa"
+                      placeholderText="dd-mm-yyyy hh:mm AM/PM"
                       className="dialog-input-standard w-full"
                       wrapperClassName="w-full"
                       showYearDropdown
@@ -1268,7 +1294,9 @@ export function Emergency() {
                       dropdownMode="select"
                       yearDropdownItemNumber={100}
                       scrollableYearDropdown
+                      isClearable
                     />
+                    <p className="text-xs text-gray-500 mt-1">Select date and time for emergency admission</p>
                   </div>
 
                   <div className="dialog-form-field">
@@ -1466,20 +1494,9 @@ export function Emergency() {
                           setSubmitError('Please select an emergency bed');
                           return;
                         }
-                        // Validate date format DD-MM-YYYY
-                        const dateRegex = /^(\d{2})-(\d{2})-(\d{4})$/;
-                        if (!emergencyFormData.emergencyAdmissionDate || !dateRegex.test(emergencyFormData.emergencyAdmissionDate)) {
-                          setSubmitError('Please enter a valid emergency admission date in DD-MM-YYYY format');
-                          return;
-                        }
-                        // Validate the date is actually valid
-                        const [, day, month, year] = emergencyFormData.emergencyAdmissionDate.match(dateRegex)!;
-                        const dayNum = parseInt(day, 10);
-                        const monthNum = parseInt(month, 10);
-                        const yearNum = parseInt(year, 10);
-                        const date = new Date(yearNum, monthNum - 1, dayNum);
-                        if (date.getDate() !== dayNum || date.getMonth() !== monthNum - 1 || date.getFullYear() !== yearNum) {
-                          setSubmitError('Please enter a valid emergency admission date');
+                        // Validate date/time is selected
+                        if (!addEmergencyAdmissionDateTime) {
+                          setSubmitError('Please select emergency admission date and time');
                           return;
                         }
 
@@ -1494,20 +1511,23 @@ export function Emergency() {
                           const transferToOT = emergencyFormData.transferToIPDOTICU && emergencyFormData.transferTo === 'OT' ? 'Yes' : 'No';
                           const transferToICU = emergencyFormData.transferToIPDOTICU && emergencyFormData.transferTo === 'ICU' ? 'Yes' : 'No';
 
-                          // Convert date from DD-MM-YYYY to YYYY-MM-DD for API
-                          let apiDate = emergencyFormData.emergencyAdmissionDate;
-                          const dateRegex = /^(\d{2})-(\d{2})-(\d{4})$/;
-                          if (dateRegex.test(apiDate)) {
-                            const [, day, month, year] = apiDate.match(dateRegex)!;
-                            apiDate = `${year}-${month}-${day}`;
-                          }
+                          // Format date/time as dd-mm-yyyy hh:mm AM/PM for API
+                          const day = String(addEmergencyAdmissionDateTime.getDate()).padStart(2, '0');
+                          const month = String(addEmergencyAdmissionDateTime.getMonth() + 1).padStart(2, '0');
+                          const year = addEmergencyAdmissionDateTime.getFullYear();
+                          const hours = addEmergencyAdmissionDateTime.getHours();
+                          const minutes = String(addEmergencyAdmissionDateTime.getMinutes()).padStart(2, '0');
+                          const ampm = hours >= 12 ? 'PM' : 'AM';
+                          const hours12 = hours % 12 || 12;
+                          const hoursStr = String(hours12).padStart(2, '0');
+                          const apiDateTime = `${day}-${month}-${year} ${hoursStr}:${minutes} ${ampm}`;
 
                           // Prepare the DTO
                           const createDto: CreateEmergencyAdmissionDto = {
                             doctorId: parseInt(emergencyFormData.doctorId),
                             patientId: emergencyFormData.patientId,
                             emergencyBedId: parseInt(emergencyFormData.emergencyBedId),
-                            emergencyAdmissionDate: apiDate,
+                            emergencyAdmissionDate: apiDateTime,
                             emergencyStatus: emergencyFormData.emergencyStatus,
                             numberOfDays: emergencyFormData.numberOfDays || null,
                             diagnosis: emergencyFormData.diagnosis || null,
@@ -1563,6 +1583,7 @@ export function Emergency() {
                               transferDetails: '',
                               status: 'Active' as EmergencyAdmission['status'],
                             });
+                            setAddEmergencyAdmissionDateTime(null);
                           }, 1500);
                         } catch (error) {
                           console.error('Error creating emergency admission:', error);
@@ -2136,30 +2157,47 @@ export function Emergency() {
                 </div>
 
                 <div className="dialog-form-field">
-                  <Label htmlFor="edit-emergencyAdmissionDate" className="dialog-label-standard">Emergency Admission Date & Time *</Label>
-                  <Input
-                    id="edit-emergencyAdmissionDate"
-                    type="text"
-                    value={editEmergencyAdmissionDateTimeDisplay}
-                    onChange={(e) => {
-                      setEditEmergencyAdmissionDateTimeDisplay(e.target.value);
-                      const parsed = parseDateTimeFromInput(e.target.value);
-                      if (parsed) {
-                        const parsedDate = new Date(parsed);
-                        setEditEmergencyAdmissionDateTime(parsedDate);
-                        const formattedDate = getDDMMYYYYFromDate(parsedDate);
-                        setEditFormData({ ...editFormData, emergencyAdmissionDate: formattedDate });
-                      } else if (!e.target.value) {
+                  <Label htmlFor="edit-emergencyAdmissionDateTime" className="dialog-label-standard">Emergency Admission Date & Time *</Label>
+                  <DatePicker
+                    id="edit-emergencyAdmissionDateTime"
+                    selected={editEmergencyAdmissionDateTime}
+                    onChange={(date: Date | null) => {
+                      setEditEmergencyAdmissionDateTime(date);
+                      if (date) {
+                        // Also store in DD-MM-YYYY format for display compatibility
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const year = date.getFullYear();
+                        const hours = date.getHours();
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const ampm = hours >= 12 ? 'PM' : 'AM';
+                        const hours12 = hours % 12 || 12;
+                        const hoursStr = String(hours12).padStart(2, '0');
+                        const displayDate = `${day}-${month}-${year}`;
+                        setEditFormData({ ...editFormData, emergencyAdmissionDate: displayDate });
+                        setEditEmergencyAdmissionDateTimeDisplay(`${day}-${month}-${year}, ${hoursStr}:${minutes} ${ampm}`);
+                      } else {
                         setEditEmergencyAdmissionDateTime(null);
                         setEditEmergencyAdmissionDateTimeDisplay('');
                         setEditFormData({ ...editFormData, emergencyAdmissionDate: '' });
                       }
                     }}
-                    placeholder="dd-mm-yyyy, hh:mm"
-                    className="dialog-input-standard"
-                    required
+                    showTimeSelect
+                    timeIntervals={1}
+                    timeCaption="Time"
+                    timeFormat="hh:mm aa"
+                    dateFormat="dd-MM-yyyy hh:mm aa"
+                    placeholderText="dd-mm-yyyy hh:mm AM/PM"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
+                    isClearable
                   />
-                  <p className="text-xs text-gray-500 mt-1">Format: dd-mm-yyyy, hh:mm (24-hour format, IST)</p>
+                  <p className="text-xs text-gray-500 mt-1">Select date and time for emergency admission</p>
                 </div>
 
                 <div className="dialog-form-field">
@@ -2426,18 +2464,8 @@ export function Emergency() {
                         return;
                       }
                       // Validate datetime
-                      if (!editEmergencyAdmissionDateTimeDisplay) {
-                        setUpdateError('Please enter a valid emergency admission date and time');
-                        return;
-                      }
-                      const parsedDateTime = parseDateTimeFromInput(editEmergencyAdmissionDateTimeDisplay);
-                      if (!parsedDateTime) {
-                        setUpdateError('Please enter a valid emergency admission date and time in format: dd-mm-yyyy, hh:mm');
-                        return;
-                      }
-                      const dateTimeObj = new Date(parsedDateTime);
-                      if (isNaN(dateTimeObj.getTime())) {
-                        setUpdateError('Please enter a valid emergency admission date and time');
+                      if (!editEmergencyAdmissionDateTime) {
+                        setUpdateError('Please select emergency admission date and time');
                         return;
                       }
 
@@ -2451,37 +2479,23 @@ export function Emergency() {
                         const transferToOT = editFormData.transferToIPDOTICU && editFormData.transferTo === 'OT' ? 'Yes' : 'No';
                         const transferToICU = editFormData.transferToIPDOTICU && editFormData.transferTo === 'ICU' ? 'Yes' : 'No';
 
-                        // Convert custom format (dd-mm-yyyy, hh:mm) to API format (YYYY-MM-DD HH:MM:SS)
-                        let apiDate = '';
-                        if (parsedDateTime) {
-                          const dateTimeObj = new Date(parsedDateTime);
-                          if (!isNaN(dateTimeObj.getTime())) {
-                            // Convert to IST and format as YYYY-MM-DD HH:MM:SS
-                            const istDate = convertToIST(dateTimeObj);
-                            const year = istDate.getUTCFullYear();
-                            const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-                            const day = String(istDate.getUTCDate()).padStart(2, '0');
-                            const hours = String(istDate.getUTCHours()).padStart(2, '0');
-                            const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
-                            const seconds = String(istDate.getUTCSeconds()).padStart(2, '0');
-                            apiDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-                          }
-                        }
-                        // Fallback to date-only format if datetime conversion failed
-                        if (!apiDate) {
-                          const dateRegex = /^(\d{2})-(\d{2})-(\d{4})$/;
-                          if (editFormData.emergencyAdmissionDate && dateRegex.test(editFormData.emergencyAdmissionDate)) {
-                            const [, day, month, year] = editFormData.emergencyAdmissionDate.match(dateRegex)!;
-                            apiDate = `${year}-${month}-${day}`;
-                          }
-                        }
+                        // Format date/time as dd-mm-yyyy hh:mm AM/PM for API
+                        const day = String(editEmergencyAdmissionDateTime.getDate()).padStart(2, '0');
+                        const month = String(editEmergencyAdmissionDateTime.getMonth() + 1).padStart(2, '0');
+                        const year = editEmergencyAdmissionDateTime.getFullYear();
+                        const hours = editEmergencyAdmissionDateTime.getHours();
+                        const minutes = String(editEmergencyAdmissionDateTime.getMinutes()).padStart(2, '0');
+                        const ampm = hours >= 12 ? 'PM' : 'AM';
+                        const hours12 = hours % 12 || 12;
+                        const hoursStr = String(hours12).padStart(2, '0');
+                        const apiDateTime = `${day}-${month}-${year} ${hoursStr}:${minutes} ${ampm}`;
 
                         // Prepare the DTO
                         const updateDto: UpdateEmergencyAdmissionDto = {
                           id: editFormData.id,
                           doctorId: parseInt(editFormData.doctorId),
                           emergencyBedId: parseInt(editFormData.emergencyBedId),
-                          emergencyAdmissionDate: apiDate,
+                          emergencyAdmissionDate: apiDateTime,
                           emergencyStatus: editFormData.emergencyStatus,
                           numberOfDays: editFormData.numberOfDays || null,
                           diagnosis: editFormData.diagnosis || null,
