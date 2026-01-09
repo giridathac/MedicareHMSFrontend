@@ -154,12 +154,13 @@ function DoctorsView({
     return role?.name || '-';
   };
 
-  const getDepartmentName = (departmentId?: string) => {
-    if (!departmentId) return '-';
-    const dept = departments.find(d => d.id.toString() === departmentId);
+  const getDepartmentName = (departmentId?: string | number) => {
+    if (departmentId === null || departmentId === undefined || departmentId === '') return '-';
+    const deptIdStr = String(departmentId);
+    const deptIdNum = Number(departmentId);
+    const dept = departments.find(d => d.id.toString() === deptIdStr || d.id === deptIdNum);
     return dept?.name || '-';
   };
-
   const getStatusBadgeColor = (status?: string) => {
     switch (status) {
       case 'Active':
