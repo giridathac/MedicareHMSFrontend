@@ -17,7 +17,7 @@ import { usePatientAppointments } from '../hooks/usePatientAppointments';
 import { useStaff } from '../hooks/useStaff';
 import { useRoles } from '../hooks/useRoles';
 import { useDepartments } from '../hooks/useDepartments';
-import { patientsApi } from '../api';
+import { patientsApi, apiRequest } from '../api';
 import { Patient, PatientAppointment, Doctor } from '../types';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
@@ -805,7 +805,7 @@ export function FrontDesk() {
         let appointmentDateFormatted = '';
         let appointmentDateDisplay = '';
         if (appointment.appointmentDate) {
-          appointmentDateFormatted = appointment.appointmentDate.toLowerCase();
+          appointmentDateFormatted = (appointment.appointmentDate || '').toLowerCase();
           // Convert to dd-mm-yyyy format for search
           try {
             appointmentDateDisplay = formatDateToDisplay(appointment.appointmentDate).toLowerCase();
@@ -814,16 +814,26 @@ export function FrontDesk() {
           }
         }
         
+        // Safely get all search fields with null checks
+        const tokenNo = (appointment.tokenNo || '').toLowerCase();
+        const patientNameLower = patientName.toLowerCase();
+        const doctorNameLower = (doctorName || '').toLowerCase();
+        const patientPhoneLower = (patientPhone || '').toLowerCase();
+        const patientIdLower = (patientId || '').toLowerCase();
+        const appointmentIdLower = (appointment.patientId || '').toLowerCase();
+        const patientAadharLower = (patientAadhar || '').toLowerCase();
+
+        // Perform global search across all fields (including phone number, name, aadhar, token number)
         return (
-          appointment.tokenNo?.toLowerCase().includes(searchLower) ||
-          patientName.toLowerCase().includes(searchLower) ||
-          doctorName.toLowerCase().includes(searchLower) ||
-          patientPhone.includes(searchTerm) ||
-          patientId.toLowerCase().includes(searchLower) ||
-          appointment.patientId.toLowerCase().includes(searchLower) ||
+          tokenNo.includes(searchLower) ||
+          patientNameLower.includes(searchLower) ||
+          doctorNameLower.includes(searchLower) ||
+          patientPhoneLower.includes(searchLower) ||
+          patientIdLower.includes(searchLower) ||
+          appointmentIdLower.includes(searchLower) ||
           appointmentDateFormatted.includes(searchLower) ||
           appointmentDateDisplay.includes(searchLower) ||
-          patientAadhar.toLowerCase().includes(searchLower)
+          patientAadharLower.includes(searchLower)
         );
       });
     }

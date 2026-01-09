@@ -46,6 +46,7 @@ interface LabTest {
   result?: string;
   reportedDate?: string;
   reportedTime?: string;
+  displayTestId?: string;
 }
 
 const mockLabTests: LabTest[] = [
@@ -1498,6 +1499,7 @@ export function Laboratory() {
     const matchesSearch = !searchTerm ||
       test.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       test.testId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      test.displayTestId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       test.testName.toLowerCase().includes(searchTerm.toLowerCase());
 
     // Date filter - compare dates with respect to server time
