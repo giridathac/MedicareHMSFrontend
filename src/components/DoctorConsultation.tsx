@@ -2337,7 +2337,8 @@ function AppointmentList({
                 <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Status</th>
                 <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Appointment Date</th>
                 <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Time</th>
-                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Admission</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Transfer to IPD/OT/ICU</th>
+                <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Refer to Another Doctor</th>
                 <th className="text-left py-3 px-3 text-gray-700 bg-white whitespace-nowrap">Actions</th>
               </tr>
             </thead>
@@ -2358,7 +2359,7 @@ function AppointmentList({
                     const doctor = doctors.find(d => d.id.toString() === appointment.doctorId);
                     const patientName = patient 
                       ? `${(patient as any).patientName || (patient as any).PatientName || ''} ${(patient as any).lastName || (patient as any).LastName || ''}`.trim() 
-                      : appointment.patientId === '00000000-0000-0000-0000-000000000001' 
+                      : appointment.patientId === '000000000001' 
                         ? 'Dummy Patient Name' 
                         : appointment.patientId;
                     const doctorName = doctor ? doctor.name : appointment.doctorId;
@@ -2385,7 +2386,16 @@ function AppointmentList({
                         <td className={`py-3 px-3 whitespace-nowrap ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{formatDateToDisplay(appointment.appointmentDate)}</td>
                         <td className={`py-3 px-3 whitespace-nowrap ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{formatTimeToDisplay(appointment.appointmentTime)}</td>
                         <td className="py-3 px-3">
-                          {appointment.toBeAdmitted ? (
+                          {appointment.transferToIPDOTICU? (
+                            <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300">
+                              <Hospital className="size-3 mr-1" />Yes
+                            </Badge>
+                          ) : (
+                            <span className="text-gray-600">No</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3">
+                          {appointment.referToAnotherDoctor? (
                             <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300">
                               <Hospital className="size-3 mr-1" />Yes
                             </Badge>

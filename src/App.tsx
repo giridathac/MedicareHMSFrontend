@@ -76,7 +76,7 @@ export default function App() {
     { path: '/frontdesk', label: 'Front Desk', icon: ClipboardList },
     { path: '/patient-registration', label: 'Patient Registration', icon: UserPlus },
     { path: '/consultation', label: 'Doctor Consultation', icon: Stethoscope },
-    { path: '/doctors', label: 'Doctors', icon: Stethoscope },
+    { path: '/doctors', label: 'Doctors & Surgeons', icon: Stethoscope },
     { path: '/laboratory', label: 'Laboratory Tests Management', icon: TestTube },
     { path: '/admissions', label: 'Admissions (IPD)', icon: BedDouble },
     { path: '/emergency', label: 'Emergency', icon: Siren },
@@ -181,10 +181,14 @@ export default function App() {
     } else if (trimmedRole === 'Surgeon') {
       // Show only Doctor Consultation menu for Doctor
       return item.path === '/consultation';
+    } else if (trimmedRole === 'Nurse') {
+      // Show only Doctor Consultation menu for Doctor
+      return item.path === '/icu' || item.path === '/admissions' || item.path === '/emergency' || item.path === '/ot';
     } else {
       // Show all menus for SuperAdmin and other roles
       return true;
     }
+    
   });
 
   const hideSidebar = location.pathname === '/login' || location.pathname === '/reset-password';
@@ -267,15 +271,16 @@ export default function App() {
               <div>
                 <p className="text-sm text-gray-900">{userInfo.userName}</p>
                 <p className="text-xs text-gray-500">{userInfo.roleName}</p>                
-                <button
+               
+              </div>
+            </div>
+             <button
                   onClick={handleLogout}
-                  className="text-xs text-red-500 hover:text-red-500 mt-1"
+                  className="text-blue-600 hover:text-blue-800 text-sm underline"
                 >
                   Log out
                 </button>
-              </div>
-            </div>
-          </div>
+          </div>          
         )}
         </aside>
       )}
