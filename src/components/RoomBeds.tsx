@@ -6,9 +6,11 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Plus, Edit, BedDouble, Home, Tag, CheckCircle2, XCircle, Wrench, User, Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { useRoomBeds } from '../hooks/useRoomBeds';
 import { roomBedsApi } from '../api/roomBeds';
 import { RoomBed } from '../types';
+
 
 interface RoomBedsViewProps {
   roomBeds: RoomBed[];
@@ -133,7 +135,6 @@ function RoomBedsView({
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedRoomBed, setSelectedRoomBed] = useState<RoomBed | null>(null);
   const [loadingEditData, setLoadingEditData] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     bedNo: '',
@@ -166,10 +167,8 @@ function RoomBedsView({
   }, [roomBeds, searchTerm]);
 
   const handleAddSubmit = async () => {
-    setSubmitError(null);
-    
     if (!formData.bedNo || !formData.roomNo || formData.chargesPerDay < 0) {
-      setSubmitError('Please fill in all required fields with valid values.');
+      toast.error('Please fill in all required fields with valid values.');
       return;
     }
     
@@ -182,10 +181,9 @@ function RoomBedsView({
         numberOfBeds: 1,
         chargesPerDay: formData.chargesPerDay,
         status: formData.status,
-        createdBy: null,//1, // Default to user ID 1 (should be replaced with actual logged-in user ID)
+        createdBy: 1, // Default to user ID 1 (should be replaced with actual logged-in user ID)
       });
       setIsAddDialogOpen(false);
-      setSubmitError(null);
       setFormData({
         bedNo: '',
         roomNo: '',
@@ -203,7 +201,7 @@ function RoomBedsView({
           errorMessage = err.message;
         }
       }
-      setSubmitError(errorMessage);
+      toast.error(errorMessage);
       console.error('Failed to create room bed:', err);
     }
   };
@@ -211,18 +209,17 @@ function RoomBedsView({
   const handleEditSubmit = async () => {
     if (!selectedRoomBed) return;
     if (!formData.bedNo || !formData.roomNo || formData.chargesPerDay < 0) {
-      setSubmitError('Please fill in all required fields with valid values.');
+      toast.error('Please fill in all required fields with valid values.');
       return;
     }
     
     // Validate roomBedId before attempting update
     if (!selectedRoomBed.roomBedId || selectedRoomBed.roomBedId <= 0) {
-      setSubmitError('Cannot update: This room bed has an invalid roomBedId. The room bed may need to be recreated in the database.');
+      toast.error('Cannot update: This room bed has an invalid roomBedId. The room bed may need to be recreated in the database.');
       return;
     }
     
     try {
-      setSubmitError(null);
       await onUpdateRoomBed(selectedRoomBed.roomBedId, {
         bedNo: formData.bedNo,
         roomNo: formData.roomNo,
@@ -245,14 +242,13 @@ function RoomBedsView({
     } catch (err) {
       console.error('Failed to update room bed:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to update room bed. Please try again.';
-      setSubmitError(errorMessage);
+      toast.error(errorMessage);
     }
   };
 
   const handleEdit = async (roomBed: RoomBed) => {
     try {
       setLoadingEditData(true);
-      setSubmitError(null);
       setIsEditDialogOpen(true);
       
       // Validate roomBedId before calling API
@@ -272,8 +268,8 @@ function RoomBedsView({
           chargesPerDay: roomBed.chargesPerDay || 0,
           status: roomBed.status || 'Active',
         });
-        // Show a warning message to the user
-        setSubmitError('Warning: This room bed has an invalid roomBedId. Changes may not be saved correctly. Please contact support.');
+        // Show a warning message to the user via toast
+        toast.error('Warning: This room bed has an invalid roomBedId. Changes may not be saved correctly. Please contact support.');
         return;
       }
       
@@ -292,7 +288,7 @@ function RoomBedsView({
     } catch (err) {
       console.error('Failed to load room bed for editing:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to load room bed data. Please try again.';
-      setSubmitError(errorMessage);
+      toast.error(errorMessage);
       // Don't close the dialog on error, let user see the error message
       // But use existing data as fallback
       if (roomBed) {
@@ -347,11 +343,6 @@ function RoomBedsView({
             </DialogHeader>
             <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0 bg-white">
               <div className="space-y-4 py-4">
-                {submitError && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-                    {submitError}
-                  </div>
-                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="bedNo" className="text-gray-600" style={{ fontSize: '1.125rem' }}>Bed No</Label>
@@ -424,6 +415,7 @@ function RoomBedsView({
                 </div>
               </div>
             </div>
+
             <div className="flex justify-end gap-2 pt-4 border-t bg-white px-6 pb-4">
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
               <Button onClick={handleAddSubmit}>Add Room Bed</Button>
@@ -533,11 +525,6 @@ function RoomBedsView({
                 </DialogHeader>
                 <div className="px-6 pb-1">
                   <div className="space-y-4 py-4">
-                    {submitError && (
-                      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-                        {submitError}
-                      </div>
-                    )}
                     {loadingEditData ? (
                       <div className="flex items-center justify-center py-12">
                         <div className="text-center">

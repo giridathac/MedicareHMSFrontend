@@ -442,9 +442,42 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
     const filterByDate = (appointments: PatientAppointment[]): PatientAppointment[] => {
       if (!dateFilterStr) return appointments;
       return appointments.filter(appointment => {
-        if (!appointment.appointmentDate) return false;
+        const appointmentDate = appointment.appointmentDate;
+        if (!appointmentDate) return false;
+        
+        // Handle different date formats
+        let appointmentDateStr: string = '';
+        if (typeof appointmentDate === 'string') {
+          // If it's already in YYYY-MM-DD format
+          if (/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate)) {
+            appointmentDateStr = appointmentDate;
+          } else if (appointmentDate.includes('T')) {
+            // If it's a datetime string, extract date part
+            appointmentDateStr = appointmentDate.split('T')[0];
+          } else if (appointmentDate.includes(' ')) {
+            // If it's a datetime string with space separator, extract date part
+            appointmentDateStr = appointmentDate.split(' ')[0];
+          } else {
+            // Try to parse as date
+            try {
+              const dateObj = new Date(appointmentDate);
+              const year = dateObj.getFullYear();
+              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const day = String(dateObj.getDate()).padStart(2, '0');
+              appointmentDateStr = `${year}-${month}-${day}`;
+            } catch {
+              return false;
+            }
+          }
+        } else if (appointmentDate instanceof Date) {
+          const year = appointmentDate.getFullYear();
+          const month = String(appointmentDate.getMonth() + 1).padStart(2, '0');
+          const day = String(appointmentDate.getDate()).padStart(2, '0');
+          appointmentDateStr = `${year}-${month}-${day}`;
+        }
+        
         // Compare dates directly (both in YYYY-MM-DD format)
-        return appointment.appointmentDate === dateFilterStr;
+        return appointmentDateStr === dateFilterStr;
       });
     };
     
