@@ -93,9 +93,7 @@ export function ForgotPassword() {
                   {loading ? 'Sending...' : 'Send Reset Instructions'}
                 </Button>
               </div>
-            </form>
-
-            <div className="text-center mt-2">
+              <div className="text-center mt-2">
               <button
                 type="button"
                 onClick={() => navigate('/')}
@@ -105,6 +103,9 @@ export function ForgotPassword() {
                 Back to Login
               </button>
             </div>
+            </form>
+
+            
           </CardContent>
         </Card>
       </div>

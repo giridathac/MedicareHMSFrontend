@@ -640,7 +640,25 @@ function StaffView({
             {headerActions && <div className="flex items-center gap-4">{headerActions}</div>}
           </div>
 
-          {/* Status Filter Tabs */}
+         
+        </div>
+        <div className="px-6 pt-4 pb-4 flex-1">
+          {/* Search */}
+          <Card className="mb-6 bg-white">
+            <CardContent className="p-6">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                <Input
+                  placeholder="Search by user name, role, phone, email, department, or status..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 bg-gray-50"
+                />
+              </div>
+              
+            </CardContent>
+          </Card>
+ {/* Status Filter Tabs */}
           <div className="mb-4 flex-shrink-0">
             <Tabs 
               value={selectedStatus} 
@@ -660,23 +678,6 @@ function StaffView({
               </TabsList>
             </Tabs>
           </div>
-        </div>
-        <div className="px-6 pt-4 pb-4 flex-1">
-          {/* Search */}
-          <Card className="mb-6 bg-white">
-            <CardContent className="p-6">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                <Input
-                  placeholder="Search by user name, role, phone, email, department, or status..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-gray-50"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
             <Card className="bg-white border border-gray-200 shadow-sm rounded-lg mb-4">
           <CardContent className="p-0 flex-1 overflow-hidden flex flex-col min-h-0">
             <div className="overflow-x-auto overflow-y-scroll border border-gray-200 rounded flex-1 min-h-0 doctors-scrollable h-full">

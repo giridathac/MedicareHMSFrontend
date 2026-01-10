@@ -30,6 +30,7 @@ interface ICUPatient {
   admissionDate: string;
   admissionTime: string;
   icuAllocationFromDate: string; // ICU Allocation From Date
+  icuAllocationToDate?: string; // ICU Allocation To Date
   condition: string;
   patientCondition?: string | null; // Patient Condition
   icuPatientStatus?: string | null; // ICU Patient Status
@@ -1381,16 +1382,7 @@ export function ICUManagement() {
           _rawBedData: bed,
         };
       })
-    : Array.from({ length: 15 }, (_, i) => {
-        // Fallback to calculated beds if API data not available
-  const bedNumber = `ICU-${(i + 1).toString().padStart(2, '0')}`;
-        const patient = patients.find(p => p.bedNumber === bedNumber);
-  return {
-    bedNumber,
-    status: patient ? 'Occupied' : 'Available',
-    patient,
-  };
-});
+  : [];
 
   const occupiedBeds = icuBeds.filter(bed => bed.status === 'Occupied').length;
   const availableBeds = icuBeds.filter(bed => bed.status === 'Available').length;
@@ -1632,16 +1624,20 @@ export function ICUManagement() {
         'admissionDate', 'AdmissionDate', 'admission_date', 'Admission_Date',
         'admitDate', 'AdmitDate', 'admit_date', 'Admit_Date'
       ], new Date().toISOString().split('T')[0]),
-      admissionTime: extractField(patientData, [
-        'icuAllocationFromDate', 'ICUAllocationFromDate', // Extract time from date field
-        'admissionTime', 'AdmissionTime', 'admission_time', 'Admission_Time',
-        'admitTime', 'AdmitTime', 'admit_time', 'Admit_Time',
-        'time', 'Time'
-      ], new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })),
-      condition: extractField(patientData, [
-        'condition', 'Condition', 'patientCondition', 'PatientCondition',
-        'diagnosis', 'Diagnosis', 'diagnosisDescription', 'DiagnosisDescription'
-      ], 'Not Specified'),
+  admissionTime: extractField(patientData, [
+    'icuAllocationFromDate', 'ICUAllocationFromDate', // Extract time from date field
+    'admissionTime', 'AdmissionTime', 'admission_time', 'Admission_Time',
+    'admitTime', 'AdmitTime', 'admit_time', 'Admit_Time',
+    'time', 'Time'
+  ], new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })),
+  icuAllocationFromDate: extractField(patientData, [
+    'icuAllocationFromDate', 'ICUAllocationFromDate', 'icu_allocation_from_date', 'ICU_Allocation_From_Date',
+    'allocationFromDate', 'AllocationFromDate', 'allocation_from_date', 'Allocation_From_Date'
+  ], new Date().toISOString().split('T')[0]),
+  condition: extractField(patientData, [
+    'condition', 'Condition', 'patientCondition', 'PatientCondition',
+    'diagnosis', 'Diagnosis', 'diagnosisDescription', 'DiagnosisDescription'
+  ], 'Not Specified'),
       patientCondition: patientCondition || 'Not Specified',
       icuPatientStatus: icuPatientStatusRaw || 'Stable',
       icuAdmissionStatus: icuAdmissionStatus,
