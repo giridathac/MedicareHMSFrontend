@@ -12,6 +12,7 @@ import {
 } from './ui/dialog';
 import { Search, Plus, Pencil, Calendar, X } from 'lucide-react';
 import { Switch } from './ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { usePatients } from '../hooks';
 import { usePatientsPaginated } from '../hooks/usePatientsPaginated';
 import { patientsApi } from '../api';
@@ -30,6 +31,7 @@ export function PatientRegistration() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
   // Initialize date filter with today's date
   const [dateFilter, setDateFilter] = useState<Date | null>(() => {
     const today = new Date();
@@ -669,6 +671,7 @@ export function PatientRegistration() {
     };
     
     const activeFilteredByDate = filterByDate(active);
+    const inactiveFilteredByDate = filterByDate(inactive);
     
     // Filter active patients by search term (exclude inactive from search)
     let filtered: Patient[] = [];
@@ -701,11 +704,25 @@ export function PatientRegistration() {
       });
     }
     
-    return { activePatients: activeFilteredByDate, inactivePatients: inactive, filteredActivePatients: filtered };
+    return { activePatients: activeFilteredByDate, inactivePatients: inactiveFilteredByDate, filteredActivePatients: filtered };
   }, [patients, searchTerm, dateFilter]);
 
-  // For backward compatibility, use filteredActivePatients
-  const filteredPatients = filteredActivePatients;
+  // Calculate total patients count for "All" tab (always shows all patients)
+  const allPatientsCount = useMemo(() => {
+    return filteredActivePatients.length + inactivePatients.length;
+  }, [filteredActivePatients.length, inactivePatients.length]);
+  
+  // Filter patients based on activeTab
+  const filteredPatients = useMemo(() => {
+    if (activeTab === 'all') {
+      return [...filteredActivePatients, ...inactivePatients];
+    } else if (activeTab === 'active') {
+      return filteredActivePatients;
+    } else if (activeTab === 'inactive') {
+      return inactivePatients;
+    }
+    return filteredActivePatients;
+  }, [activeTab, filteredActivePatients, inactivePatients]);
   
   // Calculate pagination for filtered patients
   const totalPages = Math.ceil(filteredPatients.length / itemsPerPage);
@@ -713,10 +730,10 @@ export function PatientRegistration() {
   const endIndex = startIndex + itemsPerPage;
   const paginatedPatients = filteredPatients.slice(startIndex, endIndex);
   
-  // Reset to page 1 when search term or date filter changes
+  // Reset to page 1 when search term, date filter, or activeTab changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, dateFilter]);
+  }, [searchTerm, dateFilter, activeTab]);
   
   // Generate page numbers to display
   const getPageNumbers = () => {
@@ -831,8 +848,15 @@ export function PatientRegistration() {
   };
 
   // Helper function to render patients table
-  const renderPatientsTable = (patients: Patient[]) => {
-    const showInactive = !searchTerm && inactivePatients.length > 0;
+  const renderPatientsTable = (patientsToRender: Patient[], includeInactive: boolean = false) => {
+    // Determine if a patient is inactive
+    const isPatientInactive = (patient: Patient): boolean => {
+      const statusValue = (patient as any).Status || (patient as any).status;
+      const isActive = typeof statusValue === 'string' 
+        ? statusValue === 'Active' 
+        : (statusValue === true || statusValue === 'true' || statusValue === undefined || statusValue === null);
+      return !isActive;
+    };
     
     return (
       <Card>
@@ -853,70 +877,116 @@ export function PatientRegistration() {
                 </tr>
               </thead>
               <tbody>
-                {filteredPatients.length === 0 && (!searchTerm ? inactivePatients.length === 0 : true) ? (
-                  <tr>
-                    <td colSpan={9} className="text-center py-12 text-gray-500">
-                      {searchTerm ? 'No patients found matching your search.' : 'No patients found. Click "Add New Patient" to register a new patient.'}
-                    </td>
-                  </tr>
-                ) : (
-                  <>
-                    {paginatedPatients.map((patient) => renderPatientRow(patient, false))}
-                  </>
-                )}
+                {(() => {
+                  const tabStartIndex = (currentPage - 1) * itemsPerPage;
+                  const tabEndIndex = tabStartIndex + itemsPerPage;
+                  const tabPaginatedPatients = patientsToRender.slice(tabStartIndex, tabEndIndex);
+                  
+                  return patientsToRender.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="text-center py-12 text-gray-500">
+                        {searchTerm ? 'No patients found matching your search.' : 'No patients found. Click "Add New Patient" to register a new patient.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    <>
+                      {tabPaginatedPatients.map((patient) => renderPatientRow(patient, isPatientInactive(patient)))}
+                    </>
+                  );
+                })()}
               </tbody>
             </table>
             
             {/* Pagination Controls */}
-            {filteredPatients.length > itemsPerPage && (
-              <div className="mt-6 flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  Showing {startIndex + 1} to {Math.min(endIndex, filteredPatients.length)} of {filteredPatients.length} patients
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    Previous
-                  </Button>
+            {(() => {
+              const tabTotalPages = Math.ceil(patientsToRender.length / itemsPerPage);
+              const tabStartIndex = (currentPage - 1) * itemsPerPage;
+              const tabEndIndex = tabStartIndex + itemsPerPage;
+              const tabPaginatedPatients = patientsToRender.slice(tabStartIndex, tabEndIndex);
+              
+              // Generate page numbers for this tab
+              const getTabPageNumbers = () => {
+                const pages: (number | string)[] = [];
+                const maxVisiblePages = 7;
+                
+                if (tabTotalPages <= maxVisiblePages) {
+                  for (let i = 1; i <= tabTotalPages; i++) {
+                    pages.push(i);
+                  }
+                } else {
+                  pages.push(1);
                   
-                  <div className="flex items-center gap-1">
-                    {getPageNumbers().map((page, index) => {
-                      if (page === '...') {
-                        return (
-                          <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
-                            ...
-                          </span>
-                        );
-                      }
-                      return (
-                        <Button
-                          key={page}
-                          variant={currentPage === page ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setCurrentPage(page as number)}
-                          className={currentPage === page ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
-                        >
-                          {page}
-                        </Button>
-                      );
-                    })}
+                  if (currentPage > 3) {
+                    pages.push('...');
+                  }
+                  
+                  const start = Math.max(2, currentPage - 1);
+                  const end = Math.min(tabTotalPages - 1, currentPage + 1);
+                  
+                  for (let i = start; i <= end; i++) {
+                    pages.push(i);
+                  }
+                  
+                  if (currentPage < tabTotalPages - 2) {
+                    pages.push('...');
+                  }
+                  
+                  pages.push(tabTotalPages);
+                }
+                
+                return pages;
+              };
+              
+              return patientsToRender.length > itemsPerPage ? (
+                <div className="mt-6 flex items-center justify-between">
+                  <div className="text-sm text-gray-600">
+                    Showing {tabStartIndex + 1} to {Math.min(tabEndIndex, patientsToRender.length)} of {patientsToRender.length} patients
                   </div>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages}
-                  >
-                    Next
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    
+                    <div className="flex items-center gap-1">
+                      {getTabPageNumbers().map((page, index) => {
+                        if (page === '...') {
+                          return (
+                            <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                              ...
+                            </span>
+                          );
+                        }
+                        return (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page as number)}
+                            className={currentPage === page ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+                          >
+                            {page}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(tabTotalPages, prev + 1))}
+                      disabled={currentPage === tabTotalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            )}
+              ) : null;
+            })()}
           </div>
         </CardContent>
       </Card>
@@ -1305,8 +1375,26 @@ export function PatientRegistration() {
               </CardContent>
             </Card>
 
-            {/* Patients Table */}
-            {renderPatientsTable(filteredPatients)}
+            {/* Patients Table with Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+              <TabsList>
+                <TabsTrigger value="all">All Patients ({allPatientsCount})</TabsTrigger>
+                <TabsTrigger value="active">Active ({filteredActivePatients.length})</TabsTrigger>
+                <TabsTrigger value="inactive">Inactive ({inactivePatients.length})</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="all">
+                {renderPatientsTable(filteredPatients, true)}
+              </TabsContent>
+
+              <TabsContent value="active">
+                {renderPatientsTable(filteredActivePatients, false)}
+              </TabsContent>
+
+              <TabsContent value="inactive">
+                {renderPatientsTable(inactivePatients, true)}
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>

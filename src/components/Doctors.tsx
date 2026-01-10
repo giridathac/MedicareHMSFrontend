@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 
 import { CustomResizableDialog, CustomResizableDialogHeader, CustomResizableDialogTitle, CustomResizableDialogClose } from './CustomResizableDialog';
-import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Users, Stethoscope, Search, Building2, Scissors, Plus, Edit } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { useStaff } from '../hooks/useStaff';
@@ -318,11 +318,27 @@ function DoctorsView({
     return { inhouse, consulting, surgeons };
   }, [allDoctors, roles]);
 
+  // Separate active and inactive doctors
+  const { activeDoctors, inactiveDoctors } = useMemo(() => {
+    const active: Staff[] = [];
+    const inactive: Staff[] = [];
+    
+    doctors.forEach(doctor => {
+      if (doctor.Status === 'Active') {
+        active.push(doctor);
+      } else {
+        inactive.push(doctor);
+      }
+    });
+    
+    return { activeDoctors: active, inactiveDoctors: inactive };
+  }, [doctors]);
+
   // Filter doctors based on search term
-  const filteredDoctors = useMemo(() => {
-    if (!searchTerm) return doctors;
+  const filterBySearch = (doctorList: Staff[]): Staff[] => {
+    if (!searchTerm) return doctorList;
     const searchLower = searchTerm.toLowerCase();
-    return doctors.filter(doctor => {
+    return doctorList.filter(doctor => {
       const userName = (doctor.UserName || '').toLowerCase();
       const roleName = getRoleName(doctor.RoleId).toLowerCase();
       const departmentName = getDepartmentName(doctor.DoctorDepartmentId).toLowerCase();
@@ -335,7 +351,98 @@ function DoctorsView({
              phone.includes(searchLower) ||
              email.includes(searchLower);
     });
-  }, [doctors, searchTerm, roles, departments]);
+  };
+
+  const filteredActiveDoctors = useMemo(() => filterBySearch(activeDoctors), [activeDoctors, searchTerm, roles, departments]);
+  const filteredInactiveDoctors = useMemo(() => filterBySearch(inactiveDoctors), [inactiveDoctors, searchTerm, roles, departments]);
+  const filteredAllDoctors = useMemo(() => [...filteredActiveDoctors, ...filteredInactiveDoctors], [filteredActiveDoctors, filteredInactiveDoctors]);
+
+  // Helper function to render doctors table
+  const renderDoctorsTable = (doctorsToRender: Staff[], includeInactive: boolean = false) => {
+    const isDoctorInactive = (doctor: Staff): boolean => {
+      return doctor.Status === 'InActive';
+    };
+
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-gray-700">User Name</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Role</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Department</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Type</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Phone</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Email</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Status</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {doctorsToRender.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-gray-500">
+                      {searchTerm ? 'No doctors found matching your search.' : 'No doctors found.'}
+                    </td>
+                  </tr>
+                ) : (
+                  doctorsToRender.map((doctor) => {
+                    const isInactive = isDoctorInactive(doctor);
+                    return (
+                      <tr 
+                        key={doctor.UserId || `doctor-${Math.random()}`} 
+                        className={`border-b border-gray-100 hover:bg-gray-50 ${isInactive ? 'opacity-50 bg-gray-50' : ''}`}
+                      >
+                        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : ''}`}>
+                          <div className="flex items-center gap-2">
+                            <Users className="size-4 text-blue-600" />
+                            <span className={`${isInactive ? 'text-gray-400' : 'text-gray-900'} font-medium`}>{doctor.UserName || '-'}</span>
+                          </div>
+                        </td>
+                        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{getRoleName(doctor.RoleId)}</td>
+                        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{getDepartmentName(doctor.DoctorDepartmentId)}</td>
+                        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : ''}`}>
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            doctor.DoctorType === 'INHOUSE' 
+                              ? isInactive ? 'bg-gray-100 text-gray-400' : 'bg-blue-100 text-blue-700'
+                              : doctor.DoctorType === 'VISITING'
+                              ? isInactive ? 'bg-gray-100 text-gray-400' : 'bg-purple-100 text-purple-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {doctor.DoctorType === 'INHOUSE' ? 'Inhouse' : doctor.DoctorType === 'VISITING' ? 'Visiting' : '-'}
+                          </span>
+                        </td>
+                        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{doctor.PhoneNo || '-'}</td>
+                        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'}`}>{doctor.EmailId || '-'}</td>
+                        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : ''}`}>
+                          <span className={`px-2 py-1 rounded text-xs ${getStatusBadgeColor(doctor.Status)}`}>
+                            {doctor.Status || 'Active'}
+                          </span>
+                        </td>
+                        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : ''}`}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(doctor)}
+                            className="gap-2"
+                          >
+                            <Edit className="size-3" />
+                            Manage
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <>
@@ -866,26 +973,6 @@ function DoctorsView({
                 </CustomResizableDialog>
             </div>
 
-            {/* Status Filter Tabs */}
-            <div className="mb-4 flex-shrink-0">
-              <Tabs 
-                value={selectedStatus} 
-                onValueChange={(value) => onStatusFilterChange(value as 'Active' | 'InActive' | 'all')}
-                className="w-full"
-              >
-                <TabsList className="grid w-full max-w-md grid-cols-3">
-                  <TabsTrigger value="all">
-                    All ({allDoctors.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="Active">
-                    Active ({allDoctors.filter(d => d.Status === 'Active').length})
-                  </TabsTrigger>
-                  <TabsTrigger value="InActive">
-                    InActive ({allDoctors.filter(d => d.Status === 'InActive').length})
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
           </div>
 
           <div className="px-6 pt-4 pb-4 flex-1">
@@ -941,78 +1028,38 @@ function DoctorsView({
               </CardContent>
             </Card>
 
-            {/* Doctors Table */}
-            <Card>
-              <CardContent className="p-6">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-4 text-gray-700">User Name</th>
-                        <th className="text-left py-3 px-4 text-gray-700">Role</th>
-                        <th className="text-left py-3 px-4 text-gray-700">Department</th>
-                        <th className="text-left py-3 px-4 text-gray-700">Type</th>
-                        <th className="text-left py-3 px-4 text-gray-700">Phone</th>
-                        <th className="text-left py-3 px-4 text-gray-700">Email</th>
-                        <th className="text-left py-3 px-4 text-gray-700">Status</th>
-                        <th className="text-left py-3 px-4 text-gray-700">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredDoctors.length === 0 ? (
-                        <tr>
-                          <td colSpan={8} className="text-center py-8 text-gray-500">
-                            {searchTerm ? 'No doctors found matching your search.' : 'No doctors found.'}
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredDoctors.map((doctor) => (
-                          <tr key={doctor.UserId || `doctor-${Math.random()}`} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-2">
-                                <Users className="size-4 text-blue-600" />
-                                <span className="text-gray-900 font-medium">{doctor.UserName || '-'}</span>
-                              </div>
-                            </td>
-                            <td className="py-3 px-4 text-gray-600">{getRoleName(doctor.RoleId)}</td>
-                            <td className="py-3 px-4 text-gray-600">{getDepartmentName(doctor.DoctorDepartmentId)}</td>
-                            <td className="py-3 px-4">
-                              <span className={`px-2 py-1 rounded text-xs ${
-                                doctor.DoctorType === 'INHOUSE' 
-                                  ? 'bg-blue-100 text-blue-700' 
-                                  : doctor.DoctorType === 'VISITING'
-                                  ? 'bg-purple-100 text-purple-700'
-                                  : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {doctor.DoctorType === 'INHOUSE' ? 'Inhouse' : doctor.DoctorType === 'VISITING' ? 'Visiting' : '-'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-gray-600">{doctor.PhoneNo || '-'}</td>
-                            <td className="py-3 px-4 text-gray-600">{doctor.EmailId || '-'}</td>
-                            <td className="py-3 px-4">
-                              <span className={`px-2 py-1 rounded text-xs ${getStatusBadgeColor(doctor.Status)}`}>
-                                {doctor.Status || 'Active'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEdit(doctor)}
-                                className="gap-2"
-                              >
-                                <Edit className="size-3" />
-                                Manage
-                              </Button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Status Filter Tabs and Doctors Table */}
+            <Tabs 
+              value={selectedStatus} 
+              onValueChange={(value) => onStatusFilterChange(value as 'Active' | 'InActive' | 'all')}
+              className="space-y-6"
+            >
+              <div className="mb-4 flex-shrink-0">
+                <TabsList className="grid w-full max-w-md grid-cols-3">
+                  <TabsTrigger value="all">
+                    All ({filteredAllDoctors.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="Active">
+                    Active ({filteredActiveDoctors.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="InActive">
+                    InActive ({filteredInactiveDoctors.length})
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              <TabsContent value="all">
+                {renderDoctorsTable(filteredAllDoctors, true)}
+              </TabsContent>
+
+              <TabsContent value="Active">
+                {renderDoctorsTable(filteredActiveDoctors, false)}
+              </TabsContent>
+
+              <TabsContent value="InActive">
+                {renderDoctorsTable(filteredInactiveDoctors, true)}
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>

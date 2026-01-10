@@ -17,6 +17,7 @@ import { patientsApi } from '../api/patients';
 import { apiRequest } from '../api/base';
 import { PatientAppointment, Patient, Doctor } from '../types';
 import { formatDateIST, formatTimeIST, formatDateToDDMMYYYY, formatDateTimeIST, convertToIST } from '../utils/timeUtils';
+import { getCurrentUserId, getCurrentUser } from '../utils/authUtils';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -29,6 +30,26 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
   const { staff } = useStaff();
   const { roles } = useRoles();
   const { departments } = useDepartments();
+  
+  // Get current user info and check if SuperAdmin
+  const currentUser = getCurrentUser();
+  const currentUserId = getCurrentUserId();
+  const userRole = currentUser?.role || currentUser?.roleName || currentUser?.RoleName || currentUser?.userRole || '';
+  const isSuperAdmin = userRole?.toLowerCase() === 'superadmin';
+  
+  // Get logged-in doctor's ID (UserId from staff table)
+  const loggedInDoctorId = useMemo(() => {
+    if (isSuperAdmin || !currentUserId) return null;
+    
+    // Find the staff member that matches the logged-in user's ID
+    const loggedInStaff = staff.find(s => 
+      s.UserId?.toString() === currentUserId || 
+      s.userId?.toString() === currentUserId ||
+      s.id?.toString() === currentUserId
+    );
+    
+    return loggedInStaff?.UserId?.toString() || null;
+  }, [staff, currentUserId, isSuperAdmin]);
   const [searchTerm, setSearchTerm] = useState('');
   // Initialize date filter with today's date
   const [dateFilter, setDateFilter] = useState<Date | null>(() => {
@@ -412,11 +433,20 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
       return { activeAppointments: [], inactiveAppointments: [], filteredActiveAppointments: [] };
     }
     
+    // Filter appointments by logged-in doctor's ID if not SuperAdmin
+    let appointmentsToProcess = patientAppointments;
+    if (!isSuperAdmin && loggedInDoctorId) {
+      appointmentsToProcess = patientAppointments.filter(appointment => {
+        // Match doctorId (string) with loggedInDoctorId (string)
+        return appointment.doctorId?.toString() === loggedInDoctorId;
+      });
+    }
+    
     // Separate active and inactive appointments
     const active: PatientAppointment[] = [];
     const inactive: PatientAppointment[] = [];
     
-    patientAppointments.forEach(appointment => {
+    appointmentsToProcess.forEach(appointment => {
       const statusValue = (appointment as any).Status || (appointment as any).status;
       const isActive = typeof statusValue === 'string' 
         ? statusValue === 'Active' 
@@ -520,7 +550,7 @@ export function DoctorConsultation({ onManageAppointment }: DoctorConsultationPr
     }
     
     return { activeAppointments: activeFilteredByDate, inactiveAppointments: inactive, filteredActiveAppointments: filtered };
-  }, [patientAppointments, searchTerm, dateFilter, patients, appointmentDoctors]);
+  }, [patientAppointments, searchTerm, dateFilter, patients, appointmentDoctors, isSuperAdmin, loggedInDoctorId]);
 
   const filteredAppointments = filteredActiveAppointments;
   
