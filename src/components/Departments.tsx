@@ -420,7 +420,7 @@ function DepartmentsView({
                         <tr key={dept.id} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="py-4 px-6 text-gray-900 font-medium">{dept.name}</td>
                           <td className="py-4 px-6 text-gray-600">{dept.category}</td>
-                          <td className="py-4 px-6 text-gray-600">{dept.description || '-'}</td>
+                          <td className="py-4 px-6 text-gray-600">{dept.specialisationDetails || '-'}</td>
                           <td className="py-4 px-6 text-gray-600">{dept.noOfDoctors !== undefined ? dept.noOfDoctors : 0}</td>
                           <td className="py-4 px-6">
                             <div className="flex gap-2">
@@ -520,7 +520,7 @@ function DepartmentsView({
                     <Switch
                       id="edit-status"
                       checked={formData.status === 'active'}
-                      onCheckedChange={(checked) => {
+                      onCheckedChange={(checked: boolean) => {
                         setFormData({ ...formData, status: checked ? 'active' : 'inactive' });
                       }}
                       className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
