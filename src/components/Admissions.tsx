@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -7,7 +7,7 @@ import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { BedDouble, Plus, Search, User, Calendar, Scissors, X, FileText, FlaskConical, Stethoscope, Heart, Edit } from 'lucide-react';
+import { BedDouble, Plus, Search, Calendar, Scissors, X, FileText, FlaskConical, Stethoscope, Heart, Edit } from 'lucide-react';
 import { useAdmissions } from '../hooks/useAdmissions';
 import { Admission, RoomCapacityOverview, DashboardMetrics, PatientLabTest } from '../api/admissions';
 import { admissionsApi } from '../api/admissions';
@@ -18,9 +18,11 @@ import { labTestsApi } from '../api/labTests';
 import { LabTest } from '../types';
 import { Textarea } from './ui/textarea';
 import { DialogFooter } from './ui/dialog';
+import { Switch } from './ui/switch';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { formatDateTimeIST } from '../utils/timeUtils';
+import { convertToIST } from '../utils/timeUtils';
 import ISTDatePicker from './ui/ISTDatePicker';
 
 // Fallback room capacity data (used when API data is not available)
@@ -51,6 +53,104 @@ export default function Admissions() {
   const [managedAdmission, setManagedAdmission] = useState<Admission | null>(null);
   const [editingAdmission, setEditingAdmission] = useState<Admission | null>(null);
   const [isViewEditDialogOpen, setIsViewEditDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editAdmissionForm, setEditAdmissionForm] = useState({
+    patientId: '',
+    patientType: '',
+    patientAppointmentId: '',
+    emergencyBedSlotId: '',
+    roomBedId: '',
+    roomBedsId: '',
+    roomType: '',
+    admittedBy: '',
+    admittedByDoctorId: '',
+    doctorId: '',
+    diagnosis: '',
+    roomAllocationDate: '',
+    admissionStatus: 'Active',
+    status: 'Active',
+    caseSheet: '',
+    caseDetails: '',
+    isLinkedToICU: 'No',
+    patientNo: '',
+    age: '',
+    gender: '',
+    patientName: '',
+    bedNumber: '',
+    appointmentTokenNo: '',
+    appointmentDate: '',
+    emergencyBedNo: '',
+    eBedSlotNo: '',
+    emergencyAdmissionDate: '',
+    roomVacantDate: '',
+    shiftToAnotherRoom: 'No',
+    shiftedTo: '',
+    shiftedToDetails: '',
+    scheduleOT: 'No',
+    otAdmissionId: '',
+    icuAdmissionId: '',
+    billId: '',
+    estimatedStay: '',
+    createdAt: '',
+    createdDate: '',
+    roomAdmissionId: ''
+  });
+  const [editPatientSearchTerm, setEditPatientSearchTerm] = useState('');
+  const [editRoomBedSearchTerm, setEditRoomBedSearchTerm] = useState('');
+  const [editDoctorSearchTerm, setEditDoctorSearchTerm] = useState('');
+  const [editAvailableAppointments, setEditAvailableAppointments] = useState<any[]>([]);
+  const [editAvailableEmergencyBedSlots, setEditAvailableEmergencyBedSlots] = useState<any[]>([]);
+  const [editAvailableIPDAdmissions, setEditAvailableIPDAdmissions] = useState<any[]>([]);
+  
+  // Refs for Edit dialog search inputs and dropdowns
+  const editPatientInputRef = useRef<HTMLInputElement>(null);
+  const editRoomBedInputRef = useRef<HTMLInputElement>(null);
+  const editDoctorInputRef = useRef<HTMLInputElement>(null);
+  const editPatientDropdownRef = useRef<HTMLDivElement>(null);
+  const editRoomBedDropdownRef = useRef<HTMLDivElement>(null);
+  const editDoctorDropdownRef = useRef<HTMLDivElement>(null);
+  
+  // State for Edit dialog search filters (FrontDesk pattern)
+  const [editPatientHighlightIndex, setEditPatientHighlightIndex] = useState(-1);
+  const [editRoomBedHighlightIndex, setEditRoomBedHighlightIndex] = useState(-1);
+  const [editDoctorHighlightIndex, setEditDoctorHighlightIndex] = useState(-1);
+  const [showEditPatientDropdown, setShowEditPatientDropdown] = useState(false);
+  const [showEditRoomBedDropdown, setShowEditRoomBedDropdown] = useState(false);
+  const [showEditDoctorDropdown, setShowEditDoctorDropdown] = useState(false);
+  const [editPatientVisibleCount, setEditPatientVisibleCount] = useState(10);
+  const [editRoomBedVisibleCount, setEditRoomBedVisibleCount] = useState(10);
+  const [editDoctorVisibleCount, setEditDoctorVisibleCount] = useState(10);
+  const [editPatientLoadingMore, setEditPatientLoadingMore] = useState(false);
+  const [editRoomBedLoadingMore, setEditRoomBedLoadingMore] = useState(false);
+  const [editDoctorLoadingMore, setEditDoctorLoadingMore] = useState(false);
+  const [editPatientDropdownPosition, setEditPatientDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [editRoomBedDropdownPosition, setEditRoomBedDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [editDoctorDropdownPosition, setEditDoctorDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  
+  // Refs for Create dialog search inputs and dropdowns
+  const addPatientInputRef = useRef<HTMLInputElement>(null);
+  const addRoomBedInputRef = useRef<HTMLInputElement>(null);
+  const addDoctorInputRef = useRef<HTMLInputElement>(null);
+  const addPatientDropdownRef = useRef<HTMLDivElement>(null);
+  const addRoomBedDropdownRef = useRef<HTMLDivElement>(null);
+  const addDoctorDropdownRef = useRef<HTMLDivElement>(null);
+  
+  // State for Create dialog search filters (FrontDesk pattern)
+  const [addPatientHighlightIndex, setAddPatientHighlightIndex] = useState(-1);
+  const [addRoomBedHighlightIndex, setAddRoomBedHighlightIndex] = useState(-1);
+  const [addDoctorHighlightIndex, setAddDoctorHighlightIndex] = useState(-1);
+  const [showAddPatientDropdown, setShowAddPatientDropdown] = useState(false);
+  const [showAddRoomBedDropdown, setShowAddRoomBedDropdown] = useState(false);
+  const [showAddDoctorDropdown, setShowAddDoctorDropdown] = useState(false);
+  const [addPatientVisibleCount, setAddPatientVisibleCount] = useState(10);
+  const [addRoomBedVisibleCount, setAddRoomBedVisibleCount] = useState(10);
+  const [addDoctorVisibleCount, setAddDoctorVisibleCount] = useState(10);
+  const [addPatientLoadingMore, setAddPatientLoadingMore] = useState(false);
+  const [addRoomBedLoadingMore, setAddRoomBedLoadingMore] = useState(false);
+  const [addDoctorLoadingMore, setAddDoctorLoadingMore] = useState(false);
+  const [addPatientDropdownPosition, setAddPatientDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [addRoomBedDropdownPosition, setAddRoomBedDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [addDoctorDropdownPosition, setAddDoctorDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   
   // New Lab Order Dialog State
   const [isNewLabOrderDialogOpen, setIsNewLabOrderDialogOpen] = useState(false);
@@ -132,6 +232,20 @@ export default function Admissions() {
   });
   const [savingAdmission, setSavingAdmission] = useState(false);
   const [admissionError, setAdmissionError] = useState<string | null>(null);
+  // Validation error states for Add Admission dialog
+  const [addPatientError, setAddPatientError] = useState('');
+  const [addPatientTypeError, setAddPatientTypeError] = useState('');
+  const [addRoomBedError, setAddRoomBedError] = useState('');
+  const [addDoctorError, setAddDoctorError] = useState('');
+  const [addRoomAllocationDateError, setAddRoomAllocationDateError] = useState('');
+  const [addAdmissionStatusError, setAddAdmissionStatusError] = useState('');
+  // Validation error states for Edit Admission dialog
+  const [editPatientError, setEditPatientError] = useState('');
+  const [editPatientTypeError, setEditPatientTypeError] = useState('');
+  const [editRoomBedError, setEditRoomBedError] = useState('');
+  const [editDoctorError, setEditDoctorError] = useState('');
+  const [editRoomAllocationDateError, setEditRoomAllocationDateError] = useState('');
+  const [editAdmissionStatusError, setEditAdmissionStatusError] = useState('');
 
   const navigate = useNavigate();
   
@@ -139,6 +253,291 @@ export default function Admissions() {
     const roomAdmissionId = admission.roomAdmissionId || admission.admissionId;
     if (roomAdmissionId) {
       navigate(`/manage-ipd-admission?roomAdmissionId=${roomAdmissionId}`);
+    }
+  };
+
+  // Handler to open Edit dialog and pre-populate form
+  const handleEditAdmission = async (admission: Admission) => {
+    // Get roomAdmissionId from the admission
+    const roomAdmissionId = admission.roomAdmissionId || admission.admissionId;
+    
+    if (!roomAdmissionId) {
+      console.error('Cannot edit admission: Room Admission ID is missing');
+      setAdmissionError('Cannot edit admission: Room Admission ID is missing');
+      return;
+    }
+
+    try {
+      setSavingAdmission(true);
+      setAdmissionError(null);
+
+      // Fetch admission details from API using roomAdmissionId
+      console.log('Fetching admission with roomAdmissionId:', roomAdmissionId);
+      const fetchedAdmission = await apiRequest<any>(`/room-admissions/${roomAdmissionId}`);
+      console.log('Fetched admission response:', fetchedAdmission);
+      const admissionData = fetchedAdmission?.data || fetchedAdmission;
+      console.log('Admission data after extraction:', admissionData);
+      
+      if (!admissionData) {
+        throw new Error(`Admission with id ${roomAdmissionId} not found`);
+      }
+
+      // Set the fetched admission as editingAdmission
+      setEditingAdmission(admissionData as Admission);
+      
+      // Load patient, room bed, and doctor options
+      let roomBedsList: any[] = [];
+      try {
+        const patientsList = await admissionsApi.getPatientRegistrations();
+        setPatientOptions(patientsList || []);
+        
+        roomBedsList = await roomBedsApi.getAll();
+        setRoomBedOptions(roomBedsList || []);
+        
+        const doctorsList = await doctorsApi.getAll();
+        setDoctorOptions(doctorsList || []);
+      } catch (err) {
+        console.error('Error loading options for edit:', err);
+      }
+
+      // Pre-populate form with fetched admission data
+      // Helper to extract field with multiple name variations
+      const getField = (obj: any, ...variations: string[]) => {
+        for (const variation of variations) {
+          if (obj?.[variation] !== undefined && obj?.[variation] !== null && obj?.[variation] !== '') {
+            return obj[variation];
+          }
+        }
+        return '';
+      };
+
+      const admissionStatusValue = getField(admissionData, 'AdmissionStatus', 'admissionStatus') || 'Active';
+      const normalizedAdmissionStatus = (admissionStatusValue === 'Discharged' || 
+                                         admissionStatusValue === 'Moved to ICU' || 
+                                         admissionStatusValue === 'Moved To ICU' ||
+                                         admissionStatusValue === 'Surgery Scheduled' || 
+                                         admissionStatusValue === 'Active') 
+                                         ? admissionStatusValue 
+                                         : 'Active';
+      
+      // Extract Status field separately (Active/Inactive)
+      const statusValue = getField(admissionData, 'Status', 'status') || 'Active';
+      const normalizedStatus = (statusValue === 'Active' || statusValue === 'Inactive') ? statusValue : 'Active';
+      
+      // Extract isLinkedToICU and convert to Yes/No
+      const isLinkedToICUValue = getField(admissionData, 'IsLinkedToICU', 'isLinkedToICU');
+      let isLinkedToICUString = 'No';
+      if (isLinkedToICUValue !== undefined && isLinkedToICUValue !== null && isLinkedToICUValue !== '') {
+        if (typeof isLinkedToICUValue === 'boolean') {
+          isLinkedToICUString = isLinkedToICUValue ? 'Yes' : 'No';
+        } else if (typeof isLinkedToICUValue === 'string') {
+          const lower = String(isLinkedToICUValue).toLowerCase();
+          isLinkedToICUString = (lower === 'true' || lower === 'yes' || lower === '1') ? 'Yes' : 'No';
+        }
+      }
+      
+      // Extract scheduleOT and convert to Yes/No
+      const scheduleOTValue = getField(admissionData, 'ScheduleOT', 'scheduleOT');
+      let scheduleOTString = 'No';
+      if (scheduleOTValue !== undefined && scheduleOTValue !== null && scheduleOTValue !== '') {
+        if (typeof scheduleOTValue === 'boolean') {
+          scheduleOTString = scheduleOTValue ? 'Yes' : 'No';
+        } else if (typeof scheduleOTValue === 'string') {
+          const lower = String(scheduleOTValue).toLowerCase();
+          scheduleOTString = (lower === 'true' || lower === 'yes' || lower === '1') ? 'Yes' : 'No';
+        }
+      }
+
+      // Extract shiftToAnotherRoom and convert to Yes/No
+      const shiftToAnotherRoomValue = getField(admissionData, 'ShiftToAnotherRoom', 'shiftToAnotherRoom');
+      let shiftToAnotherRoomString = 'No';
+      if (shiftToAnotherRoomValue !== undefined && shiftToAnotherRoomValue !== null && shiftToAnotherRoomValue !== '') {
+        if (typeof shiftToAnotherRoomValue === 'boolean') {
+          shiftToAnotherRoomString = shiftToAnotherRoomValue ? 'Yes' : 'No';
+        } else if (typeof shiftToAnotherRoomValue === 'string') {
+          const lower = String(shiftToAnotherRoomValue).toLowerCase();
+          shiftToAnotherRoomString = (lower === 'true' || lower === 'yes' || lower === '1') ? 'Yes' : 'No';
+        }
+      }
+
+      // Extract room bed IDs
+      const roomBedsIdFromApi = String(getField(admissionData, 'RoomBedsId', 'roomBedsId', 'roomBedId', 'RoomBedId') || '');
+      
+      // Find the room bed by matching RoomBedsId or bedNumber with roomBedOptions
+      let foundRoomBedId = '';
+      let foundRoomBedsId = roomBedsIdFromApi;
+      if (roomBedsList.length > 0) {
+        const matchingBed = roomBedsList.find((bed: any) => {
+          const bedId = String((bed as any).roomBedId || (bed as any).RoomBedsId || (bed as any).id || '');
+          const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+          const apiBedNo = getField(admissionData, 'BedNo', 'bedNumber', 'bedNo');
+          return bedId === roomBedsIdFromApi || bedNo === apiBedNo;
+        });
+        
+        if (matchingBed) {
+          foundRoomBedId = String(
+            (matchingBed as any).roomBedId ||
+            (matchingBed as any).RoomBedsId ||
+            (matchingBed as any).id ||
+            ''
+          );
+          foundRoomBedsId = String(
+            (matchingBed as any).RoomBedsId ||
+            (matchingBed as any).roomBedsId ||
+            (matchingBed as any).roomBedId ||
+            (matchingBed as any).id ||
+            ''
+          );
+        }
+      }
+
+      // Resolve doctor ID from admission
+      const resolvedDoctorId = String(getField(admissionData, 'AdmittingDoctorId', 'admittingDoctorId', 'doctorId', 'DoctorId', 'admittedByDoctorId', 'AdmittedByDoctorId') || '');
+
+      // Extract patient type
+      const patientType = getField(admissionData, 'PatientType', 'patientType') || '';
+      const patientId = getField(admissionData, 'PatientId', 'patientId') || '';
+      const patientName = getField(admissionData, 'PatientName', 'patientName') || '';
+      const patientNo = getField(admissionData, 'PatientNo', 'patientNo') || '';
+      const bedNumber = getField(admissionData, 'BedNo', 'bedNumber', 'bedNo') || '';
+      const roomNo = getField(admissionData, 'RoomNo', 'roomNo', 'roomNumber') || '';
+      const roomType = getField(admissionData, 'RoomType', 'roomType') || '';
+      const admittedBy = getField(admissionData, 'AdmittingDoctorName', 'admittingDoctorName', 'admittedBy', 'AdmittedBy') || '';
+      
+      // Extract dates - use admission.admissionDate as source of truth (same as displayed in table)
+      // The admission object already has the correct date in DD-MM-YYYY format
+      let roomAllocationDate = '';
+      
+      // First, try to use the admission object's admissionDate (source of truth from table)
+      const admissionDateFromTable = admission.admissionDate;
+      if (admissionDateFromTable) {
+        try {
+          // Handle DD-MM-YYYY format (e.g., "11-01-2026" or "11-01-2026 00:00")
+          let dateStr = String(admissionDateFromTable);
+          if (dateStr.includes(' ')) {
+            dateStr = dateStr.split(' ')[0]; // Extract date part if it has time
+          }
+          
+          // Check if it's in DD-MM-YYYY format
+          if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+            const [day, month, year] = dateStr.split('-').map(Number);
+            // Format as YYYY-MM-DD for form state (no Date object creation to avoid timezone issues)
+            roomAllocationDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          }
+        } catch (e) {
+          console.error('Error parsing admissionDate from table:', e);
+        }
+      }
+      
+      // Fallback to API data if admissionDate is not available
+      if (!roomAllocationDate) {
+        const roomAllocationDateRaw = getField(admissionData, 'RoomAllocationDate', 'roomAllocationDate', 'admissionDate', 'AdmissionDate');
+        if (roomAllocationDateRaw) {
+          try {
+            // Handle DD-MM-YYYY format (e.g., "11-01-2026" or "11-01-2026 00:00")
+            let dateStr = String(roomAllocationDateRaw);
+            if (dateStr.includes(' ')) {
+              dateStr = dateStr.split(' ')[0]; // Extract date part if it has time
+            }
+            
+            // Check if it's in DD-MM-YYYY format
+            if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+              const [day, month, year] = dateStr.split('-').map(Number);
+              // Format as YYYY-MM-DD for form state (no Date object creation to avoid timezone issues)
+              roomAllocationDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            } else {
+              // Try parsing as standard date format
+              const date = new Date(roomAllocationDateRaw);
+              if (!isNaN(date.getTime())) {
+                roomAllocationDate = date.toISOString().split('T')[0];
+              }
+            }
+          } catch (e) {
+            console.error('Error parsing roomAllocationDate from API:', e);
+          }
+        }
+      }
+      
+      if (!roomAllocationDate) {
+        roomAllocationDate = new Date().toISOString().split('T')[0];
+      }
+
+      const roomVacantDateRaw = getField(admissionData, 'RoomVacantDate', 'roomVacantDate');
+      let roomVacantDate = '';
+      if (roomVacantDateRaw) {
+        try {
+          const date = new Date(roomVacantDateRaw);
+          if (!isNaN(date.getTime())) {
+            roomVacantDate = date.toISOString().split('T')[0];
+          }
+        } catch (e) {
+          console.error('Error parsing roomVacantDate:', e);
+        }
+      }
+
+      setEditAdmissionForm({
+        patientId: patientId,
+        patientType: patientType,
+        patientAppointmentId: String(getField(admissionData, 'PatientAppointmentId', 'patientAppointmentId', 'appointmentId', 'AppointmentId') || ''),
+        emergencyBedSlotId: String(getField(admissionData, 'EmergencyAdmissionId', 'emergencyAdmissionId', 'emergencyBedSlotId', 'EmergencyBedSlotId') || ''),
+        roomBedId: foundRoomBedId || foundRoomBedsId,
+        roomBedsId: foundRoomBedsId,
+        roomType: roomType,
+        admittedBy: admittedBy,
+        admittedByDoctorId: resolvedDoctorId,
+        doctorId: resolvedDoctorId,
+        diagnosis: getField(admissionData, 'Diagnosis', 'diagnosis') || '',
+        roomAllocationDate: roomAllocationDate,
+        admissionStatus: normalizedAdmissionStatus,
+        caseSheet: getField(admissionData, 'CaseSheet', 'caseSheet') || '',
+        caseDetails: getField(admissionData, 'CaseSheetDetails', 'caseSheetDetails', 'caseDetails') || '',
+        isLinkedToICU: isLinkedToICUString,
+        patientNo: patientNo,
+        age: getField(admissionData, 'Age', 'age') ? String(getField(admissionData, 'Age', 'age')) : '',
+        gender: getField(admissionData, 'Gender', 'gender') || '',
+        patientName: patientName,
+        bedNumber: bedNumber,
+        appointmentTokenNo: String(getField(admissionData, 'AppointmentTokenNo', 'appointmentTokenNo') || ''),
+        appointmentDate: getField(admissionData, 'AppointmentDate', 'appointmentDate') ? new Date(getField(admissionData, 'AppointmentDate', 'appointmentDate')).toISOString().split('T')[0] : '',
+        emergencyBedNo: getField(admissionData, 'EmergencyBedNo', 'emergencyBedNo') || '',
+        eBedSlotNo: getField(admissionData, 'EBedSlotNo', 'eBedSlotNo') || '',
+        emergencyAdmissionDate: getField(admissionData, 'EmergencyAdmissionDate', 'emergencyAdmissionDate') ? new Date(getField(admissionData, 'EmergencyAdmissionDate', 'emergencyAdmissionDate')).toISOString().split('T')[0] : '',
+        roomVacantDate: roomVacantDate,
+        shiftToAnotherRoom: shiftToAnotherRoomString,
+        shiftedTo: getField(admissionData, 'ShiftedTo', 'shiftedTo') || '',
+        shiftedToDetails: getField(admissionData, 'ShiftedToDetails', 'shiftedToDetails') || '',
+        scheduleOT: scheduleOTString,
+        otAdmissionId: String(getField(admissionData, 'OTAdmissionId', 'otAdmissionId') || ''),
+        icuAdmissionId: String(getField(admissionData, 'ICUAdmissionId', 'icuAdmissionId') || ''),
+        billId: String(getField(admissionData, 'BillId', 'billId') || ''),
+        estimatedStay: getField(admissionData, 'EstimatedStay', 'estimatedStay') || '',
+        createdAt: getField(admissionData, 'CreatedAt', 'createdAt', 'AllocatedAt', 'allocatedAt') || '',
+        createdDate: getField(admissionData, 'CreatedDate', 'createdDate') || '',
+        roomAdmissionId: String(roomAdmissionId),
+        status: normalizedStatus // This is the Status field (Active/Inactive), separate from AdmissionStatus
+      });
+      setEditPatientSearchTerm(patientName);
+      setEditRoomBedSearchTerm(`${bedNumber}${roomType ? ` (${roomType})` : ''}${roomNo ? ` - ${roomNo}` : ''}`);
+      setEditDoctorSearchTerm(admittedBy);
+      
+      // Fetch conditional data based on patient type
+      if (patientType === 'OPD' && patientId) {
+        const appointments = await fetchPatientAppointments(patientId);
+        setEditAvailableAppointments(appointments || []);
+      } else if (patientType === 'Emergency' && patientId) {
+        const slots = await fetchPatientEmergencyBedSlots(patientId);
+        setEditAvailableEmergencyBedSlots(slots || []);
+      } else if (patientType === 'IPD' && patientId) {
+        const ipdAdmissions = await fetchPatientIPDAdmissions(patientId);
+        setEditAvailableIPDAdmissions(ipdAdmissions || []);
+      }
+      
+      setIsEditDialogOpen(true);
+    } catch (error: any) {
+      console.error('Error fetching admission details:', error);
+      setAdmissionError(error?.message || 'Failed to fetch admission details. Please try again.');
+    } finally {
+      setSavingAdmission(false);
     }
   };
 
@@ -350,185 +749,12 @@ export default function Admissions() {
     }
   };
 
-  // Handler to view/edit admission
-  const handleViewEditAdmission = async (admission: Admission) => {
-    setEditingAdmission(admission);
-    
-    // Load patient, room bed, and doctor options
-    let roomBedsList: any[] = [];
-    try {
-      const patientsList = await admissionsApi.getPatientRegistrations();
-      setPatientOptions(patientsList || []);
-      
-      roomBedsList = await roomBedsApi.getAll();
-      setRoomBedOptions(roomBedsList || []);
-      
-      const doctorsList = await doctorsApi.getAll();
-      setDoctorOptions(doctorsList || []);
-    } catch (err) {
-      console.error('Error loading options for view/edit:', err);
-    }
-
-    // Pre-populate form with admission data
-    // Extract admissionStatus - use status if admissionStatus is not available
-    const admissionStatusValue = admission.admissionStatus || admission.status || 'Active';
-    // Preserve all status values: Active, Moved to ICU, Surgery Scheduled, Discharged
-    const normalizedStatus = (admissionStatusValue === 'Discharged' || 
-                               admissionStatusValue === 'Moved to ICU' || 
-                               admissionStatusValue === 'Surgery Scheduled' || 
-                               admissionStatusValue === 'Active') 
-                               ? admissionStatusValue 
-                               : 'Active';
-    
-    // Extract isLinkedToICU and convert to Yes/No
-    const isLinkedToICUValue = admission.isLinkedToICU;
-    let isLinkedToICUString = 'No';
-    if (isLinkedToICUValue !== undefined && isLinkedToICUValue !== null) {
-      if (typeof isLinkedToICUValue === 'boolean') {
-        isLinkedToICUString = isLinkedToICUValue ? 'Yes' : 'No';
-      } else if (typeof isLinkedToICUValue === 'string') {
-        const lower = String(isLinkedToICUValue).toLowerCase();
-        isLinkedToICUString = (lower === 'true' || lower === 'yes' || lower === '1') ? 'Yes' : 'No';
-      }
-    }
-    
-    // Extract scheduleOT and convert to Yes/No
-    const scheduleOTValue = admission.scheduleOT;
-    let scheduleOTString = 'No';
-    if (scheduleOTValue !== undefined && scheduleOTValue !== null) {
-      if (typeof scheduleOTValue === 'boolean') {
-        scheduleOTString = scheduleOTValue ? 'Yes' : 'No';
-      } else if (typeof scheduleOTValue === 'string') {
-        const lower = String(scheduleOTValue).toLowerCase();
-        scheduleOTString = (lower === 'true' || lower === 'yes' || lower === '1') ? 'Yes' : 'No';
-      }
-    }
-
-    // Extract shiftToAnotherRoom and convert to Yes/No
-    const shiftToAnotherRoomValue = admission.shiftToAnotherRoom;
-    let shiftToAnotherRoomString = 'No';
-    if (shiftToAnotherRoomValue !== undefined && shiftToAnotherRoomValue !== null) {
-      if (typeof shiftToAnotherRoomValue === 'boolean') {
-        shiftToAnotherRoomString = shiftToAnotherRoomValue ? 'Yes' : 'No';
-      } else if (typeof shiftToAnotherRoomValue === 'string') {
-        const lower = String(shiftToAnotherRoomValue).toLowerCase();
-        shiftToAnotherRoomString = (lower === 'true' || lower === 'yes' || lower === '1') ? 'Yes' : 'No';
-      }
-    }
-
-    // Find the room bed by matching bedNumber with roomBedOptions
-    let foundRoomBedId = '';
-    let foundRoomBedsId = '';
-    if (admission.bedNumber && roomBedsList.length > 0) {
-      const matchingBed = roomBedsList.find((bed: any) => {
-        const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
-        return bedNo === admission.bedNumber;
-      });
-      
-      if (matchingBed) {
-        foundRoomBedId = String(
-          (matchingBed as any).roomBedId ||
-          (matchingBed as any).RoomBedsId ||
-          (matchingBed as any).id ||
-          ''
-        );
-        foundRoomBedsId = String(
-          (matchingBed as any).RoomBedsId ||
-          (matchingBed as any).roomBedsId ||
-          (matchingBed as any).roomBedId ||
-          (matchingBed as any).id ||
-          ''
-        );
-      }
-    }
-
-    // Fallbacks from admission record if we couldn't resolve from roomBeds list
-    if (!foundRoomBedId) {
-      foundRoomBedId = String(
-        (admission as any).roomBedId ||
-        (admission as any).RoomBedId ||
-        (admission as any).RoomBedsId ||
-        (admission as any).roomBedsId ||
-        ''
-      );
-    }
-    if (!foundRoomBedsId) {
-      foundRoomBedsId = String(
-        (admission as any).roomBedsId ||
-        (admission as any).RoomBedsId ||
-        (admission as any).roomBedId ||
-        (admission as any).RoomBedId ||
-        ''
-      );
-    }
-
-    // Resolve doctor ID from admission so validation passes even if user doesn't change it
-    const resolvedDoctorId = String(
-      (admission as any).doctorId ||
-      (admission as any).DoctorId ||
-      (admission as any).admittedByDoctorId ||
-      (admission as any).AdmittedByDoctorId ||
-      ''
-    );
-
-    setAddAdmissionForm({
-      patientId: admission.patientId || '',
-      patientType: admission.patientType || '',
-      patientAppointmentId: admission.patientAppointmentId || admission.appointmentId || '',
-      emergencyBedSlotId: admission.emergencyBedSlotId || '',
-      roomBedId: foundRoomBedId,
-      roomBedsId: foundRoomBedsId,
-      roomType: admission.roomType || '',
-      admittedBy: admission.admittedBy || '',
-      admittedByDoctorId: resolvedDoctorId,
-      doctorId: resolvedDoctorId,
-      diagnosis: admission.diagnosis || '',
-      roomAllocationDate: admission.admissionDate ? new Date(admission.admissionDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      admissionStatus: normalizedStatus,
-      caseSheet: admission.caseSheet || '',
-      caseDetails: admission.caseSheetDetails || '',
-      isLinkedToICU: isLinkedToICUString,
-      patientNo: admission.patientNo || '',
-      age: admission.age ? String(admission.age) : '',
-      gender: admission.gender || '',
-      patientName: admission.patientName || '',
-      bedNumber: admission.bedNumber || '',
-      appointmentTokenNo: admission.appointmentTokenNo || '',
-      appointmentDate: admission.appointmentDate || '',
-      emergencyBedNo: admission.emergencyBedNo || '',
-      eBedSlotNo: admission.eBedSlotNo || '',
-      emergencyAdmissionDate: admission.emergencyAdmissionDate || '',
-      roomVacantDate: admission.roomVacantDate || '',
-      shiftToAnotherRoom: shiftToAnotherRoomString,
-      shiftedTo: admission.shiftedTo || '',
-      shiftedToDetails: admission.shiftedToDetails || '',
-      scheduleOT: scheduleOTString,
-      otAdmissionId: admission.otAdmissionId ? String(admission.otAdmissionId) : '',
-      icuAdmissionId: admission.icuAdmissionId ? String(admission.icuAdmissionId) : '',
-      billId: admission.billId ? String(admission.billId) : '',
-      estimatedStay: admission.estimatedStay || '',
-      createdAt: admission.createdAt || '',
-      createdDate: admission.createdDate || '',
-    });
-    setPatientSearchTerm(admission.patientName || '');
-    setRoomBedSearchTerm(`${admission.bedNumber} (${admission.roomType})`);
-    setDoctorSearchTerm(admission.admittedBy || '');
-    
-    // Fetch conditional data based on patient type
-    if (admission.patientType === 'OPD' && admission.patientId) {
-      await fetchPatientAppointments(admission.patientId);
-    } else if (admission.patientType === 'Emergency' && admission.patientId) {
-      await fetchPatientEmergencyBedSlots(admission.patientId);
-    }
-    
-    setIsViewEditDialogOpen(true);
-  };
 
   // Fetch appointments for a specific patient
   const fetchPatientAppointments = async (patientId: string) => {
     if (!patientId) {
       setAvailableAppointments([]);
-      return;
+      return [];
     }
     
     try {
@@ -551,9 +777,11 @@ export default function Admissions() {
       
       console.log('Mapped appointments:', appointments);
       setAvailableAppointments(appointments);
+      return appointments;
     } catch (err) {
       console.error('Error fetching patient appointments:', err);
       setAvailableAppointments([]);
+      return [];
     }
   };
 
@@ -561,7 +789,7 @@ export default function Admissions() {
   const fetchPatientEmergencyBedSlots = async (patientId: string) => {
     if (!patientId) {
       setAvailableEmergencyBedSlots([]);
-      return;
+      return [];
     }
     
     try {
@@ -586,9 +814,11 @@ export default function Admissions() {
       
       console.log('Mapped emergency bed slots:', emergencyBedSlots);
       setAvailableEmergencyBedSlots(emergencyBedSlots);
+      return emergencyBedSlots;
     } catch (err) {
       console.error('Error fetching emergency bed slots:', err);
       setAvailableEmergencyBedSlots([]);
+      return [];
     }
   };
 
@@ -596,7 +826,7 @@ export default function Admissions() {
   const fetchPatientIPDAdmissions = async (patientId: string) => {
     if (!patientId) {
       setAvailableIPDAdmissions([]);
-      return;
+      return [];
     }
     
     try {
@@ -619,9 +849,11 @@ export default function Admissions() {
       
       console.log('Mapped IPD admissions:', ipdAdmissions);
       setAvailableIPDAdmissions(ipdAdmissions);
+      return ipdAdmissions;
     } catch (err) {
       console.error('Error fetching IPD admissions:', err);
       setAvailableIPDAdmissions([]);
+      return [];
     }
   };
 
@@ -691,40 +923,71 @@ export default function Admissions() {
     try {
       setSavingAdmission(true);
       setAdmissionError(null);
+      
+      // Clear previous validation errors
+      setAddPatientError('');
+      setAddPatientTypeError('');
+      setAddRoomBedError('');
+      setAddDoctorError('');
+      setAddRoomAllocationDateError('');
+      setAddAdmissionStatusError('');
 
-      // Validate required fields (stricter for new admissions than for edits)
-      if (!addAdmissionForm.patientId && !editingAdmission) {
-        throw new Error('Please select a patient');
+      // Validate required fields for new admissions
+      let hasErrors = false;
+      
+      if (!addAdmissionForm.patientId) {
+        setAddPatientError('Please select a patient from the list.');
+        hasErrors = true;
       }
-      if (!addAdmissionForm.patientType && !editingAdmission) {
-        throw new Error('Please select a patient type');
+      
+      if (!addAdmissionForm.patientType) {
+        setAddPatientTypeError('Please select a patient type.');
+        hasErrors = true;
+      } else {
+        if (addAdmissionForm.patientType === 'OPD' && !addAdmissionForm.patientAppointmentId) {
+          setAddPatientTypeError('Patient Appointment ID is required for OPD patients.');
+          hasErrors = true;
+        }
+        if (addAdmissionForm.patientType === 'IPD' && !(addAdmissionForm as any).roomAdmissionId) {
+          setAddPatientTypeError('Patient IPD Admission ID is required for IPD patients.');
+          hasErrors = true;
+        }
+        if (addAdmissionForm.patientType === 'Emergency' && !addAdmissionForm.emergencyBedSlotId) {
+          setAddPatientTypeError('Emergency Admission Bed No is required for Emergency patients.');
+          hasErrors = true;
+        }
       }
-      if (!editingAdmission && addAdmissionForm.patientType === 'OPD' && !addAdmissionForm.patientAppointmentId) {
-        throw new Error('Patient Appointment ID is required for OPD patients');
+      
+      if (!addAdmissionForm.roomBedId) {
+        setAddRoomBedError('Please select a room/bed.');
+        hasErrors = true;
       }
-      if (!editingAdmission && addAdmissionForm.patientType === 'IPD' && !(addAdmissionForm as any).roomAdmissionId) {
-        throw new Error('Patient IPD Admission ID is required for IPD patients');
+      
+      if (!addAdmissionForm.admittedByDoctorId && !addAdmissionForm.doctorId) {
+        setAddDoctorError('Please select a doctor from the list.');
+        hasErrors = true;
       }
-      if (!editingAdmission && addAdmissionForm.patientType === 'Emergency' && !addAdmissionForm.emergencyBedSlotId) {
-        throw new Error('Emergency Admission Bed No is required for Emergency patients');
+      
+      if (!addAdmissionForm.roomBedsId) {
+        setAddRoomBedError('Room/Bed ID is required.');
+        hasErrors = true;
       }
-      if (!addAdmissionForm.roomBedId && !editingAdmission) {
-        throw new Error('Please select a room/bed');
-      }
-      if (!editingAdmission && !addAdmissionForm.admittedByDoctorId && !addAdmissionForm.doctorId) {
-        throw new Error('Please select a doctor');
-      }
-      if (!addAdmissionForm.roomBedsId && !editingAdmission) {
-        throw new Error('Room/Bed ID is required');
-      }
+      
       if (!addAdmissionForm.roomAllocationDate) {
-        throw new Error('Room Allocation Date is required');
+        setAddRoomAllocationDateError('Room Allocation Date is required.');
+        hasErrors = true;
       }
 
       // Validate admissionStatus is one of the allowed values
       const allowedAdmissionStatuses = ['Active', 'Moved To ICU', 'Surgery Scheduled', 'Discharged'];
       if (!addAdmissionForm.admissionStatus || !allowedAdmissionStatuses.includes(addAdmissionForm.admissionStatus)) {
-        throw new Error('Admission Status must be one of: Active, Moved To ICU, Surgery Scheduled, Discharged');
+        setAddAdmissionStatusError('Admission Status must be one of: Active, Moved To ICU, Surgery Scheduled, Discharged.');
+        hasErrors = true;
+      }
+      
+      if (hasErrors) {
+        setSavingAdmission(false);
+        return;
       }
 
       // Get selected patient details
@@ -760,16 +1023,11 @@ export default function Admissions() {
       const roomType = (selectedBed as any).roomType || (selectedBed as any).RoomType || addAdmissionForm.roomType || 'Regular Ward';
       const roomBedsId = (selectedBed as any).RoomBedsId || (selectedBed as any).roomBedsId || (selectedBed as any).roomBedId || (selectedBed as any).id || '';
 
-      // Get doctor name and ID.
-      // For new admissions we require a doctor; for edits we allow it to be missing so that
-      // existing backend value is preserved if the API supports partial updates.
-      const doctorName =
-        addAdmissionForm.admittedBy ||
-        (editingAdmission?.admittedBy ?? editingAdmission?.admittingDoctorName) ||
-        '';
+      // Get doctor name and ID
+      const doctorName = addAdmissionForm.admittedBy || '';
       const doctorId = addAdmissionForm.doctorId || addAdmissionForm.admittedByDoctorId || '';
       
-      if (!doctorId && !editingAdmission) {
+      if (!doctorId) {
         throw new Error('Doctor ID is required. Please select a doctor.');
       }
 
@@ -780,61 +1038,79 @@ export default function Admissions() {
         doctorName: doctorName
       });
 
-      // Check room bed availability before proceeding (only for new admissions, not updates)
-      if (!editingAdmission) {
-        try {
-          console.log('Checking room bed availability, RoomBedsId:', roomBedsId, 'AllocationDate:', addAdmissionForm.roomAllocationDate);
-          
-          // Validate required parameters
-          if (!roomBedsId) {
-            throw new Error('RoomBedsId is required for availability check');
+      // Check room bed availability before proceeding
+      try {
+        console.log('Checking room bed availability, RoomBedsId:', roomBedsId, 'AllocationDate:', addAdmissionForm.roomAllocationDate);
+        
+        // Validate required parameters
+        if (!roomBedsId) {
+          throw new Error('RoomBedsId is required for availability check');
+        }
+        if (!addAdmissionForm.roomAllocationDate) {
+          throw new Error('Room Allocation Date is required for availability check');
+        }
+        
+        // Convert date to DD-MM-YYYY format for availability check API
+        let allocationDateForCheck = addAdmissionForm.roomAllocationDate;
+        if (allocationDateForCheck && /^\d{4}-\d{2}-\d{2}$/.test(allocationDateForCheck)) {
+          const [year, month, day] = allocationDateForCheck.split('-');
+          allocationDateForCheck = `${day}-${month}-${year}`;
+        }
+        
+        // Call the room admissions availability check API
+        const checkResponse = await apiRequest<any>(`/room-admissions/check-availability?RoomBedsId=${roomBedsId}&AllocationDate=${allocationDateForCheck}`, {
+          method: 'GET',
+        });
+        
+        console.log('Room bed availability check response:', checkResponse);
+        
+        // Check if bed is available
+        // API response structure: { data: { isAvailable: true/false, ... } }
+        // Also handle direct response: { isAvailable: true/false }
+        const responseData = checkResponse?.data || checkResponse;
+        
+        const isAvailable = 
+          responseData?.isAvailable === true ||
+          responseData?.IsAvailable === true ||
+          responseData?.available === true ||
+          responseData?.Available === true ||
+          (responseData?.status !== undefined && String(responseData.status).toLowerCase() === 'available') ||
+          (responseData?.Status !== undefined && String(responseData.Status).toLowerCase() === 'available');
+        
+        console.log('Room bed availability result:', { isAvailable, responseData, checkResponse });
+        
+        if (!isAvailable) {
+          throw new Error('The selected room bed is not available for the selected allocation date. Please select another room bed or choose a different date.');
+        }
+      } catch (checkError: any) {
+        // If it's our custom error message, throw it
+        if (checkError?.message && (checkError.message.includes('not available') || checkError.message.includes('already occupied') || checkError.message.includes('required'))) {
+          throw checkError;
+        }
+        // If the API returns an error indicating unavailability, throw it
+        if (checkError?.response?.data?.message || checkError?.message) {
+          const errorMessage = checkError.response?.data?.message || checkError.message;
+          if (errorMessage.toLowerCase().includes('not available') || 
+              errorMessage.toLowerCase().includes('occupied') ||
+              errorMessage.toLowerCase().includes('unavailable')) {
+            throw new Error(errorMessage || 'The selected room bed is not available for the selected allocation date.');
           }
-          if (!addAdmissionForm.roomAllocationDate) {
-            throw new Error('Room Allocation Date is required for availability check');
-          }
-          
-          // Call the room admissions availability check API
-          const checkResponse = await apiRequest<any>(`/room-admissions/check-availability?RoomBedsId=${roomBedsId}&AllocationDate=${addAdmissionForm.roomAllocationDate}`, {
-            method: 'GET',
-          });
-          
-          console.log('Room bed availability check response:', checkResponse);
-          
-          // Check if bed is available
-          // API response structure: { data: { isAvailable: true/false, ... } }
-          // Also handle direct response: { isAvailable: true/false }
-          const responseData = checkResponse?.data || checkResponse;
-          
-          const isAvailable = 
-            responseData?.isAvailable === true ||
-            responseData?.IsAvailable === true ||
-            responseData?.available === true ||
-            responseData?.Available === true ||
-            (responseData?.status !== undefined && String(responseData.status).toLowerCase() === 'available') ||
-            (responseData?.Status !== undefined && String(responseData.Status).toLowerCase() === 'available');
-          
-          console.log('Room bed availability result:', { isAvailable, responseData, checkResponse });
-          
-          if (!isAvailable) {
-            throw new Error('The selected room bed is not available for the selected allocation date. Please select another room bed or choose a different date.');
-          }
-        } catch (checkError: any) {
-          // If it's our custom error message, throw it
-          if (checkError?.message && (checkError.message.includes('not available') || checkError.message.includes('already occupied') || checkError.message.includes('required'))) {
-            throw checkError;
-          }
-          // If the API returns an error indicating unavailability, throw it
-          if (checkError?.response?.data?.message || checkError?.message) {
-            const errorMessage = checkError.response?.data?.message || checkError.message;
-            if (errorMessage.toLowerCase().includes('not available') || 
-                errorMessage.toLowerCase().includes('occupied') ||
-                errorMessage.toLowerCase().includes('unavailable')) {
-              throw new Error(errorMessage || 'The selected room bed is not available for the selected allocation date.');
-            }
-          }
-          // If it's a network error or other issue, throw it to prevent booking
-          console.error('Room bed availability check failed:', checkError);
-          throw new Error('Failed to verify room bed availability. Please try again or contact support.');
+        }
+        // If it's a network error or other issue, throw it to prevent booking
+        console.error('Room bed availability check failed:', checkError);
+        throw new Error('Failed to verify room bed availability. Please try again or contact support.');
+      }
+
+      // Convert roomAllocationDate from YYYY-MM-DD to DD-MM-YYYY format for backend
+      let roomAllocationDateFormatted = '';
+      if (addAdmissionForm.roomAllocationDate) {
+        const dateStr = addAdmissionForm.roomAllocationDate;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          // Convert YYYY-MM-DD to DD-MM-YYYY
+          const [year, month, day] = dateStr.split('-');
+          roomAllocationDateFormatted = `${day}-${month}-${year}`;
+        } else {
+          roomAllocationDateFormatted = addAdmissionForm.roomAllocationDate;
         }
       }
 
@@ -844,7 +1120,7 @@ export default function Admissions() {
         patientName: fullName,
         age: age,
         gender: gender,
-        admissionDate: new Date().toISOString().split('T')[0], // Today's date
+        admissionDate: convertToIST(new Date()).toISOString().split('T')[0], // Today's date in IST
         roomType: roomType as 'Regular Ward' | 'Special Shared Room' | 'Special Room',
         bedNumber: bedNumber,
         admittedBy: doctorName,
@@ -855,7 +1131,7 @@ export default function Admissions() {
         roomBedsId: roomBedsId ? String(roomBedsId) : undefined,
         doctorId: doctorId ? String(doctorId) : undefined,
         admittedByDoctorId: doctorId ? String(doctorId) : undefined, // Also include as admittedByDoctorId for API
-        roomAllocationDate: addAdmissionForm.roomAllocationDate,
+        roomAllocationDate: roomAllocationDateFormatted,
         roomVacantDate: addAdmissionForm.roomVacantDate || '',
         caseSheet: addAdmissionForm.caseSheet || '',
         caseSheetDetails: addAdmissionForm.caseDetails || '',
@@ -893,22 +1169,12 @@ export default function Admissions() {
         console.log('EmergencyAdmissionId being sent:', admissionData.emergencyAdmissionId);
       }
 
-      // Call the API to create or update admission
-      let createdAdmission: any = null;
-      if (editingAdmission && (editingAdmission.roomAdmissionId || editingAdmission.admissionId)) {
-        const roomAdmissionId = editingAdmission.roomAdmissionId || editingAdmission.admissionId;
-        const updateData = {
-          ...admissionData,
-          roomAdmissionId: Number(roomAdmissionId)
-        };
-        console.log('BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',updateData );
-        createdAdmission = await admissionsApi.update(updateData);
-        console.log('Admission updated successfully');
-        // Close edit dialog after update
-        setIsViewEditDialogOpen(false);
-      } else {
-        createdAdmission = await admissionsApi.create(admissionData);
-        console.log('Admission created successfully');
+      // Call the API to create admission
+      const createdAdmission = await admissionsApi.create(admissionData);
+      console.log('Admission created successfully');
+
+      // Refresh the admissions list
+      await fetchAdmissions();
         
         // Create PatientICUAdmission record if isLinkedToICU is Yes
         if (addAdmissionForm.isLinkedToICU === 'Yes') {
@@ -1007,7 +1273,6 @@ export default function Admissions() {
             console.warn('Admission created but ICU admission creation failed:', icuError?.message || 'Unknown error');
           }
         }
-      }
 
       // Refresh admissions list
       await fetchAdmissions();
@@ -1017,12 +1282,7 @@ export default function Admissions() {
       await fetchDashboardMetrics();
 
       // Close dialog and reset form
-      if (isViewEditDialogOpen) {
-        setIsViewEditDialogOpen(false);
-      } else {
-        setIsDialogOpen(false);
-      }
-      setEditingAdmission(null);
+      setIsDialogOpen(false);
       setPatientSearchTerm('');
       setRoomBedSearchTerm('');
       setDoctorSearchTerm('');
@@ -1104,6 +1364,248 @@ export default function Admissions() {
     }
   }, [addAdmissionForm.roomAllocationDate]);
 
+  // Update Edit dialog dropdown positions when search terms change
+  useEffect(() => {
+    if (editPatientSearchTerm && isEditDialogOpen) {
+      const timer = setTimeout(() => {
+        if (editPatientInputRef.current) {
+          const rect = editPatientInputRef.current.getBoundingClientRect();
+          setEditPatientDropdownPosition({
+            top: rect.bottom + 4,
+            left: rect.left,
+            width: rect.width
+          });
+        }
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      setEditPatientDropdownPosition(null);
+    }
+  }, [editPatientSearchTerm, isEditDialogOpen]);
+
+  useEffect(() => {
+    if (editRoomBedSearchTerm && isEditDialogOpen) {
+      const timer = setTimeout(() => {
+        if (editRoomBedInputRef.current) {
+          const rect = editRoomBedInputRef.current.getBoundingClientRect();
+          setEditRoomBedDropdownPosition({
+            top: rect.bottom + 4,
+            left: rect.left,
+            width: rect.width
+          });
+        }
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      setEditRoomBedDropdownPosition(null);
+    }
+  }, [editRoomBedSearchTerm, isEditDialogOpen]);
+
+  useEffect(() => {
+    if (editDoctorSearchTerm && isEditDialogOpen) {
+      const timer = setTimeout(() => {
+        if (editDoctorInputRef.current) {
+          const rect = editDoctorInputRef.current.getBoundingClientRect();
+          setEditDoctorDropdownPosition({
+            top: rect.bottom + 4,
+            left: rect.left,
+            width: rect.width
+          });
+        }
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      setEditDoctorDropdownPosition(null);
+    }
+  }, [editDoctorSearchTerm, isEditDialogOpen]);
+
+  // Update Edit dialog dropdown positions on scroll/resize
+  useEffect(() => {
+    const updatePositions = () => {
+      if (editPatientSearchTerm && editPatientInputRef.current) {
+        const rect = editPatientInputRef.current.getBoundingClientRect();
+        setEditPatientDropdownPosition({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width
+        });
+      }
+      if (editRoomBedSearchTerm && editRoomBedInputRef.current) {
+        const rect = editRoomBedInputRef.current.getBoundingClientRect();
+        setEditRoomBedDropdownPosition({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width
+        });
+      }
+      if (editDoctorSearchTerm && editDoctorInputRef.current) {
+        const rect = editDoctorInputRef.current.getBoundingClientRect();
+        setEditDoctorDropdownPosition({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width
+        });
+      }
+    };
+
+    window.addEventListener('scroll', updatePositions, true);
+    window.addEventListener('resize', updatePositions);
+
+    return () => {
+      window.removeEventListener('scroll', updatePositions, true);
+      window.removeEventListener('resize', updatePositions);
+    };
+  }, [editPatientSearchTerm, editRoomBedSearchTerm, editDoctorSearchTerm]);
+
+  // Scroll highlighted items into view in Edit dialog
+  useEffect(() => {
+    if (editPatientHighlightIndex >= 0) {
+      const element = document.querySelector(`#edit-patient-dropdown tbody tr:nth-child(${editPatientHighlightIndex + 1})`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [editPatientHighlightIndex]);
+
+  useEffect(() => {
+    if (editRoomBedHighlightIndex >= 0) {
+      const element = document.querySelector(`#edit-room-bed-dropdown tbody tr:nth-child(${editRoomBedHighlightIndex + 1})`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [editRoomBedHighlightIndex]);
+
+  useEffect(() => {
+    if (editDoctorHighlightIndex >= 0) {
+      const element = document.querySelector(`#edit-doctor-dropdown tbody tr:nth-child(${editDoctorHighlightIndex + 1})`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [editDoctorHighlightIndex]);
+
+  // Update Create dialog dropdown positions when search terms change
+  useEffect(() => {
+    if (patientSearchTerm && isDialogOpen) {
+      const timer = setTimeout(() => {
+        if (addPatientInputRef.current) {
+          const rect = addPatientInputRef.current.getBoundingClientRect();
+          setAddPatientDropdownPosition({
+            top: rect.bottom + 4,
+            left: rect.left,
+            width: rect.width
+          });
+        }
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      setAddPatientDropdownPosition(null);
+    }
+  }, [patientSearchTerm, isDialogOpen]);
+
+  useEffect(() => {
+    if (roomBedSearchTerm && isDialogOpen) {
+      const timer = setTimeout(() => {
+        if (addRoomBedInputRef.current) {
+          const rect = addRoomBedInputRef.current.getBoundingClientRect();
+          setAddRoomBedDropdownPosition({
+            top: rect.bottom + 4,
+            left: rect.left,
+            width: rect.width
+          });
+        }
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      setAddRoomBedDropdownPosition(null);
+    }
+  }, [roomBedSearchTerm, isDialogOpen]);
+
+  useEffect(() => {
+    if (doctorSearchTerm && isDialogOpen) {
+      const timer = setTimeout(() => {
+        if (addDoctorInputRef.current) {
+          const rect = addDoctorInputRef.current.getBoundingClientRect();
+          setAddDoctorDropdownPosition({
+            top: rect.bottom + 4,
+            left: rect.left,
+            width: rect.width
+          });
+        }
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      setAddDoctorDropdownPosition(null);
+    }
+  }, [doctorSearchTerm, isDialogOpen]);
+
+  // Update Create dialog dropdown positions on scroll/resize
+  useEffect(() => {
+    const updatePositions = () => {
+      if (patientSearchTerm && addPatientInputRef.current) {
+        const rect = addPatientInputRef.current.getBoundingClientRect();
+        setAddPatientDropdownPosition({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width
+        });
+      }
+      if (roomBedSearchTerm && addRoomBedInputRef.current) {
+        const rect = addRoomBedInputRef.current.getBoundingClientRect();
+        setAddRoomBedDropdownPosition({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width
+        });
+      }
+      if (doctorSearchTerm && addDoctorInputRef.current) {
+        const rect = addDoctorInputRef.current.getBoundingClientRect();
+        setAddDoctorDropdownPosition({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width
+        });
+      }
+    };
+
+    window.addEventListener('scroll', updatePositions, true);
+    window.addEventListener('resize', updatePositions);
+
+    return () => {
+      window.removeEventListener('scroll', updatePositions, true);
+      window.removeEventListener('resize', updatePositions);
+    };
+  }, [patientSearchTerm, roomBedSearchTerm, doctorSearchTerm]);
+
+  // Scroll highlighted items into view in Create dialog
+  useEffect(() => {
+    if (addPatientHighlightIndex >= 0) {
+      const element = document.querySelector(`#add-patient-dropdown tbody tr:nth-child(${addPatientHighlightIndex + 1})`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [addPatientHighlightIndex]);
+
+  useEffect(() => {
+    if (addRoomBedHighlightIndex >= 0) {
+      const element = document.querySelector(`#add-room-bed-dropdown tbody tr:nth-child(${addRoomBedHighlightIndex + 1})`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [addRoomBedHighlightIndex]);
+
+  useEffect(() => {
+    if (addDoctorHighlightIndex >= 0) {
+      const element = document.querySelector(`#add-doctor-dropdown tbody tr:nth-child(${addDoctorHighlightIndex + 1})`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [addDoctorHighlightIndex]);
+
   // Load patient, room bed, and doctor options when dialog opens
   useEffect(() => {
     if (isDialogOpen) {
@@ -1180,12 +1682,75 @@ export default function Admissions() {
     }
   }, [isDialogOpen]);
 
-  const filteredAdmissions = admissions.filter(admission =>
-    // Text search filter
-    (admission.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    admission.bedNumber.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    // Date filter
-    (!dateFilter || (admission.admissionDate && new Date(admission.admissionDate).toDateString() === dateFilter.toDateString()))
+  // Client-side date filtering - handle date format "11-01-2026 00:00" from API
+  let dateFilterStr: string | null = null;
+  if (dateFilter) {
+    // Format filter date as DD-MM-YYYY to match API format
+    const day = String(dateFilter.getDate()).padStart(2, '0');
+    const month = String(dateFilter.getMonth() + 1).padStart(2, '0');
+    const year = dateFilter.getFullYear();
+    dateFilterStr = `${day}-${month}-${year}`;
+  }
+  
+  const filterByDate = (admissionsList: Admission[]): Admission[] => {
+    if (!dateFilterStr) return admissionsList;
+    return admissionsList.filter(admission => {
+      // Get date from RoomAllocationDate field (format: "11-01-2026 00:00")
+      const roomAllocationDate = (admission as any).roomAllocationDate || 
+                                 (admission as any).RoomAllocationDate || 
+                                 admission.admissionDate;
+      
+      if (!roomAllocationDate) return false;
+      
+      // Handle the API date format "DD-MM-YYYY HH:mm" or "DD-MM-YYYY 00:00"
+      let admissionDateStr: string = '';
+      if (typeof roomAllocationDate === 'string') {
+        // If it's in format "11-01-2026 00:00", extract just the date part
+        if (roomAllocationDate.includes(' ')) {
+          admissionDateStr = roomAllocationDate.split(' ')[0]; // Get "11-01-2026"
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(roomAllocationDate)) {
+          // If it's in YYYY-MM-DD format, convert to DD-MM-YYYY
+          const [year, month, day] = roomAllocationDate.split('-');
+          admissionDateStr = `${day}-${month}-${year}`;
+        } else if (roomAllocationDate.includes('T')) {
+          // If it's an ISO datetime string, extract and convert
+          const datePart = roomAllocationDate.split('T')[0];
+          const [year, month, day] = datePart.split('-');
+          admissionDateStr = `${day}-${month}-${year}`;
+        } else {
+          // Try to parse as date and format as DD-MM-YYYY
+          try {
+            const dateObj = new Date(roomAllocationDate);
+            if (!isNaN(dateObj.getTime())) {
+              const day = String(dateObj.getDate()).padStart(2, '0');
+              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const year = dateObj.getFullYear();
+              admissionDateStr = `${day}-${month}-${year}`;
+            } else {
+              return false;
+            }
+          } catch {
+            return false;
+          }
+        }
+      } else if (roomAllocationDate instanceof Date) {
+        const day = String(roomAllocationDate.getDate()).padStart(2, '0');
+        const month = String(roomAllocationDate.getMonth() + 1).padStart(2, '0');
+        const year = roomAllocationDate.getFullYear();
+        admissionDateStr = `${day}-${month}-${year}`;
+      }
+      
+      // Compare dates directly (both in DD-MM-YYYY format)
+      return admissionDateStr === dateFilterStr;
+    });
+  };
+  
+  const filteredAdmissions = filterByDate(
+    admissions.filter(admission =>
+      // Text search filter
+      admission.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      admission.bedNumber.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
   const getAdmissionsByStatus = (status: string) => {
@@ -1268,6 +1833,14 @@ export default function Admissions() {
     }
   };
 
+  const handleAddAdmissionFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { id, value, type, checked } = e.target;
+    setAddAdmissionForm(prev => ({
+      ...prev,
+      [id]: type === 'checkbox' ? checked : value
+    }));
+  };
+
   return (
     <div className="dashboard-container">
       <div className="dashboard-scrollable-container">
@@ -1286,47 +1859,158 @@ export default function Admissions() {
           </DialogTrigger>
           <DialogContent className="p-0 gap-0 large-dialog max-w-4xl max-h-[90vh] bg-white">
             <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0 bg-white">
-              <DialogTitle>{editingAdmission ? 'Edit Admission' : 'Register New Admission'}</DialogTitle>
+              <DialogTitle>Register New Admission</DialogTitle>
             </DialogHeader>
             <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0 bg-white">
             <div className="space-y-4 py-4">
-                {/* Patient Type - First Field */}
-                <div>
-                  <Label htmlFor="patientType">Patient Type *</Label>
-                  <select
-                    id="patientType"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
-                    value={addAdmissionForm.patientType}
-                    onChange={(e) => handlePatientTypeChange(e.target.value)}
-                    required
-                  >
-                    <option value="">Select Patient Type</option>
-                    <option value="OPD">OPD</option>
-                    <option value="Emergency">Emergency</option>
-                    <option value="Direct">Direct</option>
-                  </select>
-                </div>
-
-                {/* Patient Selection - Same pattern as Front Desk - Disabled until Patient Type is selected */}
-                <div>
-                  <Label htmlFor="patient-search">Patient *</Label>
+              {/* Patient Selection - First Field */}
+              <div className="relative">
+                <Label htmlFor="patient-search">Patient *</Label>
                   <div className="relative mb-2">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                     <Input
+                      ref={addPatientInputRef}
                       id="patient-search"
-                      placeholder={addAdmissionForm.patientType ? "Search by Patient ID, Name, or Mobile Number..." : "Please select Patient Type first"}
+                      name="patient-search"
+                      autoComplete="off"
+                      placeholder="Search by Patient ID, Name, or Mobile Number..."
                       value={patientSearchTerm}
                       onChange={(e) => {
                         const newValue = e.target.value;
                         setPatientSearchTerm(newValue);
+                        setAddPatientHighlightIndex(-1);
+                        setShowAddPatientDropdown(true);
+                        setAddPatientVisibleCount(10);
+                        if (addAdmissionForm.patientId) {
+                          setAddAdmissionForm({ ...addAdmissionForm, patientId: '' });
+                        }
+                        requestAnimationFrame(() => {
+                          if (addPatientInputRef.current) {
+                            const rect = addPatientInputRef.current.getBoundingClientRect();
+                            setAddPatientDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
                       }}
-                      disabled={!addAdmissionForm.patientType}
-                      className={`pl-10 ${!addAdmissionForm.patientType ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      onFocus={() => {
+                        setShowAddPatientDropdown(true);
+                        setAddPatientVisibleCount(10);
+                        requestAnimationFrame(() => {
+                          if (addPatientInputRef.current) {
+                            const rect = addPatientInputRef.current.getBoundingClientRect();
+                            setAddPatientDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
+                      }}
+                      onBlur={(e) => {
+                        const relatedTarget = e.relatedTarget as HTMLElement;
+                        if (!relatedTarget || !relatedTarget.closest('#add-patient-dropdown')) {
+                          setTimeout(() => setShowAddPatientDropdown(false), 200);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        const filteredPatients = patientOptions.filter((patient: any) => {
+                          const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                          if (patientId && patientId.toLowerCase().includes('8dd9786e')) {
+                            return false;
+                          }
+                          if (!patientSearchTerm) return false;
+                          const searchLower = patientSearchTerm.toLowerCase();
+                          const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                          const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                          const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                          const fullName = `${patientName} ${lastName}`.trim();
+                          const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                          return (
+                            patientId.toLowerCase().includes(searchLower) ||
+                            patientNo.toLowerCase().includes(searchLower) ||
+                            fullName.toLowerCase().includes(searchLower) ||
+                            phoneNo.includes(patientSearchTerm)
+                          );
+                        });
+                        
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setAddPatientHighlightIndex(prev => 
+                            prev < filteredPatients.length - 1 ? prev + 1 : prev
+                          );
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setAddPatientHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                        } else if (e.key === 'Enter' && addPatientHighlightIndex >= 0 && filteredPatients[addPatientHighlightIndex]) {
+                          e.preventDefault();
+                          const patient = filteredPatients[addPatientHighlightIndex];
+                          const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                          const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                          const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                          const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                          const fullName = `${patientName} ${lastName}`.trim();
+                          const updatedForm = { ...addAdmissionForm, patientId };
+                          setAddAdmissionForm(updatedForm);
+                          setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                          setAddPatientHighlightIndex(-1);
+                          setShowAddPatientDropdown(false);
+                          if (updatedForm.patientType === 'OPD' && patientId) {
+                            fetchPatientAppointments(patientId).then(setAvailableAppointments);
+                          } else if (updatedForm.patientType === 'Emergency' && patientId) {
+                            fetchPatientEmergencyBedSlots(patientId).then(setAvailableEmergencyBedSlots);
+                          } else if (updatedForm.patientType === 'IPD' && patientId) {
+                            fetchPatientIPDAdmissions(patientId).then(setAvailableIPDAdmissions);
+                          }
+                        }
+                      }}
+                      disabled={false} // Always editable
+                      className="pl-10"
                     />
                   </div>
-                  {/* Patient Selection Dropdown - Show when searching, patient type selected, and no patient yet */}
-                  {addAdmissionForm.patientType && !addAdmissionForm.patientId && patientSearchTerm && patientOptions.length > 0 && (
-                    <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
+                  {showAddPatientDropdown && !addAdmissionForm.patientId && patientOptions.length > 0 && (
+                    <div 
+                      id="add-patient-dropdown"
+                      ref={addPatientDropdownRef}
+                      className="border border-gray-200 rounded-md max-h-60 overflow-y-auto bg-white shadow-lg"
+                      style={{ backgroundColor: 'white', opacity: 1 }}
+                      onScroll={(e) => {
+                        const target = e.target as HTMLDivElement;
+                        const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+                        if (scrollBottom < 50 && !addPatientLoadingMore) {
+                          const filteredPatients = patientSearchTerm 
+                            ? patientOptions.filter((patient: any) => {
+                                const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                if (patientId && patientId.toLowerCase().includes('8dd9786e')) {
+                                  return false;
+                                }
+                                const searchLower = patientSearchTerm.toLowerCase();
+                                const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                const fullName = `${patientName} ${lastName}`.trim();
+                                const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                return (
+                                  patientId.toLowerCase().includes(searchLower) ||
+                                  patientNo.toLowerCase().includes(searchLower) ||
+                                  fullName.toLowerCase().includes(searchLower) ||
+                                  phoneNo.includes(patientSearchTerm)
+                                );
+                              })
+                            : patientOptions;
+                          
+                          if (addPatientVisibleCount < filteredPatients.length) {
+                            setAddPatientLoadingMore(true);
+                            setTimeout(() => {
+                              setAddPatientVisibleCount(prev => Math.min(prev + 10, filteredPatients.length));
+                              setAddPatientLoadingMore(false);
+                            }, 500);
+                          }
+                        }
+                      }}
+                    >
                       <table className="w-full">
                         <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                           <tr>
@@ -1336,89 +2020,141 @@ export default function Admissions() {
                           </tr>
                         </thead>
                         <tbody>
-                          {patientOptions
-                            .filter((patient: any) => {
-                              const patientId = (patient as any).patientId || (patient as any).PatientId || '';
-                              // Exclude patient with ID 8dd9786e from inpatient dropdown
-                              if (patientId && patientId.toLowerCase().includes('8dd9786e')) {
-                                return false;
-                              }
-                              if (!patientSearchTerm) return false;
-                              const searchLower = patientSearchTerm.toLowerCase();
-                              const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
-                              const patientName = (patient as any).patientName || (patient as any).PatientName || '';
-                              const lastName = (patient as any).lastName || (patient as any).LastName || '';
-                              const fullName = `${patientName} ${lastName}`.trim();
-                              const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
-                              return (
-                                patientId.toLowerCase().includes(searchLower) ||
-                                patientNo.toLowerCase().includes(searchLower) ||
-                                fullName.toLowerCase().includes(searchLower) ||
-                                phoneNo.includes(patientSearchTerm)
-                              );
-                            })
-                            .map((patient: any) => {
-                              const patientId = (patient as any).patientId || (patient as any).PatientId || '';
-                              const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
-                              const patientName = (patient as any).patientName || (patient as any).PatientName || '';
-                              const lastName = (patient as any).lastName || (patient as any).LastName || '';
-                              const fullName = `${patientName} ${lastName}`.trim();
-                              const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
-                              const isSelected = addAdmissionForm.patientId === patientId;
-                              return (
-                                <tr
-                                  key={patientId}
-                                  onClick={async () => {
-                                    const updatedForm = { ...addAdmissionForm, patientId };
-                                    setAddAdmissionForm(updatedForm);
-                                    setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
-                                    
-                                    // If PatientType is already set, fetch conditional data
-                                    if (updatedForm.patientType === 'OPD' && patientId) {
-                                      await fetchPatientAppointments(patientId);
-                                    } else if (updatedForm.patientType === 'Emergency' && patientId) {
-                                      await fetchPatientEmergencyBedSlots(patientId);
-                                    } else if (updatedForm.patientType === 'IPD' && patientId) {
-                                      await fetchPatientIPDAdmissions(patientId);
-                                    }
-                                  }}
-                                  className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
-                                >
-                                  <td className="py-2 px-3 text-sm text-gray-900 font-mono">{patientNo || patientId.substring(0, 8)}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{fullName || 'Unknown'}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{phoneNo || '-'}</td>
-                                </tr>
-                              );
-                            })}
+                          {(() => {
+                            const filteredPatients = patientSearchTerm 
+                              ? patientOptions.filter((patient: any) => {
+                                  const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                  if (patientId && patientId.toLowerCase().includes('8dd9786e')) {
+                                    return false;
+                                  }
+                                  const searchLower = patientSearchTerm.toLowerCase();
+                                  const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                  const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                  const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                  const fullName = `${patientName} ${lastName}`.trim();
+                                  const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                  return (
+                                    patientId.toLowerCase().includes(searchLower) ||
+                                    patientNo.toLowerCase().includes(searchLower) ||
+                                    fullName.toLowerCase().includes(searchLower) ||
+                                    phoneNo.includes(patientSearchTerm)
+                                  );
+                                })
+                              : patientOptions;
+                            
+                            const visiblePatients = filteredPatients.slice(0, addPatientVisibleCount);
+                            const hasMore = addPatientVisibleCount < filteredPatients.length;
+                            
+                            return visiblePatients.length > 0 ? (
+                              <>
+                                {visiblePatients.map((patient, index) => {
+                                  const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                  const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                  const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                  const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                  const fullName = `${patientName} ${lastName}`.trim();
+                                  const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                  const isSelected = addAdmissionForm.patientId === patientId;
+                                  const isHighlighted = addPatientHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={patientId}
+                                      onClick={async () => {
+                                        const updatedForm = { ...addAdmissionForm, patientId };
+                                        setAddAdmissionForm(updatedForm);
+                                        setPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                                        setAddPatientHighlightIndex(-1);
+                                        setShowAddPatientDropdown(false);
+                                        if (updatedForm.patientType === 'OPD' && patientId) {
+                                          const appointments = await fetchPatientAppointments(patientId);
+                                          setAvailableAppointments(appointments || []);
+                                        } else if (updatedForm.patientType === 'Emergency' && patientId) {
+                                          const slots = await fetchPatientEmergencyBedSlots(patientId);
+                                          setAvailableEmergencyBedSlots(slots || []);
+                                        } else if (updatedForm.patientType === 'IPD' && patientId) {
+                                          const ipdAdmissions = await fetchPatientIPDAdmissions(patientId);
+                                          setAvailableIPDAdmissions(ipdAdmissions || []);
+                                        }
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                      }}
+                                      className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900 font-mono">{patientNo || patientId.substring(0, 8)}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{fullName || 'Unknown'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{phoneNo || '-'}</td>
+                                    </tr>
+                                  );
+                                })}
+                                {hasMore && (
+                                  <tr>
+                                    <td colSpan={3} className="text-center py-3 text-sm text-gray-500">
+                                      {addPatientLoadingMore ? (
+                                        <span className="flex items-center justify-center gap-2">
+                                          <span className="animate-spin">⏳</span>
+                                          Loading more...
+                                        </span>
+                                      ) : (
+                                        <span>Scroll for more...</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            ) : (
+                              <tr>
+                                <td colSpan={3} className="text-center py-8 text-sm text-gray-700">
+                                  No patients found. Try a different search term.
+                                </td>
+                              </tr>
+                            );
+                          })()}
                         </tbody>
                       </table>
-                      {patientOptions.filter((patient: any) => {
-                        const patientId = (patient as any).patientId || (patient as any).PatientId || '';
-                        // Exclude patient with ID 8dd9786e from inpatient dropdown
-                        if (patientId && patientId.toLowerCase().includes('8dd9786e')) {
-                          return false;
-                        }
-                        if (!patientSearchTerm) return false;
-                        const searchLower = patientSearchTerm.toLowerCase();
-                        const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
-                        const patientName = (patient as any).patientName || (patient as any).PatientName || '';
-                        const lastName = (patient as any).lastName || (patient as any).LastName || '';
-                        const fullName = `${patientName} ${lastName}`.trim();
-                        const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
-                        return (
-                          patientId.toLowerCase().includes(searchLower) ||
-                          patientNo.toLowerCase().includes(searchLower) ||
-                          fullName.toLowerCase().includes(searchLower) ||
-                          phoneNo.includes(patientSearchTerm)
-                        );
-                      }).length === 0 && !addAdmissionForm.patientId && (
-                        <div className="text-center py-8 text-sm text-gray-700">
-                          No patients found. Try a different search term.
-                        </div>
-                      )}
                     </div>
                   )}
+                  {addPatientError && (
+                    <p className="text-sm text-red-600 mt-1">{addPatientError}</p>
+                  )}
                 </div>
+
+              {/* Patient Type */}
+              <div className="relative">
+                <Label htmlFor="patientType" className="dialog-label-standard">Patient Type *</Label>
+                <select
+                  id="patientType"
+                  className="dialog-input-standard w-full"
+                  value={addAdmissionForm.patientType}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setAddAdmissionForm({ ...addAdmissionForm, patientType: newType });
+                      setAddPatientTypeError('');
+                      if (newType === 'OPD' && addAdmissionForm.patientId) {
+                        fetchPatientAppointments(addAdmissionForm.patientId);
+                      } else if (newType === 'Emergency' && addAdmissionForm.patientId) {
+                        fetchPatientEmergencyBedSlots(addAdmissionForm.patientId);
+                      } else if (newType === 'IPD' && addAdmissionForm.patientId) {
+                        fetchPatientIPDAdmissions(addAdmissionForm.patientId);
+                      } else {
+                        // Clear arrays when patient type changes but no patient is selected
+                        setAvailableAppointments([]);
+                        setAvailableEmergencyBedSlots([]);
+                        setAvailableIPDAdmissions([]);
+                      }
+                    }}
+                  required
+                >
+                  <option value="">Select Patient Type</option>
+                  <option value="OPD">OPD</option>
+                  <option value="Emergency">Emergency</option>
+                  <option value="Direct">Direct</option>
+                </select>
+                {addPatientTypeError && (
+                  <p className="text-sm text-red-600 mt-1">{addPatientTypeError}</p>
+                )}
+              </div>
+            </div>
 
                 {/* Conditional Fields based on PatientType */}
                 {addAdmissionForm.patientType === 'OPD' && (
@@ -1432,7 +2168,7 @@ export default function Admissions() {
                       required
                     >
                       <option value="">Select Appointment</option>
-                      {availableAppointments.map((appointment: any) => {
+                      {availableAppointments?.map((appointment: any) => {
                         const appointmentId = appointment.id || appointment.patientAppointmentId || appointment.PatientAppointmentId || '';
                         const tokenNo = appointment.tokenNo || appointment.TokenNo || '';
                         const appointmentDate = appointment.appointmentDate || appointment.AppointmentDate || '';
@@ -1471,7 +2207,7 @@ export default function Admissions() {
                       required
                     >
                       <option value="">Select Patient IPD Admission ID</option>
-                      {availableIPDAdmissions.map((admission: any) => {
+                      {availableIPDAdmissions?.map((admission: any) => {
                         // Extract RoomAdmissionId (prioritize this field)
                         const roomAdmissionId = admission.roomAdmissionId || admission.RoomAdmissionId || admission.admissionId || admission.id || '';
                         const bedNumber = admission.bedNumber || admission.BedNumber || admission.bedNo || admission.BedNo || '';
@@ -1513,7 +2249,7 @@ export default function Admissions() {
                       required
                     >
                       <option value="">Select Emergency Admission Bed No</option>
-                      {availableEmergencyBedSlots.map((slot: any) => {
+                      {availableEmergencyBedSlots?.map((slot: any) => {
                         // Extract EmergencyAdmissionId (prioritize this field)
                         const emergencyAdmissionId = slot.emergencyAdmissionId || slot.EmergencyAdmissionId || slot.id || '';
                         // Fallback to other IDs if EmergencyAdmissionId is not available
@@ -1536,16 +2272,135 @@ export default function Admissions() {
                   <div className="relative mb-2">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                     <Input
+                      ref={addRoomBedInputRef}
                       id="room-bed-search"
+                      name="room-bed-search"
+                      autoComplete="off"
                       placeholder={addAdmissionForm.patientType ? "Search by Room No, Bed No, Room Type, or Category..." : "Please select Patient Type first"}
                       value={roomBedSearchTerm}
-                      onChange={(e) => setRoomBedSearchTerm(e.target.value)}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setRoomBedSearchTerm(newValue);
+                        setAddRoomBedHighlightIndex(-1);
+                        setShowAddRoomBedDropdown(true);
+                        setAddRoomBedVisibleCount(10);
+                        if (addAdmissionForm.roomBedId) {
+                          setAddAdmissionForm({ ...addAdmissionForm, roomBedId: '', roomBedsId: '' });
+                        }
+                        requestAnimationFrame(() => {
+                          if (addRoomBedInputRef.current) {
+                            const rect = addRoomBedInputRef.current.getBoundingClientRect();
+                            setAddRoomBedDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
+                      }}
+                      onFocus={() => {
+                        setShowAddRoomBedDropdown(true);
+                        setAddRoomBedVisibleCount(10);
+                        requestAnimationFrame(() => {
+                          if (addRoomBedInputRef.current) {
+                            const rect = addRoomBedInputRef.current.getBoundingClientRect();
+                            setAddRoomBedDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
+                      }}
+                      onBlur={(e) => {
+                        const relatedTarget = e.relatedTarget as HTMLElement;
+                        if (!relatedTarget || !relatedTarget.closest('#add-room-bed-dropdown')) {
+                          setTimeout(() => setShowAddRoomBedDropdown(false), 200);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        const filteredBeds = roomBedOptions.filter((bed: any) => {
+                          if (!roomBedSearchTerm) return false;
+                          const searchLower = roomBedSearchTerm.toLowerCase();
+                          const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
+                          const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+                          const roomType = (bed as any).roomType || (bed as any).RoomType || '';
+                          const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
+                          return (
+                            roomNo.toLowerCase().includes(searchLower) ||
+                            bedNo.toLowerCase().includes(searchLower) ||
+                            roomType.toLowerCase().includes(searchLower) ||
+                            roomCategory.toLowerCase().includes(searchLower)
+                          );
+                        });
+                        
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setAddRoomBedHighlightIndex(prev => 
+                            prev < filteredBeds.length - 1 ? prev + 1 : prev
+                          );
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setAddRoomBedHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                        } else if (e.key === 'Enter' && addRoomBedHighlightIndex >= 0 && filteredBeds[addRoomBedHighlightIndex]) {
+                          e.preventDefault();
+                          const bed = filteredBeds[addRoomBedHighlightIndex];
+                          const roomBedId = (bed as any).roomBedId || (bed as any).RoomBedsId || (bed as any).id || '';
+                          const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
+                          const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+                          const roomType = (bed as any).roomType || (bed as any).RoomType || '';
+                          const roomBedsId = (bed as any).RoomBedsId || (bed as any).roomBedsId || roomBedId;
+                          setAddAdmissionForm({ 
+                            ...addAdmissionForm, 
+                            roomBedId: String(roomBedId),
+                            roomBedsId: String(roomBedsId),
+                            roomType: roomType
+                          });
+                          setRoomBedSearchTerm(`${roomNo} - ${bedNo} (${roomType})`);
+                          setAddRoomBedHighlightIndex(-1);
+                          setShowAddRoomBedDropdown(false);
+                        }
+                      }}
                       disabled={!addAdmissionForm.patientType}
                       className={`pl-10 ${!addAdmissionForm.patientType ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     />
-                </div>
-                  {roomBedSearchTerm && !addAdmissionForm.roomBedId && (
-                    <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
+                  </div>
+                  {showAddRoomBedDropdown && !addAdmissionForm.roomBedId && addAdmissionForm.patientType && roomBedOptions.length > 0 && (
+                    <div 
+                      id="add-room-bed-dropdown"
+                      ref={addRoomBedDropdownRef}
+                      className="border border-gray-200 rounded-md max-h-60 overflow-y-auto bg-white shadow-lg"
+                      style={{ backgroundColor: 'white', opacity: 1 }}
+                      onScroll={(e) => {
+                        const target = e.target as HTMLDivElement;
+                        const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+                        if (scrollBottom < 50 && !addRoomBedLoadingMore) {
+                          const filteredBeds = roomBedSearchTerm
+                            ? roomBedOptions.filter((bed: any) => {
+                                const searchLower = roomBedSearchTerm.toLowerCase();
+                                const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
+                                const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+                                const roomType = (bed as any).roomType || (bed as any).RoomType || '';
+                                const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
+                                return (
+                                  roomNo.toLowerCase().includes(searchLower) ||
+                                  bedNo.toLowerCase().includes(searchLower) ||
+                                  roomType.toLowerCase().includes(searchLower) ||
+                                  roomCategory.toLowerCase().includes(searchLower)
+                                );
+                              })
+                            : roomBedOptions;
+                          
+                          if (addRoomBedVisibleCount < filteredBeds.length) {
+                            setAddRoomBedLoadingMore(true);
+                            setTimeout(() => {
+                              setAddRoomBedVisibleCount(prev => Math.min(prev + 10, filteredBeds.length));
+                              setAddRoomBedLoadingMore(false);
+                            }, 500);
+                          }
+                        }
+                      }}
+                    >
                       <table className="w-full">
                         <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                           <tr>
@@ -1557,96 +2412,230 @@ export default function Admissions() {
                           </tr>
                         </thead>
                         <tbody>
-                          {roomBedOptions
-                            .filter((bed: any) => {
-                              if (!roomBedSearchTerm) return false;
-                              const searchLower = roomBedSearchTerm.toLowerCase();
-                              const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
-                              const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
-                              const roomType = (bed as any).roomType || (bed as any).RoomType || '';
-                              const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
-                              return (
-                                roomNo.toLowerCase().includes(searchLower) ||
-                                bedNo.toLowerCase().includes(searchLower) ||
-                                roomType.toLowerCase().includes(searchLower) ||
-                                roomCategory.toLowerCase().includes(searchLower)
-                              );
-                            })
-                            .map((bed: any) => {
-                              const roomBedId = (bed as any).roomBedId || (bed as any).RoomBedsId || (bed as any).id || '';
-                              const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
-                              const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
-                              const roomType = (bed as any).roomType || (bed as any).RoomType || '';
-                              const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
-                              const status = (bed as any).status || (bed as any).Status || '';
-                              const isSelected = addAdmissionForm.roomBedId === String(roomBedId);
-                              return (
-                                <tr
-                                  key={roomBedId}
-                                  onClick={() => {
-                                    const roomBedsId = (bed as any).RoomBedsId || (bed as any).roomBedsId || roomBedId;
-                                    setAddAdmissionForm({ 
-                                      ...addAdmissionForm, 
-                                      roomBedId: String(roomBedId),
-                                      roomBedsId: String(roomBedsId),
-                                      roomType: roomType
-                                    });
-                                    setRoomBedSearchTerm(`${roomNo} - ${bedNo} (${roomType})`);
-                                  }}
-                                  className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
-                                >
-                                  <td className="py-2 px-3 text-sm text-gray-900 font-mono">{roomNo || '-'}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{bedNo || '-'}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{roomType || '-'}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{roomCategory || '-'}</td>
-                                  <td className="py-2 px-3 text-sm">
-                                    <Badge variant={status === 'Active' ? 'default' : 'outline'}>
-                                      {status || 'N/A'}
-                                    </Badge>
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                          {(() => {
+                            const filteredBeds = roomBedSearchTerm
+                              ? roomBedOptions.filter((bed: any) => {
+                                  const searchLower = roomBedSearchTerm.toLowerCase();
+                                  const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
+                                  const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+                                  const roomType = (bed as any).roomType || (bed as any).RoomType || '';
+                                  const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
+                                  return (
+                                    roomNo.toLowerCase().includes(searchLower) ||
+                                    bedNo.toLowerCase().includes(searchLower) ||
+                                    roomType.toLowerCase().includes(searchLower) ||
+                                    roomCategory.toLowerCase().includes(searchLower)
+                                  );
+                                })
+                              : roomBedOptions;
+                            
+                            const visibleBeds = filteredBeds.slice(0, addRoomBedVisibleCount);
+                            const hasMore = addRoomBedVisibleCount < filteredBeds.length;
+                            
+                            return visibleBeds.length > 0 ? (
+                              <>
+                                {visibleBeds.map((bed, index) => {
+                                  const roomBedId = (bed as any).roomBedId || (bed as any).RoomBedsId || (bed as any).id || '';
+                                  const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
+                                  const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+                                  const roomType = (bed as any).roomType || (bed as any).RoomType || '';
+                                  const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
+                                  const status = (bed as any).status || (bed as any).Status || '';
+                                  const isSelected = addAdmissionForm.roomBedId === String(roomBedId);
+                                  const isHighlighted = addRoomBedHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={roomBedId}
+                                      onClick={() => {
+                                        const roomBedsId = (bed as any).RoomBedsId || (bed as any).roomBedsId || roomBedId;
+                                        setAddAdmissionForm({ 
+                                          ...addAdmissionForm, 
+                                          roomBedId: String(roomBedId),
+                                          roomBedsId: String(roomBedsId),
+                                          roomType: roomType
+                                        });
+                                        setRoomBedSearchTerm(`${roomNo} - ${bedNo} (${roomType})`);
+                                        setAddRoomBedHighlightIndex(-1);
+                                        setShowAddRoomBedDropdown(false);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                      }}
+                                      className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900 font-mono">{roomNo || '-'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{bedNo || '-'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{roomType || '-'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{roomCategory || '-'}</td>
+                                      <td className="py-2 px-3 text-sm">
+                                        <Badge variant={status === 'Active' ? 'default' : 'outline'}>
+                                          {status || 'N/A'}
+                                        </Badge>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {hasMore && (
+                                  <tr>
+                                    <td colSpan={5} className="text-center py-3 text-sm text-gray-500">
+                                      {addRoomBedLoadingMore ? (
+                                        <span className="flex items-center justify-center gap-2">
+                                          <span className="animate-spin">⏳</span>
+                                          Loading more...
+                                        </span>
+                                      ) : (
+                                        <span>Scroll for more...</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            ) : (
+                              <tr>
+                                <td colSpan={5} className="text-center py-8 text-sm text-gray-700">
+                                  No room beds found. Try a different search term.
+                                </td>
+                              </tr>
+                            );
+                          })()}
                         </tbody>
                       </table>
-                      {roomBedOptions.filter((bed: any) => {
-                        if (!roomBedSearchTerm) return false;
-                        const searchLower = roomBedSearchTerm.toLowerCase();
-                        const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
-                        const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
-                        const roomType = (bed as any).roomType || (bed as any).RoomType || '';
-                        const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
-                        return (
-                          roomNo.toLowerCase().includes(searchLower) ||
-                          bedNo.toLowerCase().includes(searchLower) ||
-                          roomType.toLowerCase().includes(searchLower) ||
-                          roomCategory.toLowerCase().includes(searchLower)
-                        );
-                      }).length === 0 && (
-                        <div className="text-center py-8 text-sm text-gray-700">
-                          No room beds found. Try a different search term.
-              </div>
-                      )}
                     </div>
+                  )}
+                  {addRoomBedError && (
+                    <p className="text-sm text-red-600 mt-1">{addRoomBedError}</p>
                   )}
                 </div>
 
                 {/* Doctor Selection - Same pattern as Patient selection */}
-              <div>
+                <div>
                   <Label htmlFor="doctor-search">Admitted By (Doctor) *</Label>
                   <div className="relative mb-2">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                     <Input
+                      ref={addDoctorInputRef}
                       id="doctor-search"
+                      name="doctor-search"
+                      autoComplete="off"
                       placeholder={addAdmissionForm.patientType ? "Search by Doctor Name, ID, or Specialty..." : "Please select Patient Type first"}
                       value={doctorSearchTerm}
-                      onChange={(e) => setDoctorSearchTerm(e.target.value)}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setDoctorSearchTerm(newValue);
+                        setAddDoctorHighlightIndex(-1);
+                        setShowAddDoctorDropdown(true);
+                        setAddDoctorVisibleCount(10);
+                        if (addAdmissionForm.admittedByDoctorId) {
+                          setAddAdmissionForm({ ...addAdmissionForm, admittedByDoctorId: '', doctorId: '' });
+                        }
+                        requestAnimationFrame(() => {
+                          if (addDoctorInputRef.current) {
+                            const rect = addDoctorInputRef.current.getBoundingClientRect();
+                            setAddDoctorDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
+                      }}
+                      onFocus={() => {
+                        setShowAddDoctorDropdown(true);
+                        setAddDoctorVisibleCount(10);
+                        requestAnimationFrame(() => {
+                          if (addDoctorInputRef.current) {
+                            const rect = addDoctorInputRef.current.getBoundingClientRect();
+                            setAddDoctorDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
+                      }}
+                      onBlur={(e) => {
+                        const relatedTarget = e.relatedTarget as HTMLElement;
+                        if (!relatedTarget || !relatedTarget.closest('#add-doctor-dropdown')) {
+                          setTimeout(() => setShowAddDoctorDropdown(false), 200);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        const filteredDoctors = doctorOptions.filter((doctor: any) => {
+                          if (!doctorSearchTerm) return false;
+                          const searchLower = doctorSearchTerm.toLowerCase();
+                          const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                          const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                          const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                          return (
+                            doctorId.toLowerCase().includes(searchLower) ||
+                            doctorName.toLowerCase().includes(searchLower) ||
+                            specialty.toLowerCase().includes(searchLower)
+                          );
+                        });
+                        
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setAddDoctorHighlightIndex(prev => 
+                            prev < filteredDoctors.length - 1 ? prev + 1 : prev
+                          );
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setAddDoctorHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                        } else if (e.key === 'Enter' && addDoctorHighlightIndex >= 0 && filteredDoctors[addDoctorHighlightIndex]) {
+                          e.preventDefault();
+                          const doctor = filteredDoctors[addDoctorHighlightIndex];
+                          const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                          const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                          const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                          setAddAdmissionForm({ 
+                            ...addAdmissionForm, 
+                            admittedByDoctorId: doctorId,
+                            doctorId: doctorId,
+                            admittedBy: doctorName
+                          });
+                          setDoctorSearchTerm(`${doctorName}${specialty ? ` - ${specialty}` : ''}`);
+                          setAddDoctorHighlightIndex(-1);
+                          setShowAddDoctorDropdown(false);
+                        }
+                      }}
                       disabled={!addAdmissionForm.patientType}
                       className={`pl-10 ${!addAdmissionForm.patientType ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     />
                   </div>
-                  {doctorSearchTerm && !addAdmissionForm.admittedByDoctorId && (
-                    <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
+                  {showAddDoctorDropdown && !addAdmissionForm.admittedByDoctorId && addAdmissionForm.patientType && doctorOptions.length > 0 && (
+                    <div 
+                      id="add-doctor-dropdown"
+                      ref={addDoctorDropdownRef}
+                      className="border border-gray-200 rounded-md max-h-60 overflow-y-auto bg-white shadow-lg"
+                      style={{ backgroundColor: 'white', opacity: 1 }}
+                      onScroll={(e) => {
+                        const target = e.target as HTMLDivElement;
+                        const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+                        if (scrollBottom < 50 && !addDoctorLoadingMore) {
+                          const filteredDoctors = doctorSearchTerm
+                            ? doctorOptions.filter((doctor: any) => {
+                                const searchLower = doctorSearchTerm.toLowerCase();
+                                const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                                const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                                const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                                return (
+                                  doctorId.toLowerCase().includes(searchLower) ||
+                                  doctorName.toLowerCase().includes(searchLower) ||
+                                  specialty.toLowerCase().includes(searchLower)
+                                );
+                              })
+                            : doctorOptions;
+                          
+                          if (addDoctorVisibleCount < filteredDoctors.length) {
+                            setAddDoctorLoadingMore(true);
+                            setTimeout(() => {
+                              setAddDoctorVisibleCount(prev => Math.min(prev + 10, filteredDoctors.length));
+                              setAddDoctorLoadingMore(false);
+                            }, 500);
+                          }
+                        }
+                      }}
+                    >
                       <table className="w-full">
                         <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                           <tr>
@@ -1657,71 +2646,94 @@ export default function Admissions() {
                           </tr>
                         </thead>
                         <tbody>
-                          {doctorOptions
-                            .filter((doctor: any) => {
-                              if (!doctorSearchTerm) return false;
-                              const searchLower = doctorSearchTerm.toLowerCase();
-                              const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
-                              const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
-                              const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
-                              return (
-                                doctorId.toLowerCase().includes(searchLower) ||
-                                doctorName.toLowerCase().includes(searchLower) ||
-                                specialty.toLowerCase().includes(searchLower)
-                              );
-                            })
-                            .map((doctor: any) => {
-                              const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
-                              const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
-                              const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || 'General';
-                              const doctorType = (doctor as any).type || (doctor as any).Type || (doctor as any).DoctorType || '';
-                              const isSelected = addAdmissionForm.admittedByDoctorId === doctorId;
-                              return (
-                                <tr
-                                  key={doctorId}
-                                  onClick={() => {
-                                    setAddAdmissionForm({ 
-                                      ...addAdmissionForm, 
-                                      admittedByDoctorId: doctorId,
-                                      doctorId: doctorId,
-                                      admittedBy: doctorName
-                                    });
-                                    setDoctorSearchTerm(`${doctorName} - ${specialty}`);
-                                  }}
-                                  className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''}`}
-                                >
-                                  <td className="py-2 px-3 text-sm text-gray-900 font-mono">{doctorId || '-'}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{doctorName || 'Unknown'}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">{specialty || '-'}</td>
-                                  <td className="py-2 px-3 text-sm text-gray-600">
-                                    <Badge variant={doctorType === 'inhouse' ? 'default' : 'outline'}>
-                                      {doctorType || 'N/A'}
-                                    </Badge>
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                          {(() => {
+                            const filteredDoctors = doctorSearchTerm
+                              ? doctorOptions.filter((doctor: any) => {
+                                  const searchLower = doctorSearchTerm.toLowerCase();
+                                  const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                                  const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                                  const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                                  return (
+                                    doctorId.toLowerCase().includes(searchLower) ||
+                                    doctorName.toLowerCase().includes(searchLower) ||
+                                    specialty.toLowerCase().includes(searchLower)
+                                  );
+                                })
+                              : doctorOptions;
+                            
+                            const visibleDoctors = filteredDoctors.slice(0, addDoctorVisibleCount);
+                            const hasMore = addDoctorVisibleCount < filteredDoctors.length;
+                            
+                            return visibleDoctors.length > 0 ? (
+                              <>
+                                {visibleDoctors.map((doctor, index) => {
+                                  const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                                  const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                                  const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                                  const doctorType = (doctor as any).type || (doctor as any).Type || (doctor as any).DoctorType || '';
+                                  const isSelected = addAdmissionForm.admittedByDoctorId === doctorId;
+                                  const isHighlighted = addDoctorHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={doctorId}
+                                      onClick={() => {
+                                        setAddAdmissionForm({ 
+                                          ...addAdmissionForm, 
+                                          admittedByDoctorId: doctorId,
+                                          doctorId: doctorId,
+                                          admittedBy: doctorName
+                                        });
+                                        setDoctorSearchTerm(`${doctorName}${specialty ? ` - ${specialty}` : ''}`);
+                                        setAddDoctorHighlightIndex(-1);
+                                        setShowAddDoctorDropdown(false);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                      }}
+                                      className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900 font-mono">{doctorId || '-'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{doctorName || 'Unknown'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{specialty || '-'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">
+                                        <Badge variant={doctorType === 'inhouse' ? 'default' : 'outline'}>
+                                          {doctorType || 'N/A'}
+                                        </Badge>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {hasMore && (
+                                  <tr>
+                                    <td colSpan={4} className="text-center py-3 text-sm text-gray-500">
+                                      {addDoctorLoadingMore ? (
+                                        <span className="flex items-center justify-center gap-2">
+                                          <span className="animate-spin">⏳</span>
+                                          Loading more...
+                                        </span>
+                                      ) : (
+                                        <span>Scroll for more...</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="text-center py-8 text-sm text-gray-700">
+                                  No doctors found. Try a different search term.
+                                </td>
+                              </tr>
+                            );
+                          })()}
                         </tbody>
                       </table>
-                      {doctorOptions.filter((doctor: any) => {
-                        if (!doctorSearchTerm) return false;
-                        const searchLower = doctorSearchTerm.toLowerCase();
-                        const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
-                        const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
-                        const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
-                        return (
-                          doctorId.toLowerCase().includes(searchLower) ||
-                          doctorName.toLowerCase().includes(searchLower) ||
-                          specialty.toLowerCase().includes(searchLower)
-                        );
-                      }).length === 0 && (
-                        <div className="text-center py-8 text-sm text-gray-700">
-                          No doctors found. Try a different search term.
-                        </div>
-                      )}
                     </div>
                   )}
-              </div>
+                  {addDoctorError && (
+                    <p className="text-sm text-red-600 mt-1">{addDoctorError}</p>
+                  )}
+                </div>
               <div className="dialog-form-field">
                   <Label htmlFor="roomAllocationDate" className="dialog-label-standard">Room Allocation Date *</Label>
                   <DatePicker
@@ -1735,6 +2747,7 @@ export default function Admissions() {
                         const day = String(date.getDate()).padStart(2, '0');
                         const dateStr = `${year}-${month}-${day}`;
                         setAddAdmissionForm({ ...addAdmissionForm, roomAllocationDate: dateStr });
+                        setAddRoomAllocationDateError('');
                       } else {
                         setAddAdmissionForm({ ...addAdmissionForm, roomAllocationDate: '' });
                       }
@@ -1777,6 +2790,9 @@ export default function Admissions() {
                     yearDropdownItemNumber={100}
                     scrollableYearDropdown
                   />
+                  {addRoomAllocationDateError && (
+                    <p className="text-sm text-red-600 mt-1">{addRoomAllocationDateError}</p>
+                  )}
               </div>
                 <div>
                   <Label htmlFor="admissionStatus">Admission Status *</Label>
@@ -1784,7 +2800,10 @@ export default function Admissions() {
                     id="admissionStatus"
                     className="w-full px-3 py-2 border border-gray-200 rounded-md"
                     value={addAdmissionForm.admissionStatus}
-                    onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, admissionStatus: e.target.value })}
+                    onChange={(e) => {
+                      setAddAdmissionForm({ ...addAdmissionForm, admissionStatus: e.target.value });
+                      setAddAdmissionStatusError('');
+                    }}
                     required
                   >
                     <option value="Active">Active</option>
@@ -1792,6 +2811,9 @@ export default function Admissions() {
                     <option value="Surgery Scheduled">Surgery Scheduled</option>
                     <option value="Discharged">Discharged</option>
                   </select>
+                  {addAdmissionStatusError && (
+                    <p className="text-sm text-red-600 mt-1">{addAdmissionStatusError}</p>
+                  )}
                 </div>
 
                 <div>
@@ -1866,8 +2888,8 @@ export default function Admissions() {
                     onChange={(e) => setAddAdmissionForm({ ...addAdmissionForm, shiftedToDetails: e.target.value })}
                   />
                 </div>
-              </div>
             </div>
+            
             {admissionError && (
               <div className="px-6 pb-2 flex-shrink-0 bg-white">
                 <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
@@ -1880,7 +2902,1234 @@ export default function Admissions() {
                 Cancel
               </Button>
               <Button onClick={handleSaveAdmission} disabled={savingAdmission}>
-                {savingAdmission ? 'Saving...' : editingAdmission ? 'Update Admission' : 'Admit Patient'}
+                {savingAdmission ? 'Adding...' : 'Add Admission'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Admission Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="p-0 gap-0 large-dialog max-w-4xl max-h-[90vh] bg-white">
+            <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0 bg-white">
+              <DialogTitle>Edit Admission</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0 bg-white">
+            <div className="space-y-4 py-4">
+                {/* Patient Selection - First Field */}
+                <div className="relative">
+                  <Label htmlFor="edit-patient-search">Patient *</Label>
+                  <div className="relative mb-2">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                    <Input
+                      ref={editPatientInputRef}
+                      id="edit-patient-search"
+                      name="edit-patient-search"
+                      autoComplete="off"
+                      placeholder="Search by Patient ID, Name, or Mobile Number..."
+                      value={editPatientSearchTerm}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setEditPatientSearchTerm(newValue);
+                        setEditPatientHighlightIndex(-1);
+                        setShowEditPatientDropdown(true);
+                        setEditPatientVisibleCount(10);
+                        if (editAdmissionForm.patientId) {
+                          setEditAdmissionForm({ ...editAdmissionForm, patientId: '' });
+                        }
+                        requestAnimationFrame(() => {
+                          if (editPatientInputRef.current) {
+                            const rect = editPatientInputRef.current.getBoundingClientRect();
+                            setEditPatientDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
+                      }}
+                      onFocus={() => {
+                        setShowEditPatientDropdown(true);
+                        setEditPatientVisibleCount(10);
+                        requestAnimationFrame(() => {
+                          if (editPatientInputRef.current) {
+                            const rect = editPatientInputRef.current.getBoundingClientRect();
+                            setEditPatientDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
+                      }}
+                      onBlur={(e) => {
+                        const relatedTarget = e.relatedTarget as HTMLElement;
+                        if (!relatedTarget || !relatedTarget.closest('#edit-patient-dropdown')) {
+                          setTimeout(() => setShowEditPatientDropdown(false), 200);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        const filteredPatients = patientOptions.filter((patient: any) => {
+                          const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                          if (patientId && patientId.toLowerCase().includes('8dd9786e')) {
+                            return false;
+                          }
+                          if (!editPatientSearchTerm) return false;
+                          const searchLower = editPatientSearchTerm.toLowerCase();
+                          const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                          const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                          const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                          const fullName = `${patientName} ${lastName}`.trim();
+                          const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                          return (
+                            patientId.toLowerCase().includes(searchLower) ||
+                            patientNo.toLowerCase().includes(searchLower) ||
+                            fullName.toLowerCase().includes(searchLower) ||
+                            phoneNo.includes(editPatientSearchTerm)
+                          );
+                        });
+                        
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setEditPatientHighlightIndex(prev => 
+                            prev < filteredPatients.length - 1 ? prev + 1 : prev
+                          );
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setEditPatientHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                        } else if (e.key === 'Enter' && editPatientHighlightIndex >= 0 && filteredPatients[editPatientHighlightIndex]) {
+                          e.preventDefault();
+                          const patient = filteredPatients[editPatientHighlightIndex];
+                          const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                          const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                          const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                          const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                          const fullName = `${patientName} ${lastName}`.trim();
+                          const updatedForm = { ...editAdmissionForm, patientId };
+                          setEditAdmissionForm(updatedForm);
+                          setEditPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                          setEditPatientHighlightIndex(-1);
+                          setShowEditPatientDropdown(false);
+                          if (updatedForm.patientType === 'OPD' && patientId) {
+                            fetchPatientAppointments(patientId).then((appointments) => {
+                              setEditAvailableAppointments(appointments || []);
+                            }).catch(() => {
+                              setEditAvailableAppointments([]);
+                            });
+                          } else if (updatedForm.patientType === 'Emergency' && patientId) {
+                            fetchPatientEmergencyBedSlots(patientId).then((slots) => {
+                              setEditAvailableEmergencyBedSlots(slots || []);
+                            }).catch(() => {
+                              setEditAvailableEmergencyBedSlots([]);
+                            });
+                          } else if (updatedForm.patientType === 'IPD' && patientId) {
+                            fetchPatientIPDAdmissions(patientId).then((ipdAdmissions) => {
+                              setEditAvailableIPDAdmissions(ipdAdmissions || []);
+                            }).catch(() => {
+                              setEditAvailableIPDAdmissions([]);
+                            });
+                          }
+                        }
+                      }}
+                      disabled={false} // Always editable
+                      className="dialog-input-standard w-full pl-10"
+                    />
+                  </div>
+                  {showEditPatientDropdown && !editAdmissionForm.patientId && patientOptions.length > 0 && (
+                    <div 
+                      id="edit-patient-dropdown"
+                      ref={editPatientDropdownRef}
+                      className="border border-gray-200 rounded-md max-h-60 overflow-y-auto bg-white shadow-lg"
+                      style={{ backgroundColor: 'white', opacity: 1 }}
+                      onScroll={(e) => {
+                        const target = e.target as HTMLDivElement;
+                        const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+                        if (scrollBottom < 50 && !editPatientLoadingMore) {
+                          const filteredPatients = editPatientSearchTerm 
+                            ? patientOptions.filter((patient: any) => {
+                                const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                if (patientId && patientId.toLowerCase().includes('8dd9786e')) {
+                                  return false;
+                                }
+                                const searchLower = editPatientSearchTerm.toLowerCase();
+                                const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                const fullName = `${patientName} ${lastName}`.trim();
+                                const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                return (
+                                  patientId.toLowerCase().includes(searchLower) ||
+                                  patientNo.toLowerCase().includes(searchLower) ||
+                                  fullName.toLowerCase().includes(searchLower) ||
+                                  phoneNo.includes(editPatientSearchTerm)
+                                );
+                              })
+                            : patientOptions;
+                          
+                          if (editPatientVisibleCount < filteredPatients.length) {
+                            setEditPatientLoadingMore(true);
+                            setTimeout(() => {
+                              setEditPatientVisibleCount(prev => Math.min(prev + 10, filteredPatients.length));
+                              setEditPatientLoadingMore(false);
+                            }, 500);
+                          }
+                        }
+                      }}
+                    >
+                      <table className="w-full">
+                        <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Patient ID</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Mobile</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const filteredPatients = editPatientSearchTerm 
+                              ? patientOptions.filter((patient: any) => {
+                                  const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                  if (patientId && patientId.toLowerCase().includes('8dd9786e')) {
+                                    return false;
+                                  }
+                                  const searchLower = editPatientSearchTerm.toLowerCase();
+                                  const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                  const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                  const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                  const fullName = `${patientName} ${lastName}`.trim();
+                                  const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                  return (
+                                    patientId.toLowerCase().includes(searchLower) ||
+                                    patientNo.toLowerCase().includes(searchLower) ||
+                                    fullName.toLowerCase().includes(searchLower) ||
+                                    phoneNo.includes(editPatientSearchTerm)
+                                  );
+                                })
+                              : patientOptions;
+                            
+                            const visiblePatients = filteredPatients.slice(0, editPatientVisibleCount);
+                            const hasMore = editPatientVisibleCount < filteredPatients.length;
+                            
+                            return visiblePatients.length > 0 ? (
+                              <>
+                                {visiblePatients.map((patient, index) => {
+                                  const patientId = (patient as any).patientId || (patient as any).PatientId || '';
+                                  const patientNo = (patient as any).patientNo || (patient as any).PatientNo || '';
+                                  const patientName = (patient as any).patientName || (patient as any).PatientName || '';
+                                  const lastName = (patient as any).lastName || (patient as any).LastName || '';
+                                  const fullName = `${patientName} ${lastName}`.trim();
+                                  const phoneNo = (patient as any).phoneNo || (patient as any).PhoneNo || (patient as any).phone || '';
+                                  const isSelected = editAdmissionForm.patientId === patientId;
+                                  const isHighlighted = editPatientHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={patientId}
+                                      onClick={async () => {
+                                        const updatedForm = { ...editAdmissionForm, patientId };
+                                        setEditAdmissionForm(updatedForm);
+                                        setEditPatientSearchTerm(`${patientNo ? `${patientNo} - ` : ''}${fullName || 'Unknown'}`);
+                                        setEditPatientHighlightIndex(-1);
+                                        setShowEditPatientDropdown(false);
+                                        if (updatedForm.patientType === 'OPD' && patientId) {
+                                          const appointments = await fetchPatientAppointments(patientId);
+                                          setEditAvailableAppointments(appointments || []);
+                                        } else if (updatedForm.patientType === 'Emergency' && patientId) {
+                                          const slots = await fetchPatientEmergencyBedSlots(patientId);
+                                          setEditAvailableEmergencyBedSlots(slots || []);
+                                        } else if (updatedForm.patientType === 'IPD' && patientId) {
+                                          const ipdAdmissions = await fetchPatientIPDAdmissions(patientId);
+                                          setEditAvailableIPDAdmissions(ipdAdmissions || []);
+                                        }
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                      }}
+                                      className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900 font-mono">{patientNo || patientId.substring(0, 8)}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{fullName || 'Unknown'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{phoneNo || '-'}</td>
+                                    </tr>
+                                  );
+                                })}
+                                {hasMore && (
+                                  <tr>
+                                    <td colSpan={3} className="text-center py-3 text-sm text-gray-500">
+                                      {editPatientLoadingMore ? (
+                                        <span className="flex items-center justify-center gap-2">
+                                          <span className="animate-spin">⏳</span>
+                                          Loading more...
+                                        </span>
+                                      ) : (
+                                        <span>Scroll for more...</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            ) : (
+                              <tr>
+                                <td colSpan={3} className="text-center py-8 text-sm text-gray-700">
+                                  No patients found. Try a different search term.
+                                </td>
+                              </tr>
+                            );
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {editPatientError && (
+                    <p className="text-sm text-red-600 mt-1">{editPatientError}</p>
+                  )}
+                </div>
+
+                {/* Patient Type */}
+                <div className="relative">
+                  <Label htmlFor="edit-patientType" className="dialog-label-standard">Patient Type *</Label>
+                  <select
+                    id="edit-patientType"
+                    className="dialog-input-standard w-full"
+                    value={editAdmissionForm.patientType}
+                    onChange={async (e) => {
+                      const newType = e.target.value;
+                      setEditAdmissionForm({ ...editAdmissionForm, patientType: newType });
+                      setEditPatientTypeError('');
+                      if (newType === 'OPD' && editAdmissionForm.patientId) {
+                        try {
+                          const appointments = await fetchPatientAppointments(editAdmissionForm.patientId);
+                          setEditAvailableAppointments(appointments || []);
+                        } catch {
+                          setEditAvailableAppointments([]);
+                        }
+                      } else if (newType === 'Emergency' && editAdmissionForm.patientId) {
+                        try {
+                          const slots = await fetchPatientEmergencyBedSlots(editAdmissionForm.patientId);
+                          setEditAvailableEmergencyBedSlots(slots || []);
+                        } catch {
+                          setEditAvailableEmergencyBedSlots([]);
+                        }
+                      } else if (newType === 'IPD' && editAdmissionForm.patientId) {
+                        try {
+                          const ipdAdmissions = await fetchPatientIPDAdmissions(editAdmissionForm.patientId);
+                          setEditAvailableIPDAdmissions(ipdAdmissions || []);
+                        } catch {
+                          setEditAvailableIPDAdmissions([]);
+                        }
+                      } else {
+                        // Clear arrays when patient type changes but no patient is selected
+                        setEditAvailableAppointments([]);
+                        setEditAvailableEmergencyBedSlots([]);
+                        setEditAvailableIPDAdmissions([]);
+                      }
+                    }}
+                    required
+                  >
+                    <option value="">Select Patient Type</option>
+                    <option value="OPD">OPD</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Direct">Direct</option>
+                  </select>
+                  {editPatientTypeError && (
+                    <p className="text-sm text-red-600 mt-1">{editPatientTypeError}</p>
+                  )}
+              </div>
+
+                
+
+                {/* Conditional Fields based on PatientType */}
+                {editAdmissionForm.patientType === 'OPD' && (
+                  <div className="relative">
+                    <Label htmlFor="edit-patientAppointmentId" className="dialog-label-standard">Patient Appointment ID *</Label>
+                    <select
+                      id="edit-patientAppointmentId"
+                      className="dialog-input-standard w-full"
+                      value={editAdmissionForm.patientAppointmentId}
+                      onChange={(e) => setEditAdmissionForm({ ...editAdmissionForm, patientAppointmentId: e.target.value })}
+                      required
+                    >
+                      <option value="">Select Appointment</option>
+                      {editAvailableAppointments?.map((appointment: any) => {
+                        const appointmentId = appointment.id || appointment.patientAppointmentId || appointment.PatientAppointmentId || '';
+                        const tokenNo = appointment.tokenNo || appointment.TokenNo || '';
+                        const appointmentDate = appointment.appointmentDate || appointment.AppointmentDate || '';
+                        let formattedDate = '';
+                        if (appointmentDate) {
+                          try {
+                            if (typeof appointmentDate === 'string') {
+                              formattedDate = appointmentDate.split('T')[0];
+                            } else {
+                              formattedDate = new Date(appointmentDate).toISOString().split('T')[0];
+                            }
+                          } catch {
+                            formattedDate = String(appointmentDate).split('T')[0] || 'N/A';
+                          }
+                        } else {
+                          formattedDate = 'N/A';
+                        }
+                        return (
+                          <option key={appointmentId} value={appointmentId}>
+                            {tokenNo ? `Token: ${tokenNo} - ${formattedDate}` : `Appointment ID: ${appointmentId} - ${formattedDate}`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+
+                {editAdmissionForm.patientType === 'IPD' && (
+                  <div className="relative">
+                    <Label htmlFor="edit-roomAdmissionId" className="dialog-label-standard">Patient IPD Admission ID *</Label>
+                    <select
+                      id="edit-roomAdmissionId"
+                      className="dialog-input-standard w-full"
+                      value={editAdmissionForm.roomAdmissionId}
+                      onChange={(e) => setEditAdmissionForm({ ...editAdmissionForm, roomAdmissionId: e.target.value })}
+                      required
+                    >
+                      <option value="">Select Patient IPD Admission ID</option>
+                      {editAvailableIPDAdmissions?.map((admission: any) => {
+                        const roomAdmissionId = admission.roomAdmissionId || admission.RoomAdmissionId || admission.admissionId || admission.id || '';
+                        const bedNumber = admission.bedNumber || admission.BedNumber || admission.bedNo || admission.BedNo || '';
+                        const roomType = admission.roomType || admission.RoomType || '';
+                        const admissionDate = admission.roomAllocationDate || admission.RoomAllocationDate || admission.admissionDate || admission.AdmissionDate || '';
+                        let formattedDate = '';
+                        if (admissionDate) {
+                          try {
+                            if (typeof admissionDate === 'string') {
+                              formattedDate = admissionDate.split('T')[0];
+                            } else {
+                              formattedDate = new Date(admissionDate).toISOString().split('T')[0];
+                            }
+                          } catch {
+                            formattedDate = String(admissionDate).split('T')[0] || 'N/A';
+                          }
+                        } else {
+                          formattedDate = 'N/A';
+                        }
+                        const status = admission.admissionStatus || admission.AdmissionStatus || admission.status || admission.Status || 'Active';
+                        return (
+                          <option key={roomAdmissionId} value={roomAdmissionId}>
+                            {bedNumber ? `Bed: ${bedNumber} - ${roomType} - ${formattedDate} (${status})` : `ID: ${roomAdmissionId} - ${formattedDate} (${status})`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+
+                {editAdmissionForm.patientType === 'Emergency' && (
+                  <div className="relative">
+                    <Label htmlFor="edit-emergencyBedSlotId" className="dialog-label-standard">Emergency Admission Bed No *</Label>
+                    <select
+                      id="edit-emergencyBedSlotId"
+                      className="dialog-input-standard w-full"
+                      value={editAdmissionForm.emergencyBedSlotId}
+                      onChange={(e) => setEditAdmissionForm({ ...editAdmissionForm, emergencyBedSlotId: e.target.value })}
+                      required
+                    >
+                      <option value="">Select Emergency Admission Bed No</option>
+                      {editAvailableEmergencyBedSlots?.map((slot: any) => {
+                        const emergencyAdmissionId = slot.emergencyAdmissionId || slot.EmergencyAdmissionId || slot.id || '';
+                        const slotId = emergencyAdmissionId || slot.emergencyBedSlotId || slot.EmergencyBedSlotId || '';
+                        const bedNo = slot.emergencyBedSlotNo || slot.EmergencyBedSlotNo || slot.bedNo || slot.BedNo || slot.emergencyBedNo || slot.EmergencyBedNo || '';
+                        const status = slot.emergencyStatus || slot.EmergencyStatus || slot.status || slot.Status || '';
+                        return (
+                          <option key={slotId} value={emergencyAdmissionId || slotId}>
+                            {bedNo ? `Bed: ${bedNo} - ${status}` : `ID: ${emergencyAdmissionId || slotId} - ${status}`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+
+                {/* Room/Bed Selection */}
+                <div className="relative">
+                  <Label htmlFor="edit-room-bed-search" className="dialog-label-standard">Room/Bed *</Label>
+                  <div className="relative mb-2">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                    <Input
+                      ref={editRoomBedInputRef}
+                      id="edit-room-bed-search"
+                      name="edit-room-bed-search"
+                      autoComplete="off"
+                      placeholder={editAdmissionForm.patientType ? "Search by Room No, Bed No, Room Type, or Category..." : "Please select Patient Type first"}
+                      value={editRoomBedSearchTerm}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setEditRoomBedSearchTerm(newValue);
+                        setEditRoomBedHighlightIndex(-1);
+                        setShowEditRoomBedDropdown(true);
+                        setEditRoomBedVisibleCount(10);
+                        if (editAdmissionForm.roomBedId) {
+                          setEditAdmissionForm({ ...editAdmissionForm, roomBedId: '', roomBedsId: '' });
+                        }
+                        requestAnimationFrame(() => {
+                          if (editRoomBedInputRef.current) {
+                            const rect = editRoomBedInputRef.current.getBoundingClientRect();
+                            setEditRoomBedDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
+                      }}
+                      onFocus={() => {
+                        setShowEditRoomBedDropdown(true);
+                        setEditRoomBedVisibleCount(10);
+                        requestAnimationFrame(() => {
+                          if (editRoomBedInputRef.current) {
+                            const rect = editRoomBedInputRef.current.getBoundingClientRect();
+                            setEditRoomBedDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
+                      }}
+                      onBlur={(e) => {
+                        const relatedTarget = e.relatedTarget as HTMLElement;
+                        if (!relatedTarget || !relatedTarget.closest('#edit-room-bed-dropdown')) {
+                          setTimeout(() => setShowEditRoomBedDropdown(false), 200);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        const filteredBeds = roomBedOptions.filter((bed: any) => {
+                          if (!editRoomBedSearchTerm) return false;
+                          const searchLower = editRoomBedSearchTerm.toLowerCase();
+                          const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
+                          const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+                          const roomType = (bed as any).roomType || (bed as any).RoomType || '';
+                          const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
+                          return (
+                            roomNo.toLowerCase().includes(searchLower) ||
+                            bedNo.toLowerCase().includes(searchLower) ||
+                            roomType.toLowerCase().includes(searchLower) ||
+                            roomCategory.toLowerCase().includes(searchLower)
+                          );
+                        });
+                        
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setEditRoomBedHighlightIndex(prev => 
+                            prev < filteredBeds.length - 1 ? prev + 1 : prev
+                          );
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setEditRoomBedHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                        } else if (e.key === 'Enter' && editRoomBedHighlightIndex >= 0 && filteredBeds[editRoomBedHighlightIndex]) {
+                          e.preventDefault();
+                          const bed = filteredBeds[editRoomBedHighlightIndex];
+                          const roomBedId = (bed as any).roomBedId || (bed as any).RoomBedsId || (bed as any).id || '';
+                          const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
+                          const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+                          const roomType = (bed as any).roomType || (bed as any).RoomType || '';
+                          const roomBedsId = (bed as any).RoomBedsId || (bed as any).roomBedsId || roomBedId;
+                          setEditAdmissionForm({ 
+                            ...editAdmissionForm, 
+                            roomBedId: String(roomBedId),
+                            roomBedsId: String(roomBedsId),
+                            roomType: roomType
+                          });
+                          setEditRoomBedSearchTerm(`${roomNo} - ${bedNo} (${roomType})`);
+                          setEditRoomBedHighlightIndex(-1);
+                          setShowEditRoomBedDropdown(false);
+                        }
+                      }}
+                      disabled={false}
+                      className={`dialog-input-standard w-full pl-10 ${!editAdmissionForm.patientType ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    />
+                  </div>
+                  {showEditRoomBedDropdown && !editAdmissionForm.roomBedId && editAdmissionForm.patientType && roomBedOptions.length > 0 && (
+                    <div 
+                      id="edit-room-bed-dropdown"
+                      ref={editRoomBedDropdownRef}
+                      className="border border-gray-200 rounded-md max-h-60 overflow-y-auto bg-white shadow-lg"
+                      style={{ backgroundColor: 'white', opacity: 1 }}
+                      onScroll={(e) => {
+                        const target = e.target as HTMLDivElement;
+                        const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+                        if (scrollBottom < 50 && !editRoomBedLoadingMore) {
+                          const filteredBeds = editRoomBedSearchTerm
+                            ? roomBedOptions.filter((bed: any) => {
+                                const searchLower = editRoomBedSearchTerm.toLowerCase();
+                                const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
+                                const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+                                const roomType = (bed as any).roomType || (bed as any).RoomType || '';
+                                const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
+                                return (
+                                  roomNo.toLowerCase().includes(searchLower) ||
+                                  bedNo.toLowerCase().includes(searchLower) ||
+                                  roomType.toLowerCase().includes(searchLower) ||
+                                  roomCategory.toLowerCase().includes(searchLower)
+                                );
+                              })
+                            : roomBedOptions;
+                          
+                          if (editRoomBedVisibleCount < filteredBeds.length) {
+                            setEditRoomBedLoadingMore(true);
+                            setTimeout(() => {
+                              setEditRoomBedVisibleCount(prev => Math.min(prev + 10, filteredBeds.length));
+                              setEditRoomBedLoadingMore(false);
+                            }, 500);
+                          }
+                        }
+                      }}
+                    >
+                      <table className="w-full">
+                        <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Room No</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Bed No</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Room Type</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Category</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const filteredBeds = editRoomBedSearchTerm
+                              ? roomBedOptions.filter((bed: any) => {
+                                  const searchLower = editRoomBedSearchTerm.toLowerCase();
+                                  const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
+                                  const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+                                  const roomType = (bed as any).roomType || (bed as any).RoomType || '';
+                                  const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
+                                  return (
+                                    roomNo.toLowerCase().includes(searchLower) ||
+                                    bedNo.toLowerCase().includes(searchLower) ||
+                                    roomType.toLowerCase().includes(searchLower) ||
+                                    roomCategory.toLowerCase().includes(searchLower)
+                                  );
+                                })
+                              : roomBedOptions;
+                            
+                            const visibleBeds = filteredBeds.slice(0, editRoomBedVisibleCount);
+                            const hasMore = editRoomBedVisibleCount < filteredBeds.length;
+                            
+                            return visibleBeds.length > 0 ? (
+                              <>
+                                {visibleBeds.map((bed, index) => {
+                                  const roomBedId = (bed as any).roomBedId || (bed as any).RoomBedsId || (bed as any).id || '';
+                                  const roomNo = (bed as any).roomNo || (bed as any).RoomNo || '';
+                                  const bedNo = (bed as any).bedNo || (bed as any).BedNo || '';
+                                  const roomType = (bed as any).roomType || (bed as any).RoomType || '';
+                                  const roomCategory = (bed as any).roomCategory || (bed as any).RoomCategory || '';
+                                  const status = (bed as any).status || (bed as any).Status || '';
+                                  const isSelected = editAdmissionForm.roomBedId === String(roomBedId);
+                                  const isHighlighted = editRoomBedHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={roomBedId}
+                                      onClick={() => {
+                                        const roomBedsId = (bed as any).RoomBedsId || (bed as any).roomBedsId || roomBedId;
+                                        setEditAdmissionForm({ 
+                                          ...editAdmissionForm, 
+                                          roomBedId: String(roomBedId),
+                                          roomBedsId: String(roomBedsId),
+                                          roomType: roomType
+                                        });
+                                        setEditRoomBedSearchTerm(`${roomNo} - ${bedNo} (${roomType})`);
+                                        setEditRoomBedHighlightIndex(-1);
+                                        setShowEditRoomBedDropdown(false);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                      }}
+                                      className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900 font-mono">{roomNo || '-'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{bedNo || '-'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{roomType || '-'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{roomCategory || '-'}</td>
+                                      <td className="py-2 px-3 text-sm">
+                                        <Badge variant={status === 'Active' ? 'default' : 'outline'}>
+                                          {status || 'N/A'}
+                                        </Badge>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {hasMore && (
+                                  <tr>
+                                    <td colSpan={5} className="text-center py-3 text-sm text-gray-500">
+                                      {editRoomBedLoadingMore ? (
+                                        <span className="flex items-center justify-center gap-2">
+                                          <span className="animate-spin">⏳</span>
+                                          Loading more...
+                                        </span>
+                                      ) : (
+                                        <span>Scroll for more...</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            ) : (
+                              <tr>
+                                <td colSpan={5} className="text-center py-8 text-sm text-gray-700">
+                                  No room beds found. Try a different search term.
+                                </td>
+                              </tr>
+                            );
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {editRoomBedError && (
+                    <p className="text-sm text-red-600 mt-1">{editRoomBedError}</p>
+                  )}
+                </div>
+
+                {/* Doctor Selection */}
+                <div className="relative">
+                  <Label htmlFor="edit-doctor-search" className="dialog-label-standard">Admitted By (Doctor) *</Label>
+                  <div className="relative mb-2">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                    <Input
+                      ref={editDoctorInputRef}
+                      id="edit-doctor-search"
+                      name="edit-doctor-search"
+                      autoComplete="off"
+                      placeholder={editAdmissionForm.patientType ? "Search by Doctor Name, ID, or Specialty..." : "Please select Patient Type first"}
+                      value={editDoctorSearchTerm}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setEditDoctorSearchTerm(newValue);
+                        setEditDoctorHighlightIndex(-1);
+                        setShowEditDoctorDropdown(true);
+                        setEditDoctorVisibleCount(10);
+                        if (editAdmissionForm.admittedByDoctorId) {
+                          setEditAdmissionForm({ ...editAdmissionForm, admittedByDoctorId: '', doctorId: '' });
+                        }
+                        requestAnimationFrame(() => {
+                          if (editDoctorInputRef.current) {
+                            const rect = editDoctorInputRef.current.getBoundingClientRect();
+                            setEditDoctorDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
+                      }}
+                      onFocus={() => {
+                        setShowEditDoctorDropdown(true);
+                        setEditDoctorVisibleCount(10);
+                        requestAnimationFrame(() => {
+                          if (editDoctorInputRef.current) {
+                            const rect = editDoctorInputRef.current.getBoundingClientRect();
+                            setEditDoctorDropdownPosition({
+                              top: rect.bottom + 4,
+                              left: rect.left,
+                              width: rect.width
+                            });
+                          }
+                        });
+                      }}
+                      onBlur={(e) => {
+                        const relatedTarget = e.relatedTarget as HTMLElement;
+                        if (!relatedTarget || !relatedTarget.closest('#edit-doctor-dropdown')) {
+                          setTimeout(() => setShowEditDoctorDropdown(false), 200);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        const filteredDoctors = doctorOptions.filter((doctor: any) => {
+                          if (!editDoctorSearchTerm) return false;
+                          const searchLower = editDoctorSearchTerm.toLowerCase();
+                          const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                          const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                          const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                          return (
+                            doctorId.toLowerCase().includes(searchLower) ||
+                            doctorName.toLowerCase().includes(searchLower) ||
+                            specialty.toLowerCase().includes(searchLower)
+                          );
+                        });
+                        
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setEditDoctorHighlightIndex(prev => 
+                            prev < filteredDoctors.length - 1 ? prev + 1 : prev
+                          );
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setEditDoctorHighlightIndex(prev => prev > 0 ? prev - 1 : -1);
+                        } else if (e.key === 'Enter' && editDoctorHighlightIndex >= 0 && filteredDoctors[editDoctorHighlightIndex]) {
+                          e.preventDefault();
+                          const doctor = filteredDoctors[editDoctorHighlightIndex];
+                          const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                          const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                          const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                          setEditAdmissionForm({ 
+                            ...editAdmissionForm, 
+                            admittedByDoctorId: doctorId,
+                            doctorId: doctorId
+                          });
+                          setEditDoctorSearchTerm(`${doctorName}${specialty ? ` - ${specialty}` : ''}`);
+                          setEditDoctorHighlightIndex(-1);
+                          setShowEditDoctorDropdown(false);
+                        }
+                      }}
+                      disabled={!editAdmissionForm.patientType}
+                      className={`dialog-input-standard w-full pl-10 ${!editAdmissionForm.patientType ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    />
+                  </div>
+                  {showEditDoctorDropdown && !editAdmissionForm.admittedByDoctorId && editAdmissionForm.patientType && doctorOptions.length > 0 && (
+                    <div 
+                      id="edit-doctor-dropdown"
+                      ref={editDoctorDropdownRef}
+                      className="border border-gray-200 rounded-md max-h-60 overflow-y-auto bg-white shadow-lg"
+                      style={{ backgroundColor: 'white', opacity: 1 }}
+                      onScroll={(e) => {
+                        const target = e.target as HTMLDivElement;
+                        const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+                        if (scrollBottom < 50 && !editDoctorLoadingMore) {
+                          const filteredDoctors = editDoctorSearchTerm
+                            ? doctorOptions.filter((doctor: any) => {
+                                const searchLower = editDoctorSearchTerm.toLowerCase();
+                                const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                                const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                                const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                                return (
+                                  doctorId.toLowerCase().includes(searchLower) ||
+                                  doctorName.toLowerCase().includes(searchLower) ||
+                                  specialty.toLowerCase().includes(searchLower)
+                                );
+                              })
+                            : doctorOptions;
+                          
+                          if (editDoctorVisibleCount < filteredDoctors.length) {
+                            setEditDoctorLoadingMore(true);
+                            setTimeout(() => {
+                              setEditDoctorVisibleCount(prev => Math.min(prev + 10, filteredDoctors.length));
+                              setEditDoctorLoadingMore(false);
+                            }, 500);
+                          }
+                        }
+                      }}
+                    >
+                      <table className="w-full">
+                        <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Doctor ID</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Name</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Specialty</th>
+                            <th className="text-left py-2 px-3 text-xs text-gray-700 font-bold">Type</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const filteredDoctors = editDoctorSearchTerm
+                              ? doctorOptions.filter((doctor: any) => {
+                                  const searchLower = editDoctorSearchTerm.toLowerCase();
+                                  const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                                  const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                                  const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                                  return (
+                                    doctorId.toLowerCase().includes(searchLower) ||
+                                    doctorName.toLowerCase().includes(searchLower) ||
+                                    specialty.toLowerCase().includes(searchLower)
+                                  );
+                                })
+                              : doctorOptions;
+                            
+                            const visibleDoctors = filteredDoctors.slice(0, editDoctorVisibleCount);
+                            const hasMore = editDoctorVisibleCount < filteredDoctors.length;
+                            
+                            return visibleDoctors.length > 0 ? (
+                              <>
+                                {visibleDoctors.map((doctor, index) => {
+                                  const doctorId = String((doctor as any).id || (doctor as any).Id || (doctor as any).UserId || '');
+                                  const doctorName = (doctor as any).name || (doctor as any).Name || (doctor as any).UserName || '';
+                                  const specialty = (doctor as any).specialty || (doctor as any).Specialty || (doctor as any).DoctorDepartmentName || '';
+                                  const doctorType = (doctor as any).type || (doctor as any).Type || (doctor as any).doctorType || '';
+                                  const isSelected = editAdmissionForm.admittedByDoctorId === doctorId;
+                                  const isHighlighted = editDoctorHighlightIndex === index;
+                                  return (
+                                    <tr
+                                      key={doctorId}
+                                      onClick={() => {
+                                        setEditAdmissionForm({ 
+                                          ...editAdmissionForm, 
+                                          admittedByDoctorId: doctorId,
+                                          doctorId: doctorId
+                                        });
+                                        setEditDoctorSearchTerm(`${doctorName}${specialty ? ` - ${specialty}` : ''}`);
+                                        setEditDoctorHighlightIndex(-1);
+                                        setShowEditDoctorDropdown(false);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                      }}
+                                      className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50 ${isSelected ? 'bg-blue-100' : ''} ${isHighlighted ? 'bg-gray-50' : ''}`}
+                                    >
+                                      <td className="py-2 px-3 text-sm text-gray-900 font-mono">{doctorId || '-'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{doctorName || '-'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{specialty || '-'}</td>
+                                      <td className="py-2 px-3 text-sm text-gray-600">{doctorType || '-'}</td>
+                                    </tr>
+                                  );
+                                })}
+                                {hasMore && (
+                                  <tr>
+                                    <td colSpan={4} className="text-center py-3 text-sm text-gray-500">
+                                      {editDoctorLoadingMore ? (
+                                        <span className="flex items-center justify-center gap-2">
+                                          <span className="animate-spin">⏳</span>
+                                          Loading more...
+                                        </span>
+                                      ) : (
+                                        <span>Scroll for more...</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="text-center py-8 text-sm text-gray-700">
+                                  No doctors found. Try a different search term.
+                                </td>
+                              </tr>
+                            );
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {editDoctorError && (
+                    <p className="text-sm text-red-600 mt-1">{editDoctorError}</p>
+                  )}
+                </div>
+
+                {/* Room Allocation Date */}
+                <div className="relative">
+                  <Label htmlFor="edit-roomAllocationDate" className="dialog-label-standard">Room Allocation Date *</Label>
+                  <ISTDatePicker
+                    selected={editAdmissionForm.roomAllocationDate ? (() => {
+                      // Parse YYYY-MM-DD format correctly (no timezone conversion)
+                      const dateStr = editAdmissionForm.roomAllocationDate;
+                      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                        const [year, month, day] = dateStr.split('-').map(Number);
+                        return new Date(year, month - 1, day);
+                      }
+                      return null;
+                    })() : null}
+                    onChange={(dateStr: string | null, date: Date | null) => {
+                      if (date) {
+                        // Format as YYYY-MM-DD like FrontDesk (no timezone conversion)
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const formattedDate = `${year}-${month}-${day}`;
+                        setEditAdmissionForm({ ...editAdmissionForm, roomAllocationDate: formattedDate });
+                        setEditRoomAllocationDateError('');
+                      } else {
+                        setEditAdmissionForm({ ...editAdmissionForm, roomAllocationDate: '' });
+                      }
+                    }}
+                    dateFormat="dd-MM-yyyy"
+                    placeholderText="Select room allocation date"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
+                  />
+                  {editRoomAllocationDateError && (
+                    <p className="text-sm text-red-600 mt-1">{editRoomAllocationDateError}</p>
+                  )}
+                </div>
+
+                {/* Admission Status */}
+                <div className="relative">
+                  <Label htmlFor="edit-admissionStatus" className="dialog-label-standard">Admission Status *</Label>
+                  <select
+                    id="edit-admissionStatus"
+                    className="dialog-input-standard w-full"
+                    value={editAdmissionForm.admissionStatus}
+                    onChange={(e) => {
+                      setEditAdmissionForm({ ...editAdmissionForm, admissionStatus: e.target.value });
+                      setEditAdmissionStatusError('');
+                    }}
+                    required
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Moved To ICU">Moved To ICU</option>
+                    <option value="Surgery Scheduled">Surgery Scheduled</option>
+                    <option value="Discharged">Discharged</option>
+                  </select>
+                  {editAdmissionStatusError && (
+                    <p className="text-sm text-red-600 mt-1">{editAdmissionStatusError}</p>
+                  )}
+                </div>
+
+                {/* Case Sheet */}
+                <div className="relative">
+                  <Label htmlFor="edit-caseSheet" className="dialog-label-standard">Case Sheet</Label>
+                  <Input
+                    id="edit-caseSheet"
+                    className="dialog-input-standard w-full"
+                    placeholder="Enter case sheet"
+                    value={editAdmissionForm.caseSheet}
+                    onChange={(e) => setEditAdmissionForm({ ...editAdmissionForm, caseSheet: e.target.value })}
+                  />
+                </div>
+
+                {/* Case Details */}
+                <div className="relative">
+                  <Label htmlFor="edit-caseDetails" className="dialog-label-standard">Case Details</Label>
+                  <Textarea
+                    id="edit-caseDetails"
+                    className="dialog-input-standard w-full"
+                    placeholder="Enter case details"
+                    value={editAdmissionForm.caseDetails}
+                    onChange={(e) => setEditAdmissionForm({ ...editAdmissionForm, caseDetails: e.target.value })}
+                    rows={4}
+                  />
+                </div>
+
+                {/* Is Linked To ICU */}
+                <div className="relative">
+                  <Label htmlFor="edit-isLinkedToICU" className="dialog-label-standard">Is Linked To ICU *</Label>
+                  <select
+                    id="edit-isLinkedToICU"
+                    className="dialog-input-standard w-full"
+                    value={editAdmissionForm.isLinkedToICU}
+                    onChange={(e) => setEditAdmissionForm({ ...editAdmissionForm, isLinkedToICU: e.target.value })}
+                    required
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+
+                {/* OT Scheduled */}
+                <div className="relative">
+                  <Label htmlFor="edit-scheduleOT" className="dialog-label-standard">OT Scheduled *</Label>
+                  <select
+                    id="edit-scheduleOT"
+                    className="dialog-input-standard w-full"
+                    value={editAdmissionForm.scheduleOT}
+                    onChange={(e) => setEditAdmissionForm({ ...editAdmissionForm, scheduleOT: e.target.value })}
+                    required
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+
+                {/* Shift to Another Room */}
+                <div className="relative">
+                  <Label htmlFor="edit-shiftToAnotherRoom" className="dialog-label-standard">Shift to Another Room</Label>
+                  <select
+                    id="edit-shiftToAnotherRoom"
+                    className="dialog-input-standard w-full"
+                    value={editAdmissionForm.shiftToAnotherRoom}
+                    onChange={(e) => setEditAdmissionForm({ ...editAdmissionForm, shiftToAnotherRoom: e.target.value })}
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+
+                {/* Shifted To Details */}
+                <div className="relative">
+                  <Label htmlFor="edit-shiftedToDetails" className="dialog-label-standard">Shifted Details</Label>
+                  <Input
+                    id="edit-shiftedToDetails"
+                    className="dialog-input-standard w-full"
+                    placeholder="Enter shifted details"
+                    value={editAdmissionForm.shiftedToDetails}
+                    onChange={(e) => setEditAdmissionForm({ ...editAdmissionForm, shiftedToDetails: e.target.value })}
+                  />
+                </div>
+
+                {/* Status Toggle - Last Row */}
+                <div className="relative">
+                  <div className="flex items-center gap-3">
+                    <Label htmlFor="edit-status" className="dialog-label-standard">Status</Label>
+                    <div className="flex-shrink-0 relative" style={{ zIndex: 1 }}>
+                      <Switch
+                        id="edit-status"
+                        checked={editAdmissionForm.status === 'Active'}
+                        onCheckedChange={(checked) => {
+                          setEditAdmissionForm({ 
+                            ...editAdmissionForm, 
+                            status: checked ? 'Active' : 'Inactive' 
+                          });
+                        }}
+                        className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
+                        style={{
+                          width: '2.5rem',
+                          height: '1.5rem',
+                          minWidth: '2.5rem',
+                          minHeight: '1.5rem',
+                          display: 'inline-flex',
+                          position: 'relative',
+                          backgroundColor: editAdmissionForm.status === 'Active' ? '#2563eb' : '#d1d5db',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {admissionError && (
+              <div className="px-6 pb-2 flex-shrink-0 bg-white">
+                <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                  {admissionError}
+                </div>
+              </div>
+            )}
+            <DialogFooter className="px-6 py-3 flex-shrink-0 border-t bg-white">
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={savingAdmission}>
+                Cancel
+              </Button>
+              <Button onClick={async () => {
+                setSavingAdmission(true);
+                setAdmissionError(null);
+                
+                // Clear previous validation errors
+                setEditPatientError('');
+                setEditPatientTypeError('');
+                setEditRoomBedError('');
+                setEditDoctorError('');
+                setEditRoomAllocationDateError('');
+                setEditAdmissionStatusError('');
+                
+                // Validate required fields
+                let hasErrors = false;
+                
+                if (!editAdmissionForm.patientId) {
+                  setEditPatientError('Please select a patient from the list.');
+                  hasErrors = true;
+                }
+                
+                if (!editAdmissionForm.patientType) {
+                  setEditPatientTypeError('Please select a patient type.');
+                  hasErrors = true;
+                } else {
+                  if (editAdmissionForm.patientType === 'OPD' && !editAdmissionForm.patientAppointmentId) {
+                    setEditPatientTypeError('Patient Appointment ID is required for OPD patients.');
+                    hasErrors = true;
+                  }
+                  if (editAdmissionForm.patientType === 'IPD' && !(editAdmissionForm as any).roomAdmissionId) {
+                    setEditPatientTypeError('Patient IPD Admission ID is required for IPD patients.');
+                    hasErrors = true;
+                  }
+                  if (editAdmissionForm.patientType === 'Emergency' && !editAdmissionForm.emergencyBedSlotId) {
+                    setEditPatientTypeError('Emergency Admission Bed No is required for Emergency patients.');
+                    hasErrors = true;
+                  }
+                }
+                
+                if (!editAdmissionForm.roomBedId) {
+                  setEditRoomBedError('Please select a room/bed.');
+                  hasErrors = true;
+                }
+                
+                if (!editAdmissionForm.admittedByDoctorId && !editAdmissionForm.doctorId) {
+                  setEditDoctorError('Please select a doctor from the list.');
+                  hasErrors = true;
+                }
+                
+                if (!editAdmissionForm.roomAllocationDate) {
+                  setEditRoomAllocationDateError('Room Allocation Date is required.');
+                  hasErrors = true;
+                }
+                
+                // Validate admissionStatus is one of the allowed values
+                const allowedAdmissionStatuses = ['Active', 'Moved To ICU', 'Surgery Scheduled', 'Discharged'];
+                if (!editAdmissionForm.admissionStatus || !allowedAdmissionStatuses.includes(editAdmissionForm.admissionStatus)) {
+                  setEditAdmissionStatusError('Admission Status must be one of: Active, Moved To ICU, Surgery Scheduled, Discharged.');
+                  hasErrors = true;
+                }
+                
+                if (!editAdmissionForm.roomAdmissionId) {
+                  setAdmissionError('Room Admission ID is required for updating');
+                  hasErrors = true;
+                }
+                
+                if (hasErrors) {
+                  setSavingAdmission(false);
+                  return;
+                }
+                
+                try {
+
+                  // Format request body according to API specification
+                  // Convert roomAllocationDate from YYYY-MM-DD to DD-MM-YYYY format for backend
+                  let roomAllocationDateFormatted = '';
+                  if (editAdmissionForm.roomAllocationDate) {
+                    const dateStr = editAdmissionForm.roomAllocationDate;
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                      // Convert YYYY-MM-DD to DD-MM-YYYY
+                      const [year, month, day] = dateStr.split('-');
+                      roomAllocationDateFormatted = `${day}-${month}-${year}`;
+                    } else {
+                      roomAllocationDateFormatted = editAdmissionForm.roomAllocationDate;
+                    }
+                  }
+                  
+                  const updatePayload: any = {
+                    PatientAppointmentId: editAdmissionForm.patientAppointmentId ? Number(editAdmissionForm.patientAppointmentId) : null,
+                    EmergencyAdmissionId: editAdmissionForm.emergencyBedSlotId ? Number(editAdmissionForm.emergencyBedSlotId) : null,
+                    PatientType: editAdmissionForm.patientType || null,
+                    AdmittingDoctorId: editAdmissionForm.admittedByDoctorId ? Number(editAdmissionForm.admittedByDoctorId) : (editAdmissionForm.doctorId ? Number(editAdmissionForm.doctorId) : null),
+                    PatientId: editAdmissionForm.patientId || '',
+                    RoomBedsId: editAdmissionForm.roomBedsId ? Number(editAdmissionForm.roomBedsId) : null,
+                    RoomAllocationDate: roomAllocationDateFormatted || '',
+                    RoomVacantDate: editAdmissionForm.roomVacantDate || null,
+                    AdmissionStatus: editAdmissionForm.admissionStatus || 'Active',
+                    CaseSheetDetails: editAdmissionForm.caseDetails || null,
+                    CaseSheet: editAdmissionForm.caseSheet || null,
+                    ShiftToAnotherRoom: editAdmissionForm.shiftToAnotherRoom || 'No',
+                    ShiftedTo: editAdmissionForm.shiftedTo || null,
+                    ShiftedToDetails: editAdmissionForm.shiftedToDetails || null,
+                    ScheduleOT: editAdmissionForm.scheduleOT || 'No',
+                    OTAdmissionId: editAdmissionForm.otAdmissionId ? Number(editAdmissionForm.otAdmissionId) : null,
+                    IsLinkedToICU: editAdmissionForm.isLinkedToICU || 'No',
+                    ICUAdmissionId: editAdmissionForm.icuAdmissionId || null,
+                    BillId: editAdmissionForm.billId ? Number(editAdmissionForm.billId) : null,
+                    AllocatedBy: null, // Can be set if needed
+                    Status: editAdmissionForm.status || 'Active'
+                  };
+
+                  console.log('Updating admission with payload:', updatePayload);
+
+                  // Call PUT /api/room-admissions/:id
+                  await apiRequest<any>(`/room-admissions/${editAdmissionForm.roomAdmissionId}`, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(updatePayload),
+                  });
+
+                  console.log('Admission updated successfully');
+                  
+                  await fetchAdmissions();
+                  await fetchRoomCapacityOverview();
+                  await fetchDashboardMetrics();
+                  setIsEditDialogOpen(false);
+                  setEditingAdmission(null);
+                } catch (error: any) {
+                  console.error('Error updating admission:', error);
+                  setAdmissionError(error?.message || 'Failed to update admission. Please try again.');
+                } finally {
+                  setSavingAdmission(false);
+                }
+              }} className="dialog-footer-button" disabled={savingAdmission}>
+                {savingAdmission ? 'Updating...' : 'Update Admission'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -2532,21 +4781,20 @@ export default function Admissions() {
                     <ISTDatePicker
                       id="date-filter"
                       selected={dateFilter}
-                      onChange={(dateStr, date) => {
-                        setDateFilter(date);
-                        if (date) {
-                          // Extract date directly and format as dd-mm-yyyy for display
-                          const year = date.getFullYear();
-                          const month = String(date.getMonth() + 1).padStart(2, '0');
-                          const day = String(date.getDate()).padStart(2, '0');
+                      onChange={(date) => {
+                        const normalizedDate = date ? convertToIST(date) : null;
+                        setDateFilter(normalizedDate);
+                        if (normalizedDate) {
+                          const year = normalizedDate.getFullYear();
+                          const month = String(normalizedDate.getMonth() + 1).padStart(2, '0');
+                          const day = String(normalizedDate.getDate()).padStart(2, '0');
                           setDateFilterDisplay(`${day}-${month}-${year}`);
                         } else {
-                          // Clear date filter to show all records
                           setDateFilterDisplay('');
                         }
                       }}
                       dateFormat="dd-MM-yyyy"
-                      placeholderText="Select date (dd-mm-yyyy)"
+                      placeholderText="Select date"
                       className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
                       wrapperClassName="w-full"
                       showYearDropdown
@@ -2603,13 +4851,13 @@ export default function Admissions() {
             <AdmissionsList
               admissions={filteredAdmissions}
               onScheduleOT={handleScheduleOT}
-              onEdit={handleViewEditAdmission}
               onManage={(admission) => {
                 setManagedAdmission(admission);
                 setIsManageDialogOpen(true);
               }}
               onManageCase={handleManageCase}
               onNewLabOrder={handleOpenNewLabOrderDialog}
+              onEdit={handleEditAdmission}
               schedulingOT={schedulingOT}
             />
           </TabsContent>
@@ -2617,13 +4865,13 @@ export default function Admissions() {
             <AdmissionsList
               admissions={getAdmissionsByStatus('Active')}
               onScheduleOT={handleScheduleOT}
-              onEdit={handleViewEditAdmission}
               onManage={(admission) => {
                 setManagedAdmission(admission);
                 setIsManageDialogOpen(true);
               }}
               onManageCase={handleManageCase}
               onNewLabOrder={handleOpenNewLabOrderDialog}
+              onEdit={handleEditAdmission}
               schedulingOT={schedulingOT}
             />
           </TabsContent>
@@ -2631,13 +4879,13 @@ export default function Admissions() {
             <AdmissionsList
               admissions={getAdmissionsByStatus('Surgery Scheduled')}
               onScheduleOT={handleScheduleOT}
-              onEdit={handleViewEditAdmission}
               onManage={(admission) => {
                 setManagedAdmission(admission);
                 setIsManageDialogOpen(true);
               }}
               onManageCase={handleManageCase}
               onNewLabOrder={handleOpenNewLabOrderDialog}
+              onEdit={handleEditAdmission}
               schedulingOT={schedulingOT}
             />
           </TabsContent>
@@ -2645,13 +4893,13 @@ export default function Admissions() {
             <AdmissionsList
               admissions={getAdmissionsByStatus('Moved to ICU')}
               onScheduleOT={handleScheduleOT}
-              onEdit={handleViewEditAdmission}
               onManage={(admission) => {
                 setManagedAdmission(admission);
                 setIsManageDialogOpen(true);
               }}
               onManageCase={handleManageCase}
               onNewLabOrder={handleOpenNewLabOrderDialog}
+              onEdit={handleEditAdmission}
               schedulingOT={schedulingOT}
             />
           </TabsContent>
@@ -2956,16 +5204,16 @@ function AdmissionsList({
   onScheduleOT,
   onManage,
   onManageCase,
-  onEdit,
   onNewLabOrder,
+  onEdit,
   schedulingOT
 }: {
   admissions: Admission[];
   onScheduleOT: (admission: Admission) => void;
   onManage: (admission: Admission) => void;
   onManageCase: (admission: Admission) => void;
-  onEdit: (admission: Admission) => void;
   onNewLabOrder: (admission: Admission) => void;
+  onEdit: (admission: Admission) => void;
   schedulingOT: number | null;
 }) {
   return (
@@ -3007,7 +5255,36 @@ function AdmissionsList({
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-primary">{admission.patientName}</td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.age}Y / {admission.gender}</td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{admission.roomType}</td>
-                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{formatDateTimeIST(admission.admissionDate)}</td>
+                    <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">
+                      {(() => {
+                        // Display date only (no time) - handle DD-MM-YYYY format from API
+                        const dateValue = admission.admissionDate || (admission as any).roomAllocationDate || (admission as any).RoomAllocationDate;
+                        if (!dateValue) return 'N/A';
+                        
+                        // If it's already in DD-MM-YYYY format (with or without time), extract date part
+                        if (typeof dateValue === 'string') {
+                          if (dateValue.includes(' ')) {
+                            return dateValue.split(' ')[0]; // Return "11-01-2026" from "11-01-2026 00:00"
+                          }
+                          if (/^\d{2}-\d{2}-\d{4}$/.test(dateValue)) {
+                            return dateValue; // Already in DD-MM-YYYY format
+                          }
+                          // Try to parse and format
+                          try {
+                            const date = new Date(dateValue);
+                            if (!isNaN(date.getTime())) {
+                              const day = String(date.getDate()).padStart(2, '0');
+                              const month = String(date.getMonth() + 1).padStart(2, '0');
+                              const year = date.getFullYear();
+                              return `${day}-${month}-${year}`;
+                            }
+                          } catch {
+                            return dateValue;
+                          }
+                        }
+                        return dateValue;
+                      })()}
+                    </td>
                     <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">
                       {admission.admittingDoctorName || admission.admittedBy || 'N/A'}
                     </td>

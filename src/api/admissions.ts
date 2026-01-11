@@ -145,6 +145,8 @@ export interface PatientDoctorVisit {
   icuDoctorVisitsId?: number; // Primary key for ICU Doctor Visits
   iCUDoctorVisitId?: number; // Legacy field name support
   patientDoctorVisitId?: number;
+  PatientAdmitDoctorVisitsId?: string; // UUID string from POST response - used for PUT requests
+  patientAdmitDoctorVisitsId?: string; // UUID string from POST response - used for PUT requests
   roomAdmissionId?: number;
   patientId?: string;
   doctorId?: number;
@@ -2261,10 +2263,20 @@ export const admissionsApi = {
       
       // Normalize the response to match PatientDoctorVisit interface
       const normalizedDoctorVisits: PatientDoctorVisit[] = doctorVisitsData.map((visit: any) => {
-        const patientDoctorVisitId = Number(extractField(visit, [
+        // Primary ID field from POST response is "PatientAdmitDoctorVisitsId" (UUID string)
+        // Also check for other variations
+        const patientAdmitDoctorVisitsId = extractField(visit, [
+          'PatientAdmitDoctorVisitsId', 'patientAdmitDoctorVisitsId', 'PatientAdmitDoctorVisitId', 'patientAdmitDoctorVisitId',
+          'patient_admit_doctor_visits_id', 'Patient_Admit_Doctor_Visits_Id',
           'patientDoctorVisitId', 'PatientDoctorVisitId', 'patient_doctor_visit_id', 'Patient_Doctor_Visit_Id',
           'id', 'Id', 'ID'
-        ], 0));
+        ], '');
+        
+        // Convert to number if it's a numeric string, otherwise keep as string (for UUID)
+        const patientDoctorVisitId = patientAdmitDoctorVisitsId && !isNaN(Number(patientAdmitDoctorVisitsId)) && 
+                                     !patientAdmitDoctorVisitsId.includes('-') ? 
+                                     Number(patientAdmitDoctorVisitsId) : 
+                                     (patientAdmitDoctorVisitsId || undefined);
         
         // Extract Doctor Name with multiple variations
         const doctorName = extractField(visit, [
@@ -2374,8 +2386,11 @@ export const admissionsApi = {
         });
         
         return {
-          id: patientDoctorVisitId || Number(extractField(visit, ['id', 'Id', 'ID'], 0)),
+          id: patientDoctorVisitId || Number(extractField(visit, ['id', 'Id', 'ID'], 0)) || undefined,
           patientDoctorVisitId: patientDoctorVisitId || undefined,
+          // Store the UUID string ID (PatientAdmitDoctorVisitsId) for PUT requests
+          PatientAdmitDoctorVisitsId: typeof patientAdmitDoctorVisitsId === 'string' ? patientAdmitDoctorVisitsId : undefined,
+          patientAdmitDoctorVisitsId: typeof patientAdmitDoctorVisitsId === 'string' ? patientAdmitDoctorVisitsId : undefined,
           roomAdmissionId: Number(extractField(visit, [
             'roomAdmissionId', 'RoomAdmissionId', 'room_admission_id', 'Room_Admission_Id',
             'admissionId', 'AdmissionId', 'admission_id', 'Admission_Id',

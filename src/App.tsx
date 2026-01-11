@@ -1,6 +1,7 @@
 import { Suspense, lazy, useState } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
+import { Toaster } from './components/ui/sonner';
 import { 
   LayoutDashboard, 
   ClipboardList,
@@ -349,6 +350,7 @@ export default function App() {
           </Routes>
         </Suspense>
       </main>
+      <Toaster />
     </div>
   );
 }

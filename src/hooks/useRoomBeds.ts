@@ -29,41 +29,23 @@ export function useRoomBeds() {
   // No auto-fetch on mount - component must call fetchRoomBeds explicitly
 
   const createRoomBed = useCallback(async (data: CreateRoomBedDto) => {
-    try {
-      setError(null);
-      const newRoomBed = await roomBedsApi.create(data);
-      // Don't update local state - always fetch fresh from network
-      return newRoomBed;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create room bed';
-      setError(errorMessage);
-      throw err;
-    }
+    // Don't set global error state for create operations - let caller handle errors
+    const newRoomBed = await roomBedsApi.create(data);
+    // Don't update local state - always fetch fresh from network
+    return newRoomBed;
   }, []);
 
   const updateRoomBed = useCallback(async (data: UpdateRoomBedDto) => {
-    try {
-      setError(null);
-      const updatedRoomBed = await roomBedsApi.update(data);
-      // Don't update local state - always fetch fresh from network
-      return updatedRoomBed;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update room bed';
-      setError(errorMessage);
-      throw err;
-    }
+    // Don't set global error state for update operations - let caller handle errors
+    const updatedRoomBed = await roomBedsApi.update(data);
+    // Don't update local state - always fetch fresh from network
+    return updatedRoomBed;
   }, []);
 
   const deleteRoomBed = useCallback(async (roomBedId: number) => {
-    try {
-      setError(null);
-      await roomBedsApi.delete(roomBedId);
-      // Don't update local state - always fetch fresh from network
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to delete room bed';
-      setError(errorMessage);
-      throw err;
-    }
+    // Don't set global error state for delete operations - let caller handle errors
+    await roomBedsApi.delete(roomBedId);
+    // Don't update local state - always fetch fresh from network
   }, []);
 
   return {

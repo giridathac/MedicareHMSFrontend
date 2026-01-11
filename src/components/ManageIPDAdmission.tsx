@@ -304,7 +304,6 @@ export function ManageIPDAdmission() {
     admissionDate: '',
     admittedBy: '',
     admittingDoctorName: '',
-    diagnosis: '',
     age: '',
     gender: '',
     patientName: '',
@@ -316,8 +315,44 @@ export function ManageIPDAdmission() {
     caseSheetDetails: '',
     caseSheet: ''
   });
+
+  const handleEditAdmissionFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { id, value, type, checked } = e.target;
+    setEditAdmissionFormData(prev => ({
+      ...prev,
+      [id]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleSaveAdmissionDetails = async () => {
+    try {
+      setEditAdmissionSubmitting(true);
+      setEditAdmissionSubmitError(null);
+
+      // Prepare data for API call
+      const updatedData = {
+        ...editAdmissionFormData,
+        roomAdmissionId: admission.roomAdmissionId, // Ensure ID is present
+      };
+
+      await admissionsApi.update(admission.roomAdmissionId, updatedData);
+      console.log('Admission details updated successfully');
+      // Refresh admission details after saving
+      if (admission?.roomAdmissionId) {
+        fetchAdmissionDetails(Number(admission.roomAdmissionId));
+      }
+      setIsEditing(false); // Exit edit mode
+    } catch (error) {
+      console.error('Error updating admission details:', error);
+      setEditAdmissionSubmitError(error instanceof Error ? error.message : 'Failed to update admission details');
+    } finally {
+      setEditAdmissionSubmitting(false);
+    }
+  };
+
   const [editAdmissionSubmitting, setEditAdmissionSubmitting] = useState(false);
   const [editAdmissionSubmitError, setEditAdmissionSubmitError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -485,6 +520,21 @@ export function ManageIPDAdmission() {
       setLabTestsError(null);
       console.log('Fetching patient lab tests for roomAdmissionId:', roomAdmissionId);
       const labTests = await admissionsApi.getPatientLabTests(roomAdmissionId);
+      
+      // Dump raw date data for debugging
+      console.log('=== RAW LAB TEST DATE DATA ===');
+      labTests.forEach((labTest, index) => {
+        console.log(`Lab Test ${index + 1}:`, {
+          testName: labTest.testName || labTest.labTestName,
+          testDoneDateTime: labTest.testDoneDateTime || (labTest as any).TestDoneDateTime || (labTest as any).test_done_date_time,
+          testDoneDateTimeType: typeof (labTest.testDoneDateTime || (labTest as any).TestDoneDateTime),
+          createdDate: labTest.createdDate || (labTest as any).CreatedDate || (labTest as any).created_date,
+          createdDateType: typeof (labTest.createdDate || (labTest as any).CreatedDate),
+          fullLabTest: labTest
+        });
+      });
+      console.log('=== END RAW DATE DATA ===');
+      
       console.log('Fetched patient lab tests:', labTests);
       setPatientLabTests(labTests);
     } catch (err) {
@@ -511,9 +561,7 @@ export function ManageIPDAdmission() {
     try {
       setDoctorVisitsLoading(true);
       setDoctorVisitsError(null);
-      console.log('Fetching patient doctor visits for roomAdmissionId:', roomAdmissionId);
       const doctorVisits = await admissionsApi.getPatientDoctorVisits(roomAdmissionId);
-      console.log('Fetched patient doctor visits:', doctorVisits);
       setPatientDoctorVisits(doctorVisits);
     } catch (err) {
       console.error('Error fetching patient doctor visits:', err);
@@ -953,11 +1001,67 @@ export function ManageIPDAdmission() {
     });
 
     // Extract orderedByDoctorId with various field name variations
-    const orderedByDoctorId = (labTest as any).orderedByDoctorId || 
-                              (labTest as any).OrderedByDoctorId || 
-                              (labTest as any).ordered_by_doctor_id ||
-                              (labTest as any).Ordered_By_Doctor_Id ||
-                              '';
+    let orderedByDoctorId = (labTest as any).orderedByDoctorId || 
+                            (labTest as any).OrderedByDoctorId || 
+                            (labTest as any).ordered_by_doctor_id ||
+                            (labTest as any).Ordered_By_Doctor_Id ||
+                            '';
+
+    // If no doctor ID from lab test, fetch latest data from GET /api/patient-lab-tests/:id
+    const patientLabTestsId = labTest.patientLabTestsId || labTest.patientLabTestId || labTest.id;
+    if (!orderedByDoctorId && patientLabTestsId) {
+      try {
+        console.log('Fetching latest lab test data from GET /api/patient-lab-tests/' + patientLabTestsId);
+        const getResponse = await apiRequest<any>(`/patient-lab-tests/${patientLabTestsId}`);
+        console.log('Fetched latest lab test from GET /api/patient-lab-tests/:id:', getResponse);
+        
+        // Handle different response structures
+        const labTestData = getResponse?.data || getResponse;
+        if (labTestData) {
+          // Extract orderedByDoctorId from the GET response with all variations
+          const fetchedDoctorId = labTestData.OrderedByDoctorId || 
+                                  labTestData.orderedByDoctorId || 
+                                  labTestData.Ordered_By_Doctor_Id ||
+                                  labTestData.ordered_by_doctor_id ||
+                                  (labTestData.OrderedByDoctor?.DoctorId || labTestData.OrderedByDoctor?.doctorId || 
+                                   labTestData.orderedByDoctor?.DoctorId || labTestData.orderedByDoctor?.doctorId ||
+                                   labTestData.OrderedByDoctor?.Id || labTestData.OrderedByDoctor?.id) ||
+                                  '';
+          if (fetchedDoctorId) {
+            orderedByDoctorId = String(fetchedDoctorId);
+          }
+        }
+      } catch (fetchErr) {
+        console.error('Error fetching latest lab test, continuing with provided data:', fetchErr);
+      }
+    }
+
+    // If still no doctor ID, try to get from admission
+    if (!orderedByDoctorId && admission) {
+      // Try to get doctor ID from admission
+      orderedByDoctorId = (admission as any).admittingDoctorId || 
+                          (admission as any).AdmittingDoctorId || 
+                          (admission as any).admittedByDoctorId || 
+                          (admission as any).AdmittedByDoctorId ||
+                          (admission as any).doctorId || 
+                          (admission as any).DoctorId ||
+                          '';
+      
+      // If still no doctor ID, try to find by doctor name from admission
+      if (!orderedByDoctorId) {
+        const admissionDoctorName = admission.admittingDoctorName || admission.admittedBy || '';
+        if (admissionDoctorName) {
+          const doctorByName = doctorsList.find((doc: Doctor) => {
+            const docName = doc.name || doc.doctorName || '';
+            return docName.toLowerCase().includes(admissionDoctorName.toLowerCase()) || 
+                   admissionDoctorName.toLowerCase().includes(docName.toLowerCase());
+          });
+          if (doctorByName) {
+            orderedByDoctorId = String(doctorByName.id || (doctorByName as any).Id || '');
+          }
+        }
+      }
+    }
 
     // Find the selected doctor to populate the search term (use doctorsList from the fetch, not availableDoctors state)
     const selectedDoctor = doctorsList.find((doc: Doctor) => {
@@ -1002,16 +1106,86 @@ export function ManageIPDAdmission() {
       labTestDone: labTest.labTestDone === true || String(labTest.labTestDone).toLowerCase() === 'true' || String(labTest.labTestDone).toLowerCase() === 'yes' ? 'Yes' : 'No',
       reportsUrl: labTest.reportsUrl || '',
       testStatus: labTest.testStatus || 'Pending',
-      testDoneDateTime: labTest.testDoneDateTime ? new Date(labTest.testDoneDateTime).toISOString().slice(0, 16) : ''
+      testDoneDateTime: (() => {
+        // Parse testDoneDateTime the same way the dashboard table does
+        // Use the raw value from backend without timezone conversion
+        const rawTestDoneDateTime = labTest.testDoneDateTime || (labTest as any).TestDoneDateTime || (labTest as any).test_done_date_time;
+        if (!rawTestDoneDateTime) return '';
+        
+        if (typeof rawTestDoneDateTime === 'string') {
+          // If it's in DD-MM-YYYY HH:mm format (e.g., "11-01-2026 00:00")
+          if (/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}/.test(rawTestDoneDateTime)) {
+            const [datePart, timePart] = rawTestDoneDateTime.split(' ');
+            const [day, month, year] = datePart.split('-');
+            const [hours, minutes] = timePart.split(':');
+            // Convert to YYYY-MM-DDTHH:mm format for datetime-local input
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+          }
+          // If it's ISO format (e.g., "2026-01-11T00:00:00" or "2026-01-11T00:00:00Z")
+          if (rawTestDoneDateTime.includes('T')) {
+            const [datePart, timePart] = rawTestDoneDateTime.split('T');
+            const timeOnly = timePart.split('.')[0].split('+')[0].split('Z')[0];
+            // Extract just HH:mm from HH:mm:ss
+            const [hours, minutes] = timeOnly.split(':');
+            return `${datePart}T${hours}:${minutes}`;
+          }
+        }
+        // Fallback: try to parse as Date (but this should be avoided if possible)
+        try {
+          const dateObj = new Date(rawTestDoneDateTime);
+          if (!isNaN(dateObj.getTime())) {
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const hours = String(dateObj.getHours()).padStart(2, '0');
+            const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+          }
+        } catch {
+          return '';
+        }
+        return '';
+      })()
     });
 
     // Set Test Done Date & Time for DatePicker
+    // Parse the same way as the form data to ensure consistency
     let testDoneDateTimeValue: Date | null = null;
-    if (labTest.testDoneDateTime) {
+    const rawTestDoneDateTime = labTest.testDoneDateTime || (labTest as any).TestDoneDateTime || (labTest as any).test_done_date_time;
+    if (rawTestDoneDateTime) {
       try {
-        const dateObj = new Date(labTest.testDoneDateTime);
-        if (!isNaN(dateObj.getTime())) {
-          testDoneDateTimeValue = convertToIST(dateObj);
+        if (typeof rawTestDoneDateTime === 'string') {
+          // If it's in DD-MM-YYYY HH:mm format (e.g., "11-01-2026 00:00")
+          if (/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}/.test(rawTestDoneDateTime)) {
+            const [datePart, timePart] = rawTestDoneDateTime.split(' ');
+            const [day, month, year] = datePart.split('-');
+            const [hours, minutes] = timePart.split(':');
+            // Create Date object using local time (no timezone conversion)
+            testDoneDateTimeValue = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes));
+          }
+          // If it's ISO format, parse it carefully
+          else if (rawTestDoneDateTime.includes('T')) {
+            const [datePart, timePart] = rawTestDoneDateTime.split('T');
+            const [year, month, day] = datePart.split('-');
+            const timeOnly = timePart.split('.')[0].split('+')[0].split('Z')[0];
+            const [hours, minutes] = timeOnly.split(':');
+            // Create Date object using local time (no timezone conversion)
+            testDoneDateTimeValue = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes));
+          }
+          // Fallback: try standard Date parsing
+          else {
+            const dateObj = new Date(rawTestDoneDateTime);
+            if (!isNaN(dateObj.getTime())) {
+              // Use local components to avoid timezone shift
+              testDoneDateTimeValue = new Date(
+                dateObj.getFullYear(),
+                dateObj.getMonth(),
+                dateObj.getDate(),
+                dateObj.getHours(),
+                dateObj.getMinutes()
+              );
+            }
+          }
         }
       } catch {
         testDoneDateTimeValue = null;
@@ -1064,7 +1238,6 @@ export function ManageIPDAdmission() {
 
   // Handle opening Manage Doctor Visit dialog
   const handleOpenCustomizeDoctorVisitDialog = async (visit: PatientDoctorVisit) => {
-    console.log('Opening Manage Doctor Visit dialog for:', visit);
     
     // First, explicitly close all other dialogs to prevent conflicts
     setIsAddDoctorVisitDialogOpen(false);
@@ -1090,30 +1263,82 @@ export function ManageIPDAdmission() {
       return String(did) === String(visit.doctorId);
     });
 
+    // Get the raw value from backend - use as-is without IST conversion
+    const rawDoctorVisitedDateTime = visit.doctorVisitedDateTime || (visit as any).DoctorVisitedDateTime || (visit as any).doctor_visited_date_time;
+    
+    // Parse raw backend value directly - no IST conversion
+    // Backend sends "2026-01-11 23:50:00" format
+    let dateTimeFormValue = '';
+    let dateTimeValue: Date | null = null;
+    
+    if (rawDoctorVisitedDateTime) {
+      try {
+        const dateStr = String(rawDoctorVisitedDateTime);
+        
+        // If it's "YYYY-MM-DD HH:mm:ss" format, convert to "YYYY-MM-DDTHH:mm" for datetime-local input
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(dateStr)) {
+          const [datePart, timePart] = dateStr.split(' ');
+          const [hours, minutes] = timePart.split(':');
+          // Format as YYYY-MM-DDTHH:mm for datetime-local input (no seconds, no timezone)
+          dateTimeFormValue = `${datePart}T${hours}:${minutes}`;
+          
+          // Create Date object from raw components (no timezone conversion)
+          const [year, month, day] = datePart.split('-').map(Number);
+          dateTimeValue = new Date(year, month - 1, day, parseInt(hours, 10), parseInt(minutes, 10));
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dateStr)) {
+          // If it's already in ISO format, use as-is
+          const timeOnly = dateStr.split('T')[1].split(':');
+          dateTimeFormValue = `${dateStr.split('T')[0]}T${timeOnly[0]}:${timeOnly[1]}`;
+          
+          // Parse ISO format
+          const [datePart, timePart] = dateStr.split('T');
+          const [year, month, day] = datePart.split('-').map(Number);
+          const [hours, minutes] = timePart.split(':').map(Number);
+          dateTimeValue = new Date(year, month - 1, day, hours, minutes);
+        } else {
+          // Fallback: try to parse as Date
+          const dateObj = new Date(dateStr);
+          if (!isNaN(dateObj.getTime())) {
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const hours = String(dateObj.getHours()).padStart(2, '0');
+            const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+            dateTimeFormValue = `${year}-${month}-${day}T${hours}:${minutes}`;
+            dateTimeValue = dateObj;
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing doctorVisitedDateTime:', error, rawDoctorVisitedDateTime);
+        dateTimeValue = getCurrentIST();
+        const year = dateTimeValue.getFullYear();
+        const month = String(dateTimeValue.getMonth() + 1).padStart(2, '0');
+        const day = String(dateTimeValue.getDate()).padStart(2, '0');
+        const hours = String(dateTimeValue.getHours()).padStart(2, '0');
+        const minutes = String(dateTimeValue.getMinutes()).padStart(2, '0');
+        dateTimeFormValue = `${year}-${month}-${day}T${hours}:${minutes}`;
+      }
+    } else {
+      dateTimeValue = getCurrentIST();
+      const year = dateTimeValue.getFullYear();
+      const month = String(dateTimeValue.getMonth() + 1).padStart(2, '0');
+      const day = String(dateTimeValue.getDate()).padStart(2, '0');
+      const hours = String(dateTimeValue.getHours()).padStart(2, '0');
+      const minutes = String(dateTimeValue.getMinutes()).padStart(2, '0');
+      dateTimeFormValue = `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+    
     setCustomizeDoctorVisitFormData({
       patientId: String(visit.patientId || admission?.patientId || ''),
       doctorId: String(visit.doctorId || ''),
-      doctorVisitedDateTime: visit.doctorVisitedDateTime || '',
+      doctorVisitedDateTime: dateTimeFormValue,
       visitsRemarks: visit.visitsRemarks || '',
       patientCondition: visit.patientCondition || '',
       status: visit.status || 'Active',
       visitCreatedAt: visit.visitCreatedAt || ''
     });
 
-    // Set DatePicker values
-    let dateTimeValue: Date | null = null;
-    if (visit.doctorVisitedDateTime) {
-      try {
-        const dateObj = new Date(visit.doctorVisitedDateTime);
-        if (!isNaN(dateObj.getTime())) {
-          dateTimeValue = convertToIST(dateObj);
-        }
-      } catch {
-        dateTimeValue = getCurrentIST();
-      }
-    } else {
-      dateTimeValue = getCurrentIST();
-    }
+    // Set DatePicker value - use the raw date/time components directly (no IST conversion)
     setCustomizeDoctorVisitDateTime(dateTimeValue);
 
     // Set Visit Created At DatePicker value
@@ -1135,7 +1360,6 @@ export function ManageIPDAdmission() {
     
     // Open the Manage Doctor Visit dialog
     setIsCustomizeDoctorVisitDialogOpen(true);
-    console.log('Set isCustomizeDoctorVisitDialogOpen to true');
     
     // Double-check other dialogs are closed (defensive)
     setTimeout(() => {
@@ -1523,8 +1747,6 @@ export function ManageIPDAdmission() {
       setDoctorVisitSubmitting(true);
       setDoctorVisitSubmitError(null);
 
-      console.log('Saving Doctor Visit with data:', doctorVisitFormData);
-
       // Validate required fields
       if (!admission?.roomAdmissionId) {
         throw new Error('Room Admission ID is required');
@@ -1568,10 +1790,7 @@ export function ManageIPDAdmission() {
         payload.VisitCreatedAt = new Date(doctorVisitFormData.visitCreatedAt).toISOString();
       }
 
-      console.log('API Payload:', JSON.stringify(payload, null, 2));
-
       // Call the API to create the doctor visit
-      console.log('API Endpoint: POST /patient-admit-doctor-visits');
       const response = await apiRequest<any>('/patient-admit-doctor-visits', {
         method: 'POST',
         headers: {
@@ -1579,12 +1798,27 @@ export function ManageIPDAdmission() {
         },
         body: JSON.stringify(payload),
       });
-      console.log('Doctor visit created successfully:', response);
+      
+      // The response should contain the generated ID (UUID string)
+      // POST response has "PatientAdmitDoctorVisitsId" - this ID will be used when updating the visit later
+      const createdVisitId = response?.data?.PatientAdmitDoctorVisitsId ||
+                            response?.data?.patientAdmitDoctorVisitsId ||
+                            response?.PatientAdmitDoctorVisitsId ||
+                            response?.patientAdmitDoctorVisitsId ||
+                            response?.data?.patientDoctorVisitId || 
+                            response?.data?.PatientDoctorVisitId ||
+                            response?.data?.id ||
+                            response?.data?.Id ||
+                            response?.patientDoctorVisitId ||
+                            response?.PatientDoctorVisitId ||
+                            response?.id ||
+                            response?.Id ||
+                            '';
 
       // Close dialog
       setIsAddDoctorVisitDialogOpen(false);
       
-      // Refresh the doctor visits list
+      // Refresh the doctor visits list (this will fetch the visit with its ID)
       if (admission?.roomAdmissionId) {
         await fetchPatientDoctorVisits(admission.roomAdmissionId);
       }
@@ -1606,6 +1840,173 @@ export function ManageIPDAdmission() {
       setDoctorVisitSubmitError(err instanceof Error ? err.message : 'Failed to save doctor visit');
     } finally {
       setDoctorVisitSubmitting(false);
+    }
+  };
+
+  // Handle saving Manage Doctor Visit (PUT request)
+  const handleSaveCustomizeDoctorVisit = async () => {
+    try {
+      setCustomizeLabTestSubmitting(true); // Reuse this state for now, or create a new one
+      setCustomizeLabTestSubmitError(null);
+
+      // Validate required fields
+      if (!admission?.roomAdmissionId) {
+        throw new Error('Room Admission ID is required');
+      }
+
+      if (!customizingDoctorVisit) {
+        throw new Error('Doctor Visit data is required');
+      }
+
+      // Get the visit ID (UUID string) - check all possible field variations
+      // The ID from POST response is "PatientAdmitDoctorVisitsId" (UUID string)
+      const visitId = (customizingDoctorVisit as any).PatientAdmitDoctorVisitsId ||
+                      (customizingDoctorVisit as any).patientAdmitDoctorVisitsId ||
+                      (customizingDoctorVisit as any).PatientAdmitDoctorVisitId ||
+                      (customizingDoctorVisit as any).patientAdmitDoctorVisitId ||
+                      (customizingDoctorVisit as any).patient_admit_doctor_visits_id ||
+                      (customizingDoctorVisit as any).Patient_Admit_Doctor_Visits_Id ||
+                      customizingDoctorVisit.patientDoctorVisitId || 
+                      customizingDoctorVisit.id || 
+                      (customizingDoctorVisit as any).PatientDoctorVisitId ||
+                      (customizingDoctorVisit as any).Id ||
+                      (customizingDoctorVisit as any).ID ||
+                      (customizingDoctorVisit as any).patient_doctor_visit_id ||
+                      (customizingDoctorVisit as any).Patient_Doctor_Visit_Id ||
+                      (customizingDoctorVisit as any).patientDoctorVisitID ||
+                      (customizingDoctorVisit as any).PatientDoctorVisitID ||
+                      '';
+      
+      // Convert to string if it's a number (UUID should be string, but handle both)
+      const visitIdString = visitId ? String(visitId) : '';
+      
+      if (!visitIdString || visitIdString === '0' || visitIdString === '' || visitIdString === 'undefined' || visitIdString === 'null') {
+        throw new Error('Doctor Visit ID is required for updating. The visit ID was not found in the visit data. Please refresh the page and try again.');
+      }
+
+      let patientIdValue = customizeDoctorVisitFormData.patientId;
+      if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '' || patientIdValue === 'null') {
+        patientIdValue = (admission as any)?.patientId || 
+                        (admission as any)?.PatientId || 
+                        (admission as any)?.PatientID || 
+                        (admission as any)?.patient_id || 
+                        (admission as any)?.Patient_ID || 
+                        '';
+      }
+
+      if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '' || patientIdValue === 'null') {
+        throw new Error('Patient ID is required. Please ensure the admission has a valid patient ID.');
+      }
+
+      if (!customizeDoctorVisitFormData.doctorId || customizeDoctorVisitFormData.doctorId === '') {
+        throw new Error('Doctor is required. Please select a doctor.');
+      }
+
+      if (!customizeDoctorVisitFormData.doctorVisitedDateTime || customizeDoctorVisitFormData.doctorVisitedDateTime.trim() === '') {
+        throw new Error('Doctor Visited Date & Time is required');
+      }
+
+      // Prepare the request payload
+      // Ensure DoctorId is a number (integer), not a UUID string
+      let doctorIdNumber: number | null = null;
+      if (customizeDoctorVisitFormData.doctorId) {
+        const doctorIdStr = String(customizeDoctorVisitFormData.doctorId).trim();
+        // Check if it's a valid number (not a UUID)
+        if (/^\d+$/.test(doctorIdStr)) {
+          doctorIdNumber = Number(doctorIdStr);
+        } else {
+          // If it's not a number, try to find the doctor by ID and get the numeric ID
+          const selectedDoctor = availableDoctors.find((doc: Doctor) => {
+            const docId = String(doc.id || '');
+            return docId === doctorIdStr;
+          });
+          if (selectedDoctor && selectedDoctor.id) {
+            doctorIdNumber = Number(selectedDoctor.id);
+          } else {
+            throw new Error('Invalid Doctor ID. Please select a valid doctor.');
+          }
+        }
+      }
+      
+      if (!doctorIdNumber || isNaN(doctorIdNumber)) {
+        throw new Error('Doctor ID must be a valid number. Please select a doctor.');
+      }
+
+      const payload: any = {
+        RoomAdmissionId: admission.roomAdmissionId ? Number(admission.roomAdmissionId) : null,
+        PatientId: String(patientIdValue).trim(),
+        DoctorId: doctorIdNumber, // Ensure it's a number (integer)
+        VisitsRemarks: customizeDoctorVisitFormData.visitsRemarks || null,
+        PatientCondition: customizeDoctorVisitFormData.patientCondition || null,
+        Status: customizeDoctorVisitFormData.status || 'Active',
+      };
+
+      // Handle DoctorVisitedDateTime - send as-is without timezone conversion
+      if (customizeDoctorVisitFormData.doctorVisitedDateTime && customizeDoctorVisitFormData.doctorVisitedDateTime.trim() !== '') {
+        let doctorVisitedDateTime = customizeDoctorVisitFormData.doctorVisitedDateTime.trim();
+        // If it's in YYYY-MM-DDTHH:mm format, append :00 for seconds
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(doctorVisitedDateTime)) {
+          payload.DoctorVisitedDateTime = doctorVisitedDateTime + ':00';
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(doctorVisitedDateTime)) {
+          // Already has seconds, use as-is
+          payload.DoctorVisitedDateTime = doctorVisitedDateTime;
+        } else {
+          // Use as-is if format is different
+          payload.DoctorVisitedDateTime = doctorVisitedDateTime;
+        }
+      }
+
+      // Add optional VisitCreatedBy if available
+      if (customizeDoctorVisitFormData.visitCreatedAt && customizeDoctorVisitFormData.visitCreatedAt.trim() !== '') {
+        // VisitCreatedBy can be extracted from visit if available
+        const visitCreatedBy = customizingDoctorVisit.visitCreatedBy || (customizingDoctorVisit as any).VisitCreatedBy || null;
+        if (visitCreatedBy) {
+          payload.VisitCreatedBy = Number(visitCreatedBy);
+        }
+      }
+
+      console.log('API Payload:', JSON.stringify(payload, null, 2));
+      console.log('DoctorVisitedDateTime being sent:', payload.DoctorVisitedDateTime);
+
+      // Call the API to update the doctor visit
+      console.log('API Endpoint: PUT /patient-admit-doctor-visits/' + visitIdString);
+      const response = await apiRequest<any>(`/patient-admit-doctor-visits/${visitIdString}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      console.log('Doctor visit updated successfully:', response);
+
+      // Close dialog
+      setIsCustomizeDoctorVisitDialogOpen(false);
+      setCustomizingDoctorVisit(null);
+      setCustomizeDoctorVisitDateTime(null);
+      setCustomizeDoctorVisitCreatedAt(null);
+
+      // Refresh the doctor visits list
+      if (admission?.roomAdmissionId) {
+        await fetchPatientDoctorVisits(admission.roomAdmissionId);
+      }
+
+      // Reset form
+      setCustomizeDoctorVisitFormData({
+        patientId: '',
+        doctorId: '',
+        doctorVisitedDateTime: '',
+        visitsRemarks: '',
+        patientCondition: '',
+        status: 'Active',
+        visitCreatedAt: ''
+      });
+      setCustomizeDoctorVisitDoctorSearchTerm('');
+      setShowCustomizeDoctorVisitDoctorList(false);
+    } catch (err) {
+      console.error('Error saving doctor visit:', err);
+      setCustomizeLabTestSubmitError(err instanceof Error ? err.message : 'Failed to save doctor visit');
+    } finally {
+      setCustomizeLabTestSubmitting(false);
     }
   };
 
@@ -1923,16 +2324,18 @@ export function ManageIPDAdmission() {
         payload.ReportsUrl = combinedReportsUrl;
       }
       if (customizeLabTestFormData.testDoneDateTime && customizeLabTestFormData.testDoneDateTime.trim() !== '') {
-        // Convert datetime-local to ISO 8601 format
-        try {
-          const date = new Date(customizeLabTestFormData.testDoneDateTime);
-          if (!isNaN(date.getTime())) {
-            payload.TestDoneDateTime = date.toISOString();
-          } else {
-            payload.TestDoneDateTime = customizeLabTestFormData.testDoneDateTime;
-          }
-        } catch (e) {
-          payload.TestDoneDateTime = customizeLabTestFormData.testDoneDateTime;
+        // Send datetime as-is without any conversion (datetime-local format is YYYY-MM-DDTHH:mm)
+        // Just append :00 for seconds if not present
+        let testDoneDateTime = customizeLabTestFormData.testDoneDateTime.trim();
+        // If it's in YYYY-MM-DDTHH:mm format, append :00 for seconds
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(testDoneDateTime)) {
+          payload.TestDoneDateTime = testDoneDateTime + ':00';
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(testDoneDateTime)) {
+          // Already has seconds, use as-is
+          payload.TestDoneDateTime = testDoneDateTime;
+        } else {
+          // Use as-is if format is different
+          payload.TestDoneDateTime = testDoneDateTime;
         }
       }
 
@@ -2324,18 +2727,44 @@ export function ManageIPDAdmission() {
         <div className="dashboard-main-content">
         {/* Room Admission Details */}
         <Card className="dashboard-table-card">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>Room Admission Details</CardTitle>
+            <div className="flex items-center gap-2">
+              {!isEditing ? (
+                <Button variant="outline" onClick={() => setIsEditing(true)} className="gap-2">
+                  <Edit className="size-4" />
+                  Edit Admission Details
+                </Button>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={() => setIsEditing(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveAdmissionDetails} disabled={editAdmissionSubmitting}>
+                    {editAdmissionSubmitting ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="dashboard-table-card-content">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div>
-                <Label className="text-sm text-gray-500">Patient Name</Label>
-                <p className="text-gray-900 font-medium mt-1">{admission.patientName}</p>
+                <Label className="text-sm text-gray-500" htmlFor="patientNo">Patient No</Label>
+                {isEditing ? (
+                  <Input
+                    id="patientNo"
+                    value={editAdmissionFormData.patientNo}
+                    onChange={handleEditAdmissionFormChange}
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="text-gray-900 font-medium mt-1">{admission.patientNo || 'N/A'}</p>
+                )}
               </div>
               <div>
-                <Label className="text-sm text-gray-500">Patient No</Label>
-                <p className="text-gray-900 font-medium mt-1">{admission.patientNo || 'N/A'}</p>
+                <Label className="text-sm text-gray-500">Patient Name</Label>
+                <p className="text-gray-900 font-medium mt-1">{admission.patientName}</p>
               </div>
               <div>
                 <Label className="text-sm text-gray-500">Bed Number</Label>
@@ -2598,9 +3027,98 @@ export function ManageIPDAdmission() {
                                 {labTest.testStatus || labTest.status || 'N/A'}
                               </Badge>
                             </td>
-                            <td className="py-3 px-4 text-gray-600">{labTest.testDoneDateTime ? formatDateTimeForInputWithAMPM(labTest.testDoneDateTime) : 'N/A'}</td>
+                            <td className="py-3 px-4 text-gray-600">
+                              {(() => {
+                                // Display TestDoneDateTime in dd-mm-yyyy hh:mm AM/PM format
+                                const rawTestDoneDateTime = labTest.testDoneDateTime || (labTest as any).TestDoneDateTime || (labTest as any).test_done_date_time;
+                                if (!rawTestDoneDateTime) return 'N/A';
+                                
+                                try {
+                                  // If it's already in DD-MM-YYYY HH:mm format, convert to AM/PM
+                                  if (typeof rawTestDoneDateTime === 'string') {
+                                    if (/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}/.test(rawTestDoneDateTime)) {
+                                      const [datePart, timePart] = rawTestDoneDateTime.split(' ');
+                                      const [hours, minutes] = timePart.split(':');
+                                      const hours24 = parseInt(hours, 10);
+                                      const period = hours24 >= 12 ? 'PM' : 'AM';
+                                      const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
+                                      return `${datePart}, ${String(hours12).padStart(2, '0')}:${minutes} ${period}`;
+                                    }
+                                    // If it's ISO format, parse and format
+                                    if (rawTestDoneDateTime.includes('T')) {
+                                      const [datePart, timePart] = rawTestDoneDateTime.split('T');
+                                      const [year, month, day] = datePart.split('-');
+                                      const [hours, minutes] = (timePart.split('.')[0].split('+')[0].split('Z')[0]).split(':');
+                                      const hours24 = parseInt(hours, 10);
+                                      const period = hours24 >= 12 ? 'PM' : 'AM';
+                                      const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
+                                      return `${day}-${month}-${year}, ${String(hours12).padStart(2, '0')}:${minutes} ${period}`;
+                                    }
+                                  }
+                                  // Fallback: use formatDateTimeForInputWithAMPM
+                                  return formatDateTimeForInputWithAMPM(rawTestDoneDateTime);
+                                } catch {
+                                  return String(rawTestDoneDateTime);
+                                }
+                              })()}
+                            </td>
                               <td className="py-3 px-4 text-gray-600">
-                                {createdDate ? formatDateTimeIST(createdDate) : 'N/A'}
+                                {(() => {
+                                  // Display CreatedDate in dd-mm-yyyy hh:mm AM/PM format
+                                  // Parse directly from string to avoid timezone conversion
+                                  const rawCreatedDate = labTest.createdDate || (labTest as any).CreatedDate || (labTest as any).created_date || (labTest as any).createdAt;
+                                  if (!rawCreatedDate) return 'N/A';
+                                  
+                                  try {
+                                    if (typeof rawCreatedDate === 'string') {
+                                      // If it's already in DD-MM-YYYY HH:mm format, convert to AM/PM
+                                      if (/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}/.test(rawCreatedDate)) {
+                                        const [datePart, timePart] = rawCreatedDate.split(' ');
+                                        const [hours, minutes] = timePart.split(':');
+                                        const hours24 = parseInt(hours, 10);
+                                        const period = hours24 >= 12 ? 'PM' : 'AM';
+                                        const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
+                                        return `${datePart}, ${String(hours12).padStart(2, '0')}:${minutes} ${period}`;
+                                      }
+                                      // If it's ISO format, extract date/time components directly without timezone conversion
+                                      if (rawCreatedDate.includes('T')) {
+                                        const [datePart, timePart] = rawCreatedDate.split('T');
+                                        // Extract date components (YYYY-MM-DD)
+                                        const [year, month, day] = datePart.split('-');
+                                        // Extract time components (HH:mm:ss or HH:mm:ss.sssZ or HH:mm:ss+offset)
+                                        const timeOnly = timePart.split('.')[0].split('+')[0].split('Z')[0].split('-')[0];
+                                        const [hours, minutes] = timeOnly.split(':');
+                                        const hours24 = parseInt(hours, 10);
+                                        const period = hours24 >= 12 ? 'PM' : 'AM';
+                                        const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
+                                        // Use the date components directly from the string (no timezone conversion)
+                                        return `${day}-${month}-${year}, ${String(hours12).padStart(2, '0')}:${minutes} ${period}`;
+                                      }
+                                    }
+                                    // Fallback: try to parse as Date but extract components directly
+                                    // This should only be used if the format is unknown
+                                    try {
+                                      const dateObj = new Date(rawCreatedDate);
+                                      if (!isNaN(dateObj.getTime())) {
+                                        // Extract UTC components to avoid timezone shift
+                                        const year = dateObj.getUTCFullYear();
+                                        const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+                                        const day = String(dateObj.getUTCDate()).padStart(2, '0');
+                                        const hours = dateObj.getUTCHours();
+                                        const minutes = dateObj.getUTCMinutes();
+                                        const hours24 = parseInt(String(hours), 10);
+                                        const period = hours24 >= 12 ? 'PM' : 'AM';
+                                        const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
+                                        return `${day}-${month}-${year}, ${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
+                                      }
+                                    } catch {
+                                      return String(rawCreatedDate);
+                                    }
+                                    return String(rawCreatedDate);
+                                  } catch {
+                                    return String(rawCreatedDate);
+                                  }
+                                })()}
                               </td>
                               <td className="py-3 px-4">
                                 <Button
@@ -2676,48 +3194,72 @@ export function ManageIPDAdmission() {
                         </tr>
                       </thead>
                       <tbody>
-                        {patientDoctorVisits.map((visit, index) => (
-                          <tr key={visit.patientDoctorVisitId || visit.id || index} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-3 px-4 text-gray-900 font-medium">{visit.doctorName || 'N/A'}</td>
-                            <td className="py-3 px-4 text-gray-600">
-                              {visit.doctorVisitedDateTime ? formatDateTimeIST(visit.doctorVisitedDateTime) : 'N/A'}
-                            </td>
-                            <td className="py-3 px-4 text-gray-600">{visit.visitsRemarks || 'N/A'}</td>
-                            <td className="py-3 px-4">
-                              <Badge variant={
-                                visit.patientCondition?.toLowerCase() === 'stable' || visit.patientCondition?.toLowerCase() === 'good' ? 'default' :
-                                visit.patientCondition?.toLowerCase() === 'critical' || visit.patientCondition?.toLowerCase() === 'serious' ? 'destructive' :
-                                'outline'
-                              }>
-                                {visit.patientCondition || 'N/A'}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">
-                              <Badge variant={
-                                visit.status?.toLowerCase() === 'active' ? 'default' :
-                                visit.status?.toLowerCase() === 'completed' ? 'default' :
-                                'outline'
-                              }>
-                                {visit.status || 'N/A'}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleOpenCustomizeDoctorVisitDialog(visit);
-                                }}
-                                className="gap-1"
-                              >
-                                <Settings className="size-3" />
-                                Manage
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
+                        {patientDoctorVisits.map((visit, index) => {
+                          // Use raw backend value - no IST conversion
+                          // Backend sends "2026-01-11 23:50:00" format - display as-is or format for display only
+                          const rawDateTime = visit.doctorVisitedDateTime || (visit as any).DoctorVisitedDateTime || (visit as any).doctor_visited_date_time;
+                          let displayDateTime = 'N/A';
+                          
+                          if (rawDateTime) {
+                            const dateStr = String(rawDateTime);
+                            // If it's "YYYY-MM-DD HH:mm:ss" format, convert to "DD-MM-YYYY, HH:mm AM/PM" for display
+                            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(dateStr)) {
+                              const [datePart, timePart] = dateStr.split(' ');
+                              const [year, month, day] = datePart.split('-');
+                              const [hours24, minutes] = timePart.split(':');
+                              const hours = parseInt(hours24, 10);
+                              const period = hours >= 12 ? 'PM' : 'AM';
+                              const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+                              displayDateTime = `${day}-${month}-${year}, ${String(displayHour).padStart(2, '0')}:${minutes} ${period}`;
+                            } else {
+                              // Use as-is for other formats
+                              displayDateTime = dateStr;
+                            }
+                          }
+                          
+                          return (
+                            <tr key={visit.patientDoctorVisitId || visit.id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="py-3 px-4 text-gray-900 font-medium">{visit.doctorName || 'N/A'}</td>
+                              <td className="py-3 px-4 text-gray-600">
+                                {displayDateTime}
+                              </td>
+                              <td className="py-3 px-4 text-gray-600">{visit.visitsRemarks || 'N/A'}</td>
+                              <td className="py-3 px-4">
+                                <Badge variant={
+                                  visit.patientCondition?.toLowerCase() === 'stable' || visit.patientCondition?.toLowerCase() === 'good' ? 'default' :
+                                  visit.patientCondition?.toLowerCase() === 'critical' || visit.patientCondition?.toLowerCase() === 'serious' ? 'destructive' :
+                                  'outline'
+                                }>
+                                  {visit.patientCondition || 'N/A'}
+                                </Badge>
+                              </td>
+                              <td className="py-3 px-4">
+                                <Badge variant={
+                                  visit.status?.toLowerCase() === 'active' ? 'default' :
+                                  visit.status?.toLowerCase() === 'completed' ? 'default' :
+                                  'outline'
+                                }>
+                                  {visit.status || 'N/A'}
+                                </Badge>
+                              </td>
+                              <td className="py-3 px-4">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleOpenCustomizeDoctorVisitDialog(visit);
+                                  }}
+                                  className="gap-1"
+                                >
+                                  <Settings className="size-3" />
+                                  Manage
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -3347,7 +3889,37 @@ export function ManageIPDAdmission() {
                   <div>
                     <Label className="text-sm text-gray-500">Ordered Date</Label>
                     <p className="text-gray-900 font-medium mt-1">
-                      {viewingLabTest.orderedDate ? new Date(viewingLabTest.orderedDate).toLocaleDateString() : 'N/A'}
+                      {(() => {
+                        // Display orderedDate the same way as Manage IPD Lab Test dialog
+                        // Parse YYYY-MM-DD format and display as DD-MM-YYYY without timezone conversion
+                        const rawOrderedDate = viewingLabTest.orderedDate || (viewingLabTest as any).OrderedDate || (viewingLabTest as any).ordered_date;
+                        if (!rawOrderedDate) return 'N/A';
+                        
+                        if (typeof rawOrderedDate === 'string') {
+                          // If it's already in YYYY-MM-DD format, convert to DD-MM-YYYY
+                          if (/^\d{4}-\d{2}-\d{2}/.test(rawOrderedDate)) {
+                            const [year, month, day] = rawOrderedDate.split('-');
+                            return `${day}-${month}-${year}`;
+                          }
+                          // If it's in DD-MM-YYYY format, use as-is
+                          if (/^\d{2}-\d{2}-\d{4}/.test(rawOrderedDate)) {
+                            return rawOrderedDate;
+                          }
+                        }
+                        // Fallback: try to parse and format
+                        try {
+                          const dateObj = new Date(rawOrderedDate);
+                          if (!isNaN(dateObj.getTime())) {
+                            const day = String(dateObj.getDate()).padStart(2, '0');
+                            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                            const year = dateObj.getFullYear();
+                            return `${day}-${month}-${year}`;
+                          }
+                        } catch {
+                          return String(rawOrderedDate);
+                        }
+                        return String(rawOrderedDate);
+                      })()}
                     </p>
                   </div>
                   <div>
@@ -3359,7 +3931,39 @@ export function ManageIPDAdmission() {
                   <div>
                     <Label className="text-sm text-gray-500">Test Done Date & Time</Label>
                     <p className="text-gray-900 font-medium mt-1">
-                      {viewingLabTest.testDoneDateTime ? new Date(viewingLabTest.testDoneDateTime).toLocaleString() : 'N/A'}
+                      {(() => {
+                        // Display TestDoneDateTime in dd-mm-yyyy hh:mm AM/PM format
+                        const rawTestDoneDateTime = viewingLabTest.testDoneDateTime;
+                        if (!rawTestDoneDateTime) return 'N/A';
+                        
+                        try {
+                          // If it's already in DD-MM-YYYY HH:mm format, convert to AM/PM
+                          if (typeof rawTestDoneDateTime === 'string') {
+                            if (/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}/.test(rawTestDoneDateTime)) {
+                              const [datePart, timePart] = rawTestDoneDateTime.split(' ');
+                              const [hours, minutes] = timePart.split(':');
+                              const hours24 = parseInt(hours, 10);
+                              const period = hours24 >= 12 ? 'PM' : 'AM';
+                              const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
+                              return `${datePart}, ${String(hours12).padStart(2, '0')}:${minutes} ${period}`;
+                            }
+                            // If it's ISO format, parse and format
+                            if (rawTestDoneDateTime.includes('T')) {
+                              const [datePart, timePart] = rawTestDoneDateTime.split('T');
+                              const [year, month, day] = datePart.split('-');
+                              const [hours, minutes] = (timePart.split('.')[0].split('+')[0].split('Z')[0]).split(':');
+                              const hours24 = parseInt(hours, 10);
+                              const period = hours24 >= 12 ? 'PM' : 'AM';
+                              const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
+                              return `${day}-${month}-${year}, ${String(hours12).padStart(2, '0')}:${minutes} ${period}`;
+                            }
+                          }
+                          // Fallback: use formatDateTimeForInputWithAMPM
+                          return formatDateTimeForInputWithAMPM(rawTestDoneDateTime);
+                        } catch {
+                          return String(rawTestDoneDateTime);
+                        }
+                      })()}
                     </p>
                   </div>
                   <div>
@@ -3377,7 +3981,62 @@ export function ManageIPDAdmission() {
                   <div>
                     <Label className="text-sm text-gray-500">Created Date</Label>
                     <p className="text-gray-900 font-medium mt-1">
-                      {viewingLabTest.createdDate ? formatDateTimeIST(viewingLabTest.createdDate) : 'N/A'}
+                      {(() => {
+                        // Display CreatedDate in dd-mm-yyyy hh:mm AM/PM format
+                        // Parse directly from string to avoid timezone conversion
+                        const rawCreatedDate = viewingLabTest.createdDate || (viewingLabTest as any).CreatedDate || (viewingLabTest as any).created_date || (viewingLabTest as any).createdAt;
+                        if (!rawCreatedDate) return 'N/A';
+                        
+                        try {
+                          if (typeof rawCreatedDate === 'string') {
+                            // If it's already in DD-MM-YYYY HH:mm format, convert to AM/PM
+                            if (/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}/.test(rawCreatedDate)) {
+                              const [datePart, timePart] = rawCreatedDate.split(' ');
+                              const [hours, minutes] = timePart.split(':');
+                              const hours24 = parseInt(hours, 10);
+                              const period = hours24 >= 12 ? 'PM' : 'AM';
+                              const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
+                              return `${datePart}, ${String(hours12).padStart(2, '0')}:${minutes} ${period}`;
+                            }
+                            // If it's ISO format, extract date/time components directly without timezone conversion
+                            if (rawCreatedDate.includes('T')) {
+                              const [datePart, timePart] = rawCreatedDate.split('T');
+                              // Extract date components (YYYY-MM-DD)
+                              const [year, month, day] = datePart.split('-');
+                              // Extract time components (HH:mm:ss or HH:mm:ss.sssZ or HH:mm:ss+offset)
+                              const timeOnly = timePart.split('.')[0].split('+')[0].split('Z')[0].split('-')[0];
+                              const [hours, minutes] = timeOnly.split(':');
+                              const hours24 = parseInt(hours, 10);
+                              const period = hours24 >= 12 ? 'PM' : 'AM';
+                              const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
+                              // Use the date components directly from the string (no timezone conversion)
+                              return `${day}-${month}-${year}, ${String(hours12).padStart(2, '0')}:${minutes} ${period}`;
+                            }
+                          }
+                          // Fallback: try to parse as Date but extract components directly
+                          // This should only be used if the format is unknown
+                          try {
+                            const dateObj = new Date(rawCreatedDate);
+                            if (!isNaN(dateObj.getTime())) {
+                              // Extract UTC components to avoid timezone shift
+                              const year = dateObj.getUTCFullYear();
+                              const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+                              const day = String(dateObj.getUTCDate()).padStart(2, '0');
+                              const hours = dateObj.getUTCHours();
+                              const minutes = dateObj.getUTCMinutes();
+                              const hours24 = parseInt(String(hours), 10);
+                              const period = hours24 >= 12 ? 'PM' : 'AM';
+                              const hours12 = hours24 === 0 ? 12 : hours24 > 12 ? hours24 - 12 : hours24;
+                              return `${day}-${month}-${year}, ${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
+                            }
+                          } catch {
+                            return String(rawCreatedDate);
+                          }
+                          return String(rawCreatedDate);
+                        } catch {
+                          return String(rawCreatedDate);
+                        }
+                      })()}
                     </p>
                   </div>
                   <div className="col-span-2">
@@ -3801,20 +4460,15 @@ export function ManageIPDAdmission() {
                     onChange={(date: Date | null) => {
                       setCustomizeTestDoneDateTime(date);
                       if (date) {
-                        // Treat the selected date/time as IST and convert to UTC for API
-                        // Extract date/time components from the selected date (treating as IST)
+                        // Extract date/time components directly without timezone conversion
+                        // Format as YYYY-MM-DDTHH:mm (no timezone, no conversion)
                         const year = date.getFullYear();
                         const month = String(date.getMonth() + 1).padStart(2, '0');
                         const day = String(date.getDate()).padStart(2, '0');
                         const hours = String(date.getHours()).padStart(2, '0');
                         const minutes = String(date.getMinutes()).padStart(2, '0');
-                        const seconds = String(date.getSeconds()).padStart(2, '0');
-                        // Create IST datetime string and convert to UTC
-                        const istDateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
-                        const dateObj = new Date(istDateTimeStr);
-                        if (!isNaN(dateObj.getTime())) {
-                          setCustomizeLabTestFormData({ ...customizeLabTestFormData, testDoneDateTime: dateObj.toISOString().slice(0, 16) });
-                        }
+                        const dateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}`;
+                        setCustomizeLabTestFormData({ ...customizeLabTestFormData, testDoneDateTime: dateTimeStr });
                       } else {
                         setCustomizeLabTestFormData({ ...customizeLabTestFormData, testDoneDateTime: '' });
                       }
@@ -3966,20 +4620,15 @@ export function ManageIPDAdmission() {
                     onChange={(date: Date | null) => {
                       setCustomizeDoctorVisitDateTime(date);
                       if (date) {
-                        // Treat the selected date/time as IST and convert to UTC for API
-                        // Extract date/time components from the selected date (treating as IST)
+                        // Extract date/time components directly without timezone conversion
+                        // Format as YYYY-MM-DDTHH:mm (no timezone, no conversion)
                         const year = date.getFullYear();
                         const month = String(date.getMonth() + 1).padStart(2, '0');
                         const day = String(date.getDate()).padStart(2, '0');
                         const hours = String(date.getHours()).padStart(2, '0');
                         const minutes = String(date.getMinutes()).padStart(2, '0');
-                        const seconds = String(date.getSeconds()).padStart(2, '0');
-                        // Create IST datetime string and convert to UTC
-                        const istDateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
-                        const dateObj = new Date(istDateTimeStr);
-                        if (!isNaN(dateObj.getTime())) {
-                          setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, doctorVisitedDateTime: dateObj.toISOString() });
-                        }
+                        const dateTimeStr = `${year}-${month}-${day}T${hours}:${minutes}`;
+                        setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, doctorVisitedDateTime: dateTimeStr });
                       } else {
                         setCustomizeDoctorVisitFormData({ ...customizeDoctorVisitFormData, doctorVisitedDateTime: '' });
                       }
@@ -4034,6 +4683,11 @@ export function ManageIPDAdmission() {
                   />
                 </div>
               </div>
+              {customizeLabTestSubmitError && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-600">{customizeLabTestSubmitError}</p>
+                </div>
+              )}
             </div>
           </div>
           <div className="dialog-footer-buttons px-6 pb-4 flex-shrink-0">
@@ -4044,18 +4698,16 @@ export function ManageIPDAdmission() {
                 setCustomizingDoctorVisit(null);
                 setCustomizeDoctorVisitDateTime(null);
                 setCustomizeDoctorVisitCreatedAt(null);
+                setCustomizeLabTestSubmitError(null);
               }}
             >
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                // TODO: Add save functionality for manage doctor visit dialog
-                console.log('Manage doctor visit data:', customizeDoctorVisitFormData);
-                setIsCustomizeDoctorVisitDialogOpen(false);
-              }}
+              onClick={handleSaveCustomizeDoctorVisit}
+              disabled={customizeLabTestSubmitting}
             >
-              Save
+              {customizeLabTestSubmitting ? 'Saving...' : 'Save'}
             </Button>
           </div>
         </div>
