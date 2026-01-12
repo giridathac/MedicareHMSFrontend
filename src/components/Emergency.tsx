@@ -195,6 +195,32 @@ export function Emergency() {
     }
   };
 
+  // Helper function to format datetime to IST timestamp format (dd-mm-yyyy hh:mm am/pm)
+  const formatISTTimestamp = (dateTime: string | Date | undefined): string => {
+    if (!dateTime) return '';
+    try {
+      // Use convertToIST to properly convert to IST
+      const istDate = convertToIST(dateTime);
+      
+      // Extract date components
+      const year = istDate.getUTCFullYear();
+      const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(istDate.getUTCDate()).padStart(2, '0');
+      
+      // Extract time components
+      const hours = istDate.getUTCHours();
+      const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+      
+      // Convert to 12-hour format with lowercase am/pm
+      const period = hours >= 12 ? 'pm' : 'am';
+      const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+      
+      return `${day}-${month}-${year} ${String(displayHour).padStart(2, '0')}:${minutes} ${period}`;
+    } catch {
+      return '';
+    }
+  };
+
   // Helper function to format datetime to dd-mm-yyyy, hh:mm format in IST
   const formatDateTimeForInput = (dateTime: string | Date | undefined): string => {
     if (!dateTime) return '';
@@ -270,10 +296,12 @@ export function Emergency() {
   const [isAddVitalsDialogOpen, setIsAddVitalsDialogOpen] = useState(false);
   const [isManageVitalsDialogOpen, setIsManageVitalsDialogOpen] = useState(false);
   const [selectedVitals, setSelectedVitals] = useState<EmergencyAdmissionVitals | null>(null);
+  const [addVitalsRecordedDateTime, setAddVitalsRecordedDateTime] = useState<Date | null>(new Date());
+  const [manageVitalsRecordedDateTime, setManageVitalsRecordedDateTime] = useState<Date | null>(null);
   const [vitalsFormData, setVitalsFormData] = useState<CreateEmergencyAdmissionVitalsDto>({
     emergencyAdmissionId: 0,
     nurseId: 0,
-    recordedDateTime: getCurrentISTDateTimeLocal(),
+    recordedDateTime: '',
     heartRate: undefined,
     bloodPressure: '',
     temperature: undefined,
@@ -1000,7 +1028,8 @@ export function Emergency() {
         );
         
         // Check if patient is transferred or discharged
-        const isTransferred = admission?.transferToIPDOTICU && admission?.transferTo;
+        // When transferred, emergencyStatus should be 'Movedout' (set automatically on save)
+        // Keep checks for 'IPD', 'OT', 'ICU' as fallback for existing records
         const isDischargedOrMoved = admission?.emergencyStatus === 'Discharged' || 
                                     admission?.emergencyStatus === 'Movedout' ||
                                     admission?.emergencyStatus === 'IPD' ||
@@ -1009,21 +1038,21 @@ export function Emergency() {
         
         // Bed is occupied if:
         // 1. Bed status is 'occupied' (regardless of admission record - backend marks it as occupied), OR
-        // 2. There's an active admission with 'Admitted' status and not transferred/discharged
+        // 2. There's an active admission with 'Admitted' status (not transferred/discharged/moved)
         const bedStatus = bed.status?.toLowerCase();
         if (bedStatus === 'occupied') {
           // Bed marked as occupied in database - always show as occupied
           occupied.push(bed);
         } else if (admission && 
                    admission.emergencyStatus === 'Admitted' && 
-                   !isTransferred && 
                    !isDischargedOrMoved) {
-          // Bed has active admission - show as occupied
+          // Bed has active admission with 'Admitted' status - show as occupied
           occupied.push(bed);
         } else {
           // Bed is unoccupied if:
           // - Bed status is 'active' (mapped from 'Unoccupied' in API) AND no active admission, OR
-          // - Admission exists but patient is transferred/discharged/moved
+          // - Admission exists but patient is transferred/discharged/moved (emergencyStatus is 'Movedout', 'Discharged', etc.)
+          //   The record still exists but bed is available
           unoccupied.push(bed);
         }
       });
@@ -1511,6 +1540,12 @@ export function Emergency() {
                           const transferToOT = emergencyFormData.transferToIPDOTICU && emergencyFormData.transferTo === 'OT' ? 'Yes' : 'No';
                           const transferToICU = emergencyFormData.transferToIPDOTICU && emergencyFormData.transferTo === 'ICU' ? 'Yes' : 'No';
 
+                          // If patient is being transferred, automatically set emergencyStatus to 'Movedout'
+                          // This marks the bed as unoccupied while keeping the record
+                          const finalEmergencyStatus = (emergencyFormData.transferToIPDOTICU && emergencyFormData.transferTo) 
+                            ? 'Movedout' 
+                            : emergencyFormData.emergencyStatus;
+
                           // Format date/time as dd-mm-yyyy hh:mm AM/PM for API
                           const day = String(addEmergencyAdmissionDateTime.getDate()).padStart(2, '0');
                           const month = String(addEmergencyAdmissionDateTime.getMonth() + 1).padStart(2, '0');
@@ -1528,7 +1563,7 @@ export function Emergency() {
                             patientId: emergencyFormData.patientId,
                             emergencyBedId: parseInt(emergencyFormData.emergencyBedId),
                             emergencyAdmissionDate: apiDateTime,
-                            emergencyStatus: emergencyFormData.emergencyStatus,
+                            emergencyStatus: finalEmergencyStatus,
                             numberOfDays: emergencyFormData.numberOfDays || null,
                             diagnosis: emergencyFormData.diagnosis || null,
                             treatmentDetails: emergencyFormData.treatmentDetails || null,
@@ -1855,9 +1890,7 @@ export function Emergency() {
             <div className="space-y-3">
               {sortedAdmissions
                 .filter(a => a.status === 'Active' && 
-                  a.emergencyStatus !== 'Discharged' && 
-                  a.emergencyStatus !== 'Movedout' &&
-                  (a.emergencyStatus === 'Admitted' || a.emergencyStatus === 'IPD'))
+                  a.emergencyStatus === 'Admitted')
                 .sort((a, b) => {
                   const priorityOrder = { 'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3 };
                   const priorityA = (a.priority || 'Medium') as keyof typeof priorityOrder;
@@ -1897,9 +1930,7 @@ export function Emergency() {
                   );
                 })}
               {sortedAdmissions.filter(a => a.status === 'Active' && 
-                a.emergencyStatus !== 'Discharged' && 
-                a.emergencyStatus !== 'Movedout' &&
-                (a.emergencyStatus === 'Admitted' || a.emergencyStatus === 'IPD')).length === 0 && (
+                a.emergencyStatus === 'Admitted').length === 0 && (
                 <div className="text-center py-8 text-sm text-gray-500">
                   No active emergency admissions
                 </div>
@@ -2479,6 +2510,12 @@ export function Emergency() {
                         const transferToOT = editFormData.transferToIPDOTICU && editFormData.transferTo === 'OT' ? 'Yes' : 'No';
                         const transferToICU = editFormData.transferToIPDOTICU && editFormData.transferTo === 'ICU' ? 'Yes' : 'No';
 
+                        // If patient is being transferred, automatically set emergencyStatus to 'Movedout'
+                        // This marks the bed as unoccupied while keeping the record
+                        const finalEmergencyStatus = (editFormData.transferToIPDOTICU && editFormData.transferTo) 
+                          ? 'Movedout' 
+                          : editFormData.emergencyStatus;
+
                         // Format date/time as dd-mm-yyyy hh:mm AM/PM for API
                         const day = String(editEmergencyAdmissionDateTime.getDate()).padStart(2, '0');
                         const month = String(editEmergencyAdmissionDateTime.getMonth() + 1).padStart(2, '0');
@@ -2496,7 +2533,7 @@ export function Emergency() {
                           doctorId: parseInt(editFormData.doctorId),
                           emergencyBedId: parseInt(editFormData.emergencyBedId),
                           emergencyAdmissionDate: apiDateTime,
-                          emergencyStatus: editFormData.emergencyStatus,
+                          emergencyStatus: finalEmergencyStatus,
                           numberOfDays: editFormData.numberOfDays || null,
                           diagnosis: editFormData.diagnosis || null,
                           treatmentDetails: editFormData.treatmentDetails || null,
@@ -2509,6 +2546,18 @@ export function Emergency() {
                           transferDetails: editFormData.transferDetails || null,
                           status: editFormData.status,
                         };
+
+                        // DEBUG: Log all values being sent
+                        console.log('=== EMERGENCY ADMISSION UPDATE DEBUG ===');
+                        console.log('API Method: PUT');
+                        console.log('API Endpoint: /emergency-admissions/' + editFormData.id);
+                        console.log('Update DTO (Frontend):', JSON.stringify(updateDto, null, 2));
+                        console.log('emergencyStatus value:', finalEmergencyStatus);
+                        console.log('emergencyStatus type:', typeof finalEmergencyStatus);
+                        console.log('transferToIPDOTICU:', editFormData.transferToIPDOTICU);
+                        console.log('transferTo:', editFormData.transferTo);
+                        console.log('Original emergencyStatus from form:', editFormData.emergencyStatus);
+                        console.log('==========================================');
 
                         // Call the API
                         await emergencyAdmissionsApi.update(updateDto);
@@ -2570,7 +2619,7 @@ export function Emergency() {
                           setVitalsFormData({
                             emergencyAdmissionId: selectedAdmissionForEdit.emergencyAdmissionId,
                             nurseId: 0,
-                            recordedDateTime: getCurrentISTDateTimeLocal(),
+                            recordedDateTime: '',
                             heartRate: undefined,
                             bloodPressure: '',
                             temperature: undefined,
@@ -2581,6 +2630,7 @@ export function Emergency() {
                             vitalsRemarks: '',
                             status: 'Active',
                           });
+                          setAddVitalsRecordedDateTime(new Date());
                           setIsAddVitalsDialogOpen(true);
                         }
                       }}
@@ -2606,7 +2656,7 @@ export function Emergency() {
                                   {vital.vitalsStatus}
                                 </Badge>
                                 <span className="text-sm text-gray-600">
-                                  {new Date(vital.recordedDateTime).toLocaleString()}
+                                  {formatISTTimestamp(vital.recordedDateTime)}
                                 </span>
                                 {vital.nurseName && (
                                   <span className="text-sm text-gray-500">by {vital.nurseName}</span>
@@ -2644,10 +2694,66 @@ export function Emergency() {
                                 size="sm"
                                 onClick={() => {
                                   setSelectedVitals(vital);
+                                  
+                                  // Parse recordedDateTime for DatePicker
+                                  let parsedDate: Date | null = null;
+                                  try {
+                                    if (vital.recordedDateTime) {
+                                      // Try to parse various date formats
+                                      const dateStr = typeof vital.recordedDateTime === 'string' 
+                                        ? vital.recordedDateTime 
+                                        : vital.recordedDateTime.toString();
+                                      
+                                      // Handle YYYY-MM-DD HH:mm:ss format
+                                      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(dateStr)) {
+                                        const [datePart, timePart] = dateStr.split(' ');
+                                        const [year, month, day] = datePart.split('-').map(Number);
+                                        const [hours, minutes] = timePart.split(':').map(Number);
+                                        parsedDate = new Date(year, month - 1, day, hours, minutes);
+                                      }
+                                      // Handle YYYY-MM-DDTHH:mm format
+                                      else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dateStr)) {
+                                        parsedDate = new Date(dateStr);
+                                      }
+                                      // Handle DD-MM-YYYY HH:mm format
+                                      else if (/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}/.test(dateStr)) {
+                                        const [datePart, timePart] = dateStr.split(' ');
+                                        const [day, month, year] = datePart.split('-').map(Number);
+                                        const [hours, minutes] = timePart.split(':').map(Number);
+                                        parsedDate = new Date(year, month - 1, day, hours, minutes);
+                                      }
+                                      // Fallback to Date constructor
+                                      else {
+                                        parsedDate = new Date(dateStr);
+                                      }
+                                      
+                                      // Validate the date
+                                      if (isNaN(parsedDate.getTime())) {
+                                        parsedDate = new Date();
+                                      }
+                                    } else {
+                                      parsedDate = new Date();
+                                    }
+                                  } catch {
+                                    parsedDate = new Date();
+                                  }
+                                  
+                                  setManageVitalsRecordedDateTime(parsedDate);
+                                  
+                                  // Format for API (YYYY-MM-DD HH:MM:SS)
+                                  const formatForAPI = (date: Date): string => {
+                                    const year = date.getFullYear();
+                                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                                    const day = String(date.getDate()).padStart(2, '0');
+                                    const hours = String(date.getHours()).padStart(2, '0');
+                                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                                    return `${year}-${month}-${day} ${hours}:${minutes}:00`;
+                                  };
+                                  
                                   setVitalsFormData({
                                     emergencyAdmissionId: vital.emergencyAdmissionId,
                                     nurseId: vital.nurseId,
-                                    recordedDateTime: convertToISTDateTimeLocal(vital.recordedDateTime),
+                                    recordedDateTime: parsedDate ? formatForAPI(parsedDate) : '',
                                     heartRate: vital.heartRate,
                                     bloodPressure: vital.bloodPressure || '',
                                     temperature: vital.temperature,
@@ -2716,11 +2822,40 @@ export function Emergency() {
               
               <div>
                 <Label htmlFor="add-recordedDateTime">Recorded Date & Time *</Label>
-                <Input
+                <DatePicker
                   id="add-recordedDateTime"
-                  type="datetime-local"
-                  value={vitalsFormData.recordedDateTime}
-                  onChange={(e) => setVitalsFormData({ ...vitalsFormData, recordedDateTime: e.target.value })}
+                  selected={addVitalsRecordedDateTime}
+                  onChange={(date: Date | null) => {
+                    setAddVitalsRecordedDateTime(date);
+                    if (date) {
+                      // Extract local date/time components without timezone conversion
+                      const year = date.getFullYear();
+                      const month = String(date.getMonth() + 1).padStart(2, '0');
+                      const day = String(date.getDate()).padStart(2, '0');
+                      const hours = String(date.getHours()).padStart(2, '0');
+                      const minutes = String(date.getMinutes()).padStart(2, '0');
+                      const seconds = '00';
+                      // Format as YYYY-MM-DD HH:MM:SS for API (no timezone conversion)
+                      const dateTimeStr = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                      setVitalsFormData({ ...vitalsFormData, recordedDateTime: dateTimeStr });
+                    } else {
+                      setVitalsFormData({ ...vitalsFormData, recordedDateTime: '' });
+                    }
+                  }}
+                  showTimeSelect
+                  timeIntervals={1}
+                  timeCaption="Time"
+                  timeFormat="hh:mm aa"
+                  dateFormat="dd-MM-yyyy hh:mm aa"
+                  placeholderText="dd-mm-yyyy hh:mm am/pm"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                  wrapperClassName="w-full"
+                  showYearDropdown
+                  showMonthDropdown
+                  dropdownMode="select"
+                  yearDropdownItemNumber={100}
+                  scrollableYearDropdown
+                  required
                 />
               </div>
 
@@ -2834,7 +2969,7 @@ export function Emergency() {
                   setVitalsFormData({
                     emergencyAdmissionId: 0,
                     nurseId: 0,
-                    recordedDateTime: getCurrentISTDateTimeLocal(),
+                    recordedDateTime: '',
                     heartRate: undefined,
                     bloodPressure: '',
                     temperature: undefined,
@@ -2845,6 +2980,7 @@ export function Emergency() {
                     vitalsRemarks: '',
                     status: 'Active',
                   });
+                  setAddVitalsRecordedDateTime(new Date());
                 }
               } catch (err) {
                 console.error('Error creating vitals:', err);
@@ -2900,11 +3036,40 @@ export function Emergency() {
               
                 <div>
                   <Label htmlFor="manage-vitals-recordedDateTime">Recorded Date & Time *</Label>
-                  <Input
+                  <DatePicker
                     id="manage-vitals-recordedDateTime"
-                    type="datetime-local"
-                    value={vitalsFormData.recordedDateTime}
-                    onChange={(e) => setVitalsFormData({ ...vitalsFormData, recordedDateTime: e.target.value })}
+                    selected={manageVitalsRecordedDateTime}
+                    onChange={(date: Date | null) => {
+                      setManageVitalsRecordedDateTime(date);
+                      if (date) {
+                        // Extract local date/time components without timezone conversion
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const seconds = '00';
+                        // Format as YYYY-MM-DD HH:MM:SS for API (no timezone conversion)
+                        const dateTimeStr = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                        setVitalsFormData({ ...vitalsFormData, recordedDateTime: dateTimeStr });
+                      } else {
+                        setVitalsFormData({ ...vitalsFormData, recordedDateTime: '' });
+                      }
+                    }}
+                    showTimeSelect
+                    timeIntervals={1}
+                    timeCaption="Time"
+                    timeFormat="hh:mm aa"
+                    dateFormat="dd-MM-yyyy hh:mm aa"
+                    placeholderText="dd-mm-yyyy hh:mm am/pm"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
+                    required
                   />
                 </div>
 
@@ -3072,7 +3237,7 @@ export function Emergency() {
                     vitalsRemarks: vitalsFormData.vitalsRemarks || undefined,
                     status: vitalsFormData.status,
                   };
-                  await emergencyAdmissionVitalsApi.update(selectedAdmissionForEdit.emergencyAdmissionId, selectedVitals.emergencyAdmissionVitalsId, updateData);
+                  await emergencyAdmissionVitalsApi.update(selectedVitals.emergencyAdmissionVitalsId, updateData);
                   await fetchVitals(selectedAdmissionForEdit.emergencyAdmissionId);
                   setIsManageVitalsDialogOpen(false);
                   setSelectedVitals(null);

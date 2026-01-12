@@ -1,6 +1,7 @@
 // Emergency Admissions API service
 import { apiRequest } from './base';
 import { EmergencyAdmission, EmergencyAdmissionVitals } from '../types';
+import { emergencyBedsApi } from './emergencyBeds';
 
 // API Response types
 interface EmergencyAdmissionResponseItem {
@@ -264,6 +265,16 @@ export const emergencyAdmissionsApi = {
       if (data.admissionCreatedBy !== undefined) backendRequest.AdmissionCreatedBy = data.admissionCreatedBy ?? null;
       if (data.status !== undefined) backendRequest.Status = data.status;
       
+      // DEBUG: Log backend request being sent
+      console.log('=== API UPDATE REQUEST DEBUG ===');
+      console.log('API Method: PUT');
+      console.log('API Endpoint: /emergency-admissions/' + data.id);
+      console.log('Backend Request (being sent to API):', JSON.stringify(backendRequest, null, 2));
+      console.log('EmergencyStatus field value:', backendRequest.EmergencyStatus);
+      console.log('EmergencyStatus field type:', typeof backendRequest.EmergencyStatus);
+      console.log('All backend request keys:', Object.keys(backendRequest));
+      console.log('================================');
+      
       const response = await apiRequest<EmergencyAdmissionGetByIdResponse>(`/emergency-admissions/${data.id}`, {
         method: 'PUT',
         body: JSON.stringify(backendRequest),
@@ -281,9 +292,34 @@ export const emergencyAdmissionsApi = {
 
   async delete(id: number): Promise<void> {
     try {
+      // Get admission details before deleting to know which bed to mark as unoccupied
+      let bedId: number | undefined;
+      try {
+        const admission = await this.getById(id);
+        bedId = admission.emergencyBedId;
+        console.log(`[Delete Emergency Admission] Found bed ID ${bedId} for admission ${id}`);
+      } catch (getError) {
+        console.warn(`[Delete Emergency Admission] Could not fetch admission ${id} before deletion, will proceed with delete only:`, getError);
+      }
+
+      // Delete the emergency admission
       await apiRequest<void>(`/emergency-admissions/${id}`, {
         method: 'DELETE',
       });
+
+      // If we have a bed ID, mark the bed as unoccupied (status: 'active')
+      if (bedId) {
+        try {
+          await emergencyBedsApi.update({
+            id: bedId,
+            status: 'active', // 'active' means unoccupied
+          });
+          console.log(`[Delete Emergency Admission] Successfully marked bed ${bedId} as unoccupied after deleting admission ${id}`);
+        } catch (bedUpdateError) {
+          console.error(`[Delete Emergency Admission] Failed to mark bed ${bedId} as unoccupied after deleting admission ${id}:`, bedUpdateError);
+          // Don't throw - admission is already deleted, bed update failure is logged but doesn't block
+        }
+      }
     } catch (err) {
       console.error('Error deleting emergency admission:', err);
       throw err;
@@ -463,7 +499,7 @@ export const emergencyAdmissionVitalsApi = {
     }
   },
 
-  async update(emergencyAdmissionId: number, vitalsId: number, data: UpdateEmergencyAdmissionVitalsDto): Promise<EmergencyAdmissionVitals> {
+  async update(vitalsId: number, data: UpdateEmergencyAdmissionVitalsDto): Promise<EmergencyAdmissionVitals> {
     try {
       const updateData: any = {};
       if (data.nurseId !== undefined) updateData.NurseId = data.nurseId;
@@ -479,7 +515,7 @@ export const emergencyAdmissionVitalsApi = {
       if (data.status !== undefined) updateData.Status = data.status;
 
       const response = await apiRequest<EmergencyAdmissionVitalsGetByIdResponse>(
-        `/emergency-admissions/${emergencyAdmissionId}/vitals/${vitalsId}`,
+        `/emergency-admission-vitals/${vitalsId}`,
         {
           method: 'PUT',
           body: JSON.stringify(updateData),

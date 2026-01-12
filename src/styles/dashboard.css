@@ -86,7 +86,7 @@
 
 /* Stats card content */
 .dashboard-stats-card-content {
-  padding: 2rem; /* p-8 */
+  padding: 1.5rem; /* p-6 - matches FrontDesk */
 }
 
 /* Stats card icon container */
@@ -94,7 +94,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.5rem; /* mb-6 */
+  margin-bottom: 1rem; /* mb-4 - reduced to match FrontDesk compact style */
 }
 
 /* Stats card icon background */
@@ -112,12 +112,12 @@
   font-size: 1.5rem; /* 24px */
   font-weight: 700; /* font-bold */
   color: rgb(17, 24, 39); /* text-gray-900 */
-  margin-bottom: 0.5rem; /* mb-2 */
+  margin-bottom: 0.25rem; /* mb-1 - reduced to match FrontDesk compact style */
 }
 
 /* Stats card label */
 .dashboard-stats-label {
-  font-size: 1.125rem; /* text-lg - 18px */
+  font-size: 0.875rem; /* text-sm - 14px - matches FrontDesk */
   color: rgb(107, 114, 128); /* text-gray-500 */
 }
 

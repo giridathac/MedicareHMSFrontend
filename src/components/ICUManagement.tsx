@@ -7,7 +7,6 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { HeartPulse, Activity, Thermometer, Wind, Droplet, Brain, Plus, Edit, CheckCircle2, XCircle, Wrench, Clock, Search } from 'lucide-react';
 import { admissionsApi } from '../api/admissions';
@@ -2342,56 +2341,58 @@ export function ICUManagement() {
           </div>
         </DialogContent>
       </Dialog>
-      <Tabs defaultValue="patients" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="patients">ICU Patient Management</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="patients" className="dashboard-tabs">
+      <div className="dashboard-tabs">
           {/* Stats Grid */}
-          <div className="dashboard-stats-grid">
-            <Card className="dashboard-stats-card">
-              <CardContent className="dashboard-stats-card-content">
-                <div className="dashboard-stats-icon-container">
-                  <HeartPulse className="size-5 text-red-600" />
-                  <span className="dashboard-stats-status-label">Occupied beds</span>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Occupied beds</p>
+                    <h3 className="text-gray-900">{occupancy.occupiedBeds}/{occupancy.totalBeds}</h3>
+                  </div>
+                  <HeartPulse className="size-8 text-red-600" />
                 </div>
-                <h3 className="dashboard-stats-number">{occupancy.occupiedBeds}/{occupancy.totalBeds}</h3>
-                <p className="dashboard-stats-label">Total Patients</p>
               </CardContent>
             </Card>
 
-            <Card className="dashboard-stats-card">
-              <CardContent className="dashboard-stats-card-content">
-                <div className="dashboard-stats-icon-container">
-                  
-                  <span className="dashboard-stats-status-label">Require immediate attention</span>
-                  <Badge variant="destructive">{criticalPatientsCount}</Badge>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Require immediate attention</p>
+                    <h3 className="text-gray-900">{criticalPatientsCount}</h3>
+                  </div>
+                  <div className="size-8 bg-red-100 rounded-full flex items-center justify-center">
+                    <span className="text-red-700">⚠️</span>
+                  </div>
                 </div>
-                <h3 className="dashboard-stats-number">{criticalPatientsCount}</h3>
-                <p className="dashboard-stats-label">Critical Patients</p>
               </CardContent>
             </Card>
 
-            <Card className="dashboard-stats-card">
-              <CardContent className="dashboard-stats-card-content">
-                <div className="dashboard-stats-icon-container">
-                  <Wind className="size-5 text-blue-600" />
-                  <span className="dashboard-stats-status-label">Ventilator support</span>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Ventilator support</p>
+                    <h3 className="text-gray-900">{onVentilatorCount}</h3>
+                  </div>
+                  <Wind className="size-8 text-blue-600" />
                 </div>
-                <h3 className="dashboard-stats-number">{onVentilatorCount}</h3>
-                <p className="dashboard-stats-label">On Ventilator</p>
               </CardContent>
             </Card>
 
-            <Card className="dashboard-stats-card">
-              <CardContent className="dashboard-stats-card-content">
-                <div className="dashboard-stats-icon-container">
-                  <span className="text-green-600 text-2xl">●</span>
-                  <span className="dashboard-stats-status-label">Ready for admission</span>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Ready for admission</p>
+                    <h3 className="text-gray-900">{availableBedsCount}</h3>
+                  </div>
+                  <div className="size-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-green-700 text-xl">●</span>
+                  </div>
                 </div>
-                <h3 className="dashboard-stats-number">{availableBedsCount}</h3>
-                <p className="dashboard-stats-label">Available Beds</p>
               </CardContent>
             </Card>
           </div>
@@ -2799,8 +2800,7 @@ export function ICUManagement() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+      </div>
         </div>
       </div>
     </div>
