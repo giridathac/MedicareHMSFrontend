@@ -466,9 +466,26 @@ export default function Admissions() {
       let roomVacantDate = '';
       if (roomVacantDateRaw) {
         try {
-          const date = new Date(roomVacantDateRaw);
-          if (!isNaN(date.getTime())) {
-            roomVacantDate = date.toISOString().split('T')[0];
+          // Handle DD-MM-YYYY format (e.g., "11-01-2026" or "11-01-2026 00:00")
+          let dateStr = String(roomVacantDateRaw);
+          if (dateStr.includes(' ')) {
+            dateStr = dateStr.split(' ')[0]; // Extract date part if it has time
+          }
+          
+          // Check if it's in DD-MM-YYYY format
+          if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+            const [day, month, year] = dateStr.split('-').map(Number);
+            // Format as YYYY-MM-DD for form state (no Date object creation to avoid timezone issues)
+            roomVacantDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          } else if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+            // Already in YYYY-MM-DD format
+            roomVacantDate = dateStr.split(' ')[0].split('T')[0];
+          } else {
+            // Try parsing as standard date format
+            const date = new Date(roomVacantDateRaw);
+            if (!isNaN(date.getTime())) {
+              roomVacantDate = date.toISOString().split('T')[0];
+            }
           }
         } catch (e) {
           console.error('Error parsing roomVacantDate:', e);
@@ -3848,6 +3865,43 @@ export default function Admissions() {
                   )}
                 </div>
 
+                {/* Room Vacant Date */}
+                <div className="relative">
+                  <Label htmlFor="edit-roomVacantDate" className="dialog-label-standard">Room Vacant Date</Label>
+                  <ISTDatePicker
+                    selected={editAdmissionForm.roomVacantDate ? (() => {
+                      // Parse YYYY-MM-DD format correctly (no timezone conversion)
+                      const dateStr = editAdmissionForm.roomVacantDate;
+                      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                        const [year, month, day] = dateStr.split('-').map(Number);
+                        return new Date(year, month - 1, day);
+                      }
+                      return null;
+                    })() : null}
+                    onChange={(dateStr: string | null, date: Date | null) => {
+                      if (date) {
+                        // Format as YYYY-MM-DD (no timezone conversion)
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const formattedDate = `${year}-${month}-${day}`;
+                        setEditAdmissionForm({ ...editAdmissionForm, roomVacantDate: formattedDate });
+                      } else {
+                        setEditAdmissionForm({ ...editAdmissionForm, roomVacantDate: '' });
+                      }
+                    }}
+                    dateFormat="dd-MM-yyyy"
+                    placeholderText="Select room vacant date"
+                    className="dialog-input-standard w-full"
+                    wrapperClassName="w-full"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    yearDropdownItemNumber={100}
+                    scrollableYearDropdown
+                  />
+                </div>
+
                 {/* Admission Status */}
                 <div className="relative">
                   <Label htmlFor="edit-admissionStatus" className="dialog-label-standard">Admission Status *</Label>
@@ -4080,6 +4134,19 @@ export default function Admissions() {
                     }
                   }
                   
+                  // Convert roomVacantDate from YYYY-MM-DD to DD-MM-YYYY format for backend
+                  let roomVacantDateFormatted = null;
+                  if (editAdmissionForm.roomVacantDate) {
+                    const dateStr = editAdmissionForm.roomVacantDate;
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                      // Convert YYYY-MM-DD to DD-MM-YYYY
+                      const [year, month, day] = dateStr.split('-');
+                      roomVacantDateFormatted = `${day}-${month}-${year}`;
+                    } else {
+                      roomVacantDateFormatted = editAdmissionForm.roomVacantDate;
+                    }
+                  }
+                  
                   const updatePayload: any = {
                     PatientAppointmentId: editAdmissionForm.patientAppointmentId ? Number(editAdmissionForm.patientAppointmentId) : null,
                     EmergencyAdmissionId: editAdmissionForm.emergencyBedSlotId ? Number(editAdmissionForm.emergencyBedSlotId) : null,
@@ -4088,7 +4155,7 @@ export default function Admissions() {
                     PatientId: editAdmissionForm.patientId || '',
                     RoomBedsId: editAdmissionForm.roomBedsId ? Number(editAdmissionForm.roomBedsId) : null,
                     RoomAllocationDate: roomAllocationDateFormatted || '',
-                    RoomVacantDate: editAdmissionForm.roomVacantDate || null,
+                    RoomVacantDate: roomVacantDateFormatted,
                     AdmissionStatus: editAdmissionForm.admissionStatus || 'Active',
                     CaseSheetDetails: editAdmissionForm.caseDetails || null,
                     CaseSheet: editAdmissionForm.caseSheet || null,
