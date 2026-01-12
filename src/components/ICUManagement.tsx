@@ -1477,12 +1477,12 @@ export function ICUManagement() {
     // The API returns: { success: true, data: { icuId: 5, icuBedNo: "B02", admissions: [...] } }
     let actualBedData = bedDetails;
     let patientData = null;
-    
+
     // Check if response has a 'data' wrapper
     if (bedDetails.data) {
       actualBedData = bedDetails.data;
     }
-    
+
     // Extract patient data from admissions array (most recent admission)
     if (actualBedData.admissions && Array.isArray(actualBedData.admissions) && actualBedData.admissions.length > 0) {
       patientData = actualBedData.admissions[0]; // Get the first/most recent admission
@@ -1491,6 +1491,20 @@ export function ICUManagement() {
     } else {
       // Fallback to old structure
       patientData = bedDetails.patient || bedDetails.Patient || bedDetails.patientData || bedDetails.PatientData || bedDetails;
+    }
+
+    // If no patient data found or patient data has no meaningful patient information, return null
+    if (!patientData ||
+        (typeof patientData === 'object' &&
+         !patientData.patientName &&
+         !patientData.PatientName &&
+         !patientData.name &&
+         !patientData.Name &&
+         !patientData.id &&
+         !patientData.Id &&
+         !patientData.patientICUAdmissionId &&
+         !patientData.PatientICUAdmissionId)) {
+      return null;
     }
     
     const bedData = actualBedData;
@@ -2298,7 +2312,7 @@ export function ICUManagement() {
               <div>
                 <Label>ICU Admission Status</Label>
                 <Select
-                  onValueChange={(val) => {
+                  onValueChange={(val: string) => {
                     console.log('ICU Admission Status selected:', val);
                     setAddICUAdmissionForm(prev => ({ ...prev, icuAdmissionStatus: val }));
                   }}
@@ -2552,7 +2566,7 @@ export function ICUManagement() {
                     <span className="text-gray-600">Available</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="size-3 rounded-full bg-red-500" />
+                    <span className="size-3 rounded-full bg-blue-500" />
                     <span className="text-gray-600">Occupied</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2573,18 +2587,9 @@ export function ICUManagement() {
                   <div className="text-center py-12 text-gray-500">
                     Loading bed details...
                   </div>
-                ) : selectedBedDetails && !selectedPatient ? (
-                  <div className="space-y-4">
-                    <div className="text-center py-8 text-yellow-600">
-                      <p className="mb-2">Bed details loaded but patient data not found.</p>
-                      <p className="text-sm text-gray-500">Check console for details.</p>
-                      <details className="mt-4 text-left">
-                        <summary className="cursor-pointer text-sm text-gray-600">View raw data</summary>
-                        <pre className="mt-2 p-4 bg-gray-100 rounded text-xs overflow-auto max-h-96">
-                          {JSON.stringify(selectedBedDetails, null, 2)}
-                        </pre>
-                      </details>
-                    </div>
+                ) : selectedICUBedId && !selectedPatient ? (
+                  <div className="text-center py-12 text-gray-500">
+                    No admission found for this ICU Bed
                   </div>
                 ) : selectedPatient ? (
                   <div className="space-y-4">
@@ -2600,7 +2605,6 @@ export function ICUManagement() {
                         {selectedPatient.severity}
                       </Badge>
                     </div>
-
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <p className="text-gray-500">Patient No</p>
@@ -2721,6 +2725,34 @@ export function ICUManagement() {
               </CardContent>
             </Card>
           </div>
+
+                    {/* ICU Bed Details */}
+                    {/*                    <div className="border-t border-gray-200 pt-4">
+                      <h4 className="text-gray-900 mb-3">ICU Bed Details</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500">ICU Bed No</p>
+                          <p className="text-gray-900">{selectedBedDetails?.icuBedNo || selectedBedDetails?.ICUBedNo || selectedBedDetails?.bedNumber || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">ICU Type</p>
+                          <p className="text-gray-900">{selectedBedDetails?.icuType || selectedBedDetails?.ICUType || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">ICU Room Name No</p>
+                          <p className="text-gray-900">{selectedBedDetails?.icuRoomNameNo || selectedBedDetails?.ICURoomNameNo || selectedBedDetails?.roomName || selectedBedDetails?.roomNameNo || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">ICU Description</p>
+                          <p className="text-gray-900">{selectedBedDetails?.icuDescription || selectedBedDetails?.ICUDescription || selectedBedDetails?.description || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Is Ventilator Attached</p>
+                          <p className="text-gray-900">{selectedBedDetails?.isVentilatorAttached || selectedBedDetails?.IsVentilatorAttached ? 'Yes' : 'No'}</p>
+                        </div>
+                      </div>
+                    </div>
+                    */}
 
           {/* All ICU Patients List */}
           <Card className="dashboard-table-card">
