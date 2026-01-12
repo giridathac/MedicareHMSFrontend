@@ -13,11 +13,10 @@ import { HeartPulse, Activity, Thermometer, Wind, Droplet, Brain, Plus, Edit, Ch
 import { admissionsApi } from '../api/admissions';
 import { apiRequest } from '../api/base';
 import { doctorsApi } from '../api/doctors';
-import { formatDateTimeIST } from '../utils/timeUtils';
 
 interface ICUPatient {
   id: number | string;
-  patientICUAdmissionId?: string | number; // UUID for API calls
+  patientICUAdmissionId?: string | number | null; // UUID for API calls
   patientId?: string | number | null; // Patient ID
   patientNo?: string | null; // Patient Number
   patientType?: string | null; // Patient Type
@@ -29,7 +28,7 @@ interface ICUPatient {
   gender: string;
   admissionDate: string;
   admissionTime: string;
-  icuAllocationFromDate: string; // ICU Allocation From Date
+  icuAllocationFromDate?: string; // ICU Allocation From Date
   icuAllocationToDate?: string; // ICU Allocation To Date
   condition: string;
   patientCondition?: string | null; // Patient Condition
@@ -54,7 +53,7 @@ interface ICUBed {
   icuBedId: string | number | null;
   id: string | number | null;
   status: 'Occupied' | 'Available';
-  icuPatientStatus: 'Critical' | 'Green';
+  icuPatientStatus: 'Critical' | 'Serious' | 'Stable';
   icuAdmissionStatus: string;
   patient?: ICUPatient;
   _rawBedData?: any;
@@ -450,22 +449,22 @@ export function ICUManagement() {
 
           // Extract patientICUAdmissionId (UUID) - this is the actual ID we need for API calls
           // Prioritize UUID fields, then fallback to other ID fields
-          let patientICUAdmissionId = extractField(admission, [
+          let patientICUAdmissionId: string | number | null = extractField(admission, [
             'patientICUAdmissionId', 'PatientICUAdmissionId', 'patient_icu_admission_id', 'Patient_ICU_Admission_Id'
           ], null);
-          
+
           // If not found, try other ID fields but validate they look like UUIDs
           if (!patientICUAdmissionId) {
             const candidateId = extractField(admission, [
               'id', 'Id', 'admissionId', 'AdmissionId'
             ], null);
-            
+
             // Only use if it looks like a UUID (string and length > 20)
             if (candidateId && typeof candidateId === 'string' && candidateId.length > 20) {
               patientICUAdmissionId = candidateId;
             }
           }
-          
+
           console.log('Mapped patient ICU Admission ID:', patientICUAdmissionId, 'Type:', typeof patientICUAdmissionId, 'for patient:', extractField(admission, ['patientName', 'PatientName', 'name', 'Name'], 'Unknown'));
 
           // Extract PatientNo
@@ -488,8 +487,8 @@ export function ICUManagement() {
           ], admissionDate); // Default to admissionDate if not found
 
           const icuAllocationToDate = extractField(admission, [
-            'icuAllocationToDate', 'ICUAllocationToDate', 'icu_allocation_from_date', 'ICU_Allocation_To_Date',
-            'allocationToDate', 'AllocationToDate', 'allocation_from_date', 'Allocation_To_Date'
+            'icuAllocationToDate', 'ICUAllocationToDate', 'icu_allocation_to_date', 'ICU_Allocation_To_Date',
+            'allocationToDate', 'AllocationToDate', 'allocation_to_date', 'Allocation_To_Date'
           ], admissionDate); // Default to admissionDate if not found
 
 
@@ -1156,21 +1155,35 @@ export function ICUManagement() {
           'status', 'Status', 'icuAdmissionStatus', 'ICUAdmissionStatus', 'bedStatus', 'BedStatus', 'bed_status', 'Bed_Status'
         ], 'Available');
 
+        console.log(bed);
         // Extract icuPatientStatus from bed level first, then patient data level
         // This field determines the bed status display (Critical, Serious, Available)
         let icuPatientStatusRaw = extractField(bed, [
-          'icuPatientStatus', 'ICUPatientStatus', 'icu_patient_status', 'ICU_Patient_Status',
+          'admissions.icuPatientStatus','icuPatientStatus', 'ICUPatientStatus', 'icu_patient_status', 'ICU_Patient_Status',
           'patientStatus', 'PatientStatus', 'patient_status', 'Patient_Status'
         ], null);
 
+        // If not found, check in admissions array (for bed layout API structure)
+        if (!icuPatientStatusRaw && bed.admissions && Array.isArray(bed.admissions) && bed.admissions.length > 0) {
+          icuPatientStatusRaw = extractField(bed.admissions[0], [
+            'icuPatientStatus', 'ICUPatientStatus', 'icu_patient_status', 'ICU_Patient_Status',
+            'patientStatus', 'PatientStatus', 'patient_status', 'Patient_Status'
+          ], null);
+        }
+
         // Map patient data if available
         let patient: ICUPatient | undefined = undefined;
-        const patientData = bed.patient || bed.Patient || bed.patientData || bed.PatientData;
+        let patientData = bed.patient || bed.Patient || bed.patientData || bed.PatientData;
+
+        // If patient data not found in standard locations, check admissions array
+        if (!patientData && bed.admissions && Array.isArray(bed.admissions) && bed.admissions.length > 0) {
+          patientData = bed.admissions[0];
+        }
         if (patientData) {
           // If not found at bed level, extract from patient data
           if (!icuPatientStatusRaw) {
             icuPatientStatusRaw = extractField(patientData, [
-              'icuPatientStatus', 'ICUPatientStatus', 'icu_patient_status', 'ICU_Patient_Status',
+              'admissions.icuPatientStatus','icuPatientStatus', 'ICUPatientStatus', 'icu_patient_status', 'ICU_Patient_Status',
               'patientCondition', 'PatientCondition', 'patient_condition', 'Patient_Condition',
               'condition', 'Condition', 'patientStatus', 'PatientStatus',
               'status', 'Status', 'severity', 'Severity', 'patientSeverity', 'PatientSeverity'
@@ -1345,7 +1358,7 @@ export function ICUManagement() {
         
         // Extract ICUAdmissionStatus (Occupied/Discharged)
         const icuAdmissionStatus = extractField(bed, [
-          'icuAdmissionStatus', 'ICUAdmissionStatus', 'icu_admission_status', 'ICU_Admission_Status',
+          'admissions.icuAdmissionStatus', 'ICUAdmissionStatus', 'icu_admission_status', 'ICU_Admission_Status',
           'admissionStatus', 'AdmissionStatus', 'admission_status', 'Admission_Status'
         ], 'Occupied');
         
@@ -1353,7 +1366,7 @@ export function ICUManagement() {
         let finalICUAdmissionStatus = icuAdmissionStatus;
         if (patientData && !finalICUAdmissionStatus) {
           finalICUAdmissionStatus = extractField(patientData, [
-            'icuAdmissionStatus', 'ICUAdmissionStatus', 'icu_admission_status', 'ICU_Admission_Status',
+            'admissions.icuAdmissionStatus', 'ICUAdmissionStatus', 'icu_admission_status', 'ICU_Admission_Status',
             'admissionStatus', 'AdmissionStatus', 'admission_status', 'Admission_Status'
           ], 'Occupied');
         }
@@ -1361,6 +1374,7 @@ export function ICUManagement() {
         // Determine bed status display based on ICUPatientStatus
         // Map ICUPatientStatus to: Critical (red) or else Green
         let bedStatusDisplay: 'Critical' | 'Green' = 'Green';
+        
         if (icuPatientStatusRaw) {
           const statusLower = String(icuPatientStatusRaw).toLowerCase().trim();
           if (statusLower.includes('critical') || statusLower === 'critical' || statusLower === 'cr' || statusLower === 'c') {
@@ -2266,16 +2280,16 @@ export function ICUManagement() {
               <div>
                 <Label>On Ventilator</Label>
                 <Select
-                  onValueChange={(val) => {
+                  onValueChange={(val: string) => {
                     console.log('On Ventilator selected:', val);
                     setAddICUAdmissionForm(prev => ({ ...prev, onVentilator: val }));
                   }}
                   value={addICUAdmissionForm.onVentilator || ''}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full px-3 py-2 border border-gray-200 rounded-md">
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
-                  <SelectContent className="w-full px-3 py-2 border border-gray-200 rounded-md" position="popper">
+                  <SelectContent position="popper">
                     <SelectItem value="Yes">Yes</SelectItem>
                     <SelectItem value="No">No</SelectItem>
                   </SelectContent>
@@ -2439,13 +2453,22 @@ export function ICUManagement() {
                     
                     // Check if bed has admission details (patient exists)
                     const hasAdmission = bed.patient !== undefined && bed.patient !== null;
+
+                    // Determine ICU patient status for color coding
+                    const icuPatientStatus = bed.icuPatientStatus ||
+                                           bed.patient?.icuPatientStatus ||
+                                           bed.patient?.severity ||
+                                           'Stable';
+                    console.log(bed.icuAdmissionStatus, bed.icuPatientStatus,bed.patient?.icuPatientStatus, bed.patient?.severity );
                     
-                    // Check if ICU Patient Status is Critical
-                    const isCritical = bed.icuPatientStatus === 'Critical' || 
-                                      (bed.patient?.icuPatientStatus && 
-                                       String(bed.patient.icuPatientStatus).toLowerCase().includes('critical')) ||
-                                      (bed.patient?.severity === 'Critical');
-                    
+                    // Check status for color coding
+                    const isCritical = icuPatientStatus === 'Critical' ||
+                                      String(icuPatientStatus).toLowerCase().includes('critical');
+                    const isSerious = icuPatientStatus === 'Serious' ||
+                                     String(icuPatientStatus).toLowerCase().includes('serious');
+                    const isStable = icuPatientStatus === 'Stable' ||
+                                    String(icuPatientStatus).toLowerCase().includes('stable');
+
                     return (
                     <div
                       key={bed.bedNumber}
@@ -2455,11 +2478,13 @@ export function ICUManagement() {
                           ? 'border-blue-500 bg-blue-50 scale-105'
                           : isCritical
                             ? 'border-red-600 bg-red-200 hover:border-red-700 hover:bg-red-300'
+                          : isSerious
+                            ? 'border-pink-600 bg-pink-200 hover:border-pink-700 hover:bg-pink-300'
                           : hasAdmission
-                            ? 'border-red-300 bg-red-50 hover:border-red-400'
+                            ? 'border-blue-300 bg-blue-50 hover:border-blue-400'
                           : 'border-green-300 bg-green-50 hover:border-green-400'
                       }`}
-                      style={{ 
+                      style={{
                         position: 'relative',
                         zIndex: 10,
                         pointerEvents: 'auto',
@@ -2475,16 +2500,18 @@ export function ICUManagement() {
                         }
                       }}
                     >
-                      <p className={`mb-1 font-medium ${isCritical ? 'text-red-900' : 'text-gray-900'}`}>{bed.bedNumber}</p>
+                      <p className={`mb-1 font-medium ${isCritical ? 'text-red-900' : isSerious ? 'text-pink-900' : 'text-gray-900'}`}>{bed.bedNumber}</p>
                       <div className="flex items-center justify-center gap-1">
                         <span className={`size-2 rounded-full ${
                           isCritical
                             ? 'bg-red-600'
+                          : isSerious
+                            ? 'bg-pink-600'
                           : hasAdmission
-                              ? 'bg-red-500'
+                              ? 'bg-blue-500'
                             : 'bg-green-500'
                         }`} />
-                        <span className={`text-xs ${isCritical ? 'text-red-900 font-semibold' : 'text-gray-600'}`}>
+                        <span className={`text-xs ${isCritical ? 'text-red-900 font-semibold' : isSerious ? 'text-pink-900 font-semibold' : 'text-gray-600'}`}>
                           {hasAdmission ? (bed as any).icuAdmissionStatus || 'Occupied' : 'Available'}
                         </span>
                       </div>
@@ -2492,6 +2519,13 @@ export function ICUManagement() {
                         <div className="mt-1">
                           <Badge variant="destructive" className="text-xs">
                             Critical
+                          </Badge>
+                        </div>
+                      )}
+                      {isSerious && (
+                        <div className="mt-1">
+                          <Badge variant="default" className="text-xs bg-pink-600 hover:bg-pink-700">
+                            Serious
                           </Badge>
                         </div>
                       )}
