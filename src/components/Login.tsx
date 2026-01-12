@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { apiRequest } from '../api/base';
+import { getCurrentUser } from '../utils/authUtils';
 import { Activity } from 'lucide-react';
 
 interface LoginResponse {
@@ -54,8 +55,29 @@ export function Login() {
       }
 
        
-      // Redirect to dashboard
-      navigate('/dashboard');
+      // Extract role from token and navigate accordingly
+      const user = getCurrentUser();
+      
+      if (user.RoleName.trim() === 'SuperAdmin') {       
+        navigate('/dashboard');
+      } else if (user.RoleName.trim() === 'LabAdmin') {       
+        navigate('/Laboratory');
+      } else if (user.RoleName.trim() === 'OTAdmin') {       
+        navigate('/ot');
+      } else if (user.RoleName.trim() === 'ICUAdmin') {       
+        navigate('/icu');
+      } else if (user.RoleName.trim() === 'IPDAdmin') {       
+        navigate('/admissions');
+      } else if (user.RoleName.trim() === 'EmergencyAdmin') {       
+        navigate('/emergency');
+      } else if (user.RoleName.trim() === 'Nurse') {       
+        navigate('/admissions');
+      } else if (user.RoleName.trim() === 'FrontDesk') {       
+        navigate('/frontdesk');
+      } else if (user.RoleName.trim() === 'Doctor' || user.RoleName.trim() === 'Surgeon') {       
+        navigate('/consultation');
+      }
+    
 
     } catch (err) {
       console.error('Login failed:', err);

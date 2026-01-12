@@ -993,7 +993,7 @@ function DoctorsView({
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-500 mb-1">Consulting Doctors</p>
+                      <p className="text-sm text-gray-500 mb-1">Visiting / Consulting Doctors</p>
                       <h3 className="text-gray-900">{doctorStats.consulting}</h3>
                     </div>
                     <Stethoscope className="size-8 text-purple-500" />

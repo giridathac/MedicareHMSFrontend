@@ -877,20 +877,7 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
               </TabsContent>
 
               <TabsContent value="medicines" className="space-y-4">
-                <div>
-                  <Label htmlFor="prescriptionsUrl">Prescriptions URL</Label>
-                  <Input
-                    id="prescriptionsUrl"
-                    type="url"
-                    placeholder="Enter prescriptions folder URL"
-                    value={prescriptionsUrl}
-                    onChange={(e) => setPrescriptionsUrl(e.target.value)}
-                    className="mt-1"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Folder URL - multiple prescriptions should be saved</p>
-                </div>
-                
-                <div>
+              <div>
                   <Label htmlFor="prescriptionsDocuments">Upload Prescription Documents</Label>
                   <Input
                     id="prescriptionsDocuments"
@@ -923,8 +910,7 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
                                 <FileText className="size-3" />
                                 {file.name}
                               </a>
-                            </div>
-                            <Button
+                               <Button
                               type="button"
                               variant="ghost"
                               size="sm"
@@ -937,6 +923,8 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
                             >
                               ×
                             </Button>
+                            </div>
+                           
                           </div>
                         );
                       })}
@@ -962,7 +950,7 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
                       })}
                     </div>
                   )}
-                  <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Save Consultation"</p>
+                  <p className="text-xs text-gray-500 mt-1">Files will be uploaded when you click "Complete Consultation"</p>
                 </div>
               </TabsContent>
 
