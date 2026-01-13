@@ -315,7 +315,8 @@ function DoctorsView({
       const role = roles.find(r => r.id === d.RoleId);
       return role?.name?.toLowerCase().includes('surgeon') || false;
     }).length;
-    return { inhouse, consulting, surgeons };
+    const totalDoctors = allDoctors.length;
+    return { inhouse, consulting, surgeons, totalDoctors };
   }, [allDoctors, roles]);
 
   // Separate active and inactive doctors
@@ -481,7 +482,7 @@ function DoctorsView({
                               aria-label="Role"
                               className="dialog-select-standard"
                               value={formData.RoleId}
-                              onChange={(e) => setFormData({ ...formData, RoleId: e.target.value })}
+                              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, RoleId: e.target.value })}
                               required
                             >
                               <option value="">Select a role</option>
@@ -496,7 +497,7 @@ function DoctorsView({
                               id="userName"
                               placeholder="Enter user name"
                               value={formData.UserName}
-                              onChange={(e) => setFormData({ ...formData, UserName: e.target.value })}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, UserName: e.target.value })}
                               className="dialog-input-standard"
                               required
                             />
@@ -510,7 +511,7 @@ function DoctorsView({
                               type="password"
                               placeholder="Enter password"
                               value={formData.Password}
-                              onChange={(e) => setFormData({ ...formData, Password: e.target.value })}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, Password: e.target.value })}
                               className="dialog-input-standard"
                               required
                             />
@@ -521,7 +522,7 @@ function DoctorsView({
                               id="phoneNo"
                               placeholder="Enter 10-digit phone number"
                               value={formData.PhoneNo}
-                              onChange={(e) => {
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                 const value = e.target.value.replace(/\D/g, ''); // Only allow digits
                                 if (value.length <= 10) {
                                   setFormData({ ...formData, PhoneNo: value });
@@ -540,7 +541,7 @@ function DoctorsView({
                             type="email"
                             placeholder="Enter email"
                             value={formData.EmailId}
-                            onChange={(e) => setFormData({ ...formData, EmailId: e.target.value })}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, EmailId: e.target.value })}
                             className="dialog-input-standard"
                           />
                         </div>
@@ -557,7 +558,7 @@ function DoctorsView({
                                   aria-label="Department"
                                   className="dialog-select-standard"
                                   value={formData.DoctorDepartmentId}
-                                  onChange={(e) => setFormData({ ...formData, DoctorDepartmentId: e.target.value })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, DoctorDepartmentId: e.target.value })}
                                 >
                                   <option value="">Select a department</option>
                                   {departments && departments.length > 0 ? (
@@ -577,7 +578,7 @@ function DoctorsView({
                                   id="doctorQualification"
                                   placeholder="e.g., MBBS, MD"
                                   value={formData.DoctorQualification}
-                                  onChange={(e) => setFormData({ ...formData, DoctorQualification: e.target.value })}
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, DoctorQualification: e.target.value })}
                                   className="dialog-input-standard"
                                 />
                               </div>
@@ -590,7 +591,7 @@ function DoctorsView({
                                   aria-label="Doctor Type"
                                   className="dialog-select-standard"
                                   value={formData.DoctorType || ''}
-                                  onChange={(e) => setFormData({ ...formData, DoctorType: e.target.value as 'INHOUSE' | 'VISITING' || undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, DoctorType: e.target.value as 'INHOUSE' | 'VISITING' || undefined })}
                                 >
                                   <option value="">Select type</option>
                                   <option value="INHOUSE">INHOUSE</option>
@@ -604,7 +605,7 @@ function DoctorsView({
                                   type="number"
                                   placeholder="Enter OPD charge"
                                   value={formData.DoctorOPDCharge || ''}
-                                  onChange={(e) => setFormData({ ...formData, DoctorOPDCharge: e.target.value ? Number(e.target.value) : undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, DoctorOPDCharge: e.target.value ? Number(e.target.value) : undefined })}
                                   className="dialog-input-standard"
                                 />
                               </div>
@@ -617,7 +618,7 @@ function DoctorsView({
                                   type="number"
                                   placeholder="Enter surgery charge"
                                   value={formData.DoctorSurgeryCharge || ''}
-                                  onChange={(e) => setFormData({ ...formData, DoctorSurgeryCharge: e.target.value ? Number(e.target.value) : undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, DoctorSurgeryCharge: e.target.value ? Number(e.target.value) : undefined })}
                                   className="dialog-input-standard"
                                 />
                               </div>
@@ -630,7 +631,7 @@ function DoctorsView({
                                   aria-label="OPD Consultation"
                                   className="dialog-select-standard"
                                   value={formData.OPDConsultation || ''}
-                                  onChange={(e) => setFormData({ ...formData, OPDConsultation: e.target.value as 'Yes' | 'No' || undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, OPDConsultation: e.target.value as 'Yes' | 'No' || undefined })}
                                 >
                                   <option value="">Select</option>
                                   <option value="Yes">Yes</option>
@@ -644,7 +645,7 @@ function DoctorsView({
                                   aria-label="IPD Visit"
                                   className="dialog-select-standard"
                                   value={formData.IPDVisit || ''}
-                                  onChange={(e) => setFormData({ ...formData, IPDVisit: e.target.value as 'Yes' | 'No' || undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, IPDVisit: e.target.value as 'Yes' | 'No' || undefined })}
                                 >
                                   <option value="">Select</option>
                                   <option value="Yes">Yes</option>
@@ -660,7 +661,7 @@ function DoctorsView({
                                   aria-label="OT Handle"
                                   className="dialog-select-standard"
                                   value={formData.OTHandle || ''}
-                                  onChange={(e) => setFormData({ ...formData, OTHandle: e.target.value as 'Yes' | 'No' || undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, OTHandle: e.target.value as 'Yes' | 'No' || undefined })}
                                 >
                                   <option value="">Select</option>
                                   <option value="Yes">Yes</option>
@@ -674,7 +675,7 @@ function DoctorsView({
                                   aria-label="ICU Visits"
                                   className="dialog-select-standard"
                                   value={formData.ICUVisits || ''}
-                                  onChange={(e) => setFormData({ ...formData, ICUVisits: e.target.value as 'Yes' | 'No' || undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, ICUVisits: e.target.value as 'Yes' | 'No' || undefined })}
                                 >
                                   <option value="">Select</option>
                                   <option value="Yes">Yes</option>
@@ -731,7 +732,7 @@ function DoctorsView({
                               aria-label="Role"
                               className="dialog-select-standard"
                               value={formData.RoleId}
-                              onChange={(e) => setFormData({ ...formData, RoleId: e.target.value })}
+                              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, RoleId: e.target.value })}
                               required
                             >
                               <option value="">Select a role</option>
@@ -746,7 +747,7 @@ function DoctorsView({
                               id="editUserName"
                               placeholder="Enter user name"
                               value={formData.UserName}
-                              onChange={(e) => setFormData({ ...formData, UserName: e.target.value })}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, UserName: e.target.value })}
                               className="dialog-input-standard"
                               required
                             />
@@ -759,7 +760,7 @@ function DoctorsView({
                               id="editPhoneNo"
                               placeholder="Enter 10-digit phone number"
                               value={formData.PhoneNo}
-                              onChange={(e) => {
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                 const value = e.target.value.replace(/\D/g, ''); // Only allow digits
                                 if (value.length <= 10) {
                                   setFormData({ ...formData, PhoneNo: value });
@@ -777,7 +778,7 @@ function DoctorsView({
                               type="email"
                               placeholder="Enter email"
                               value={formData.EmailId}
-                              onChange={(e) => setFormData({ ...formData, EmailId: e.target.value })}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, EmailId: e.target.value })}
                               className="dialog-input-standard"
                             />
                           </div>
@@ -795,7 +796,7 @@ function DoctorsView({
                                   aria-label="Department"
                                   className="dialog-select-standard"
                                   value={formData.DoctorDepartmentId}
-                                  onChange={(e) => setFormData({ ...formData, DoctorDepartmentId: e.target.value })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, DoctorDepartmentId: e.target.value })}
                                 >
                                   <option value="">Select a department</option>
                                   {departments && departments.length > 0 ? (
@@ -815,7 +816,7 @@ function DoctorsView({
                                   id="editDoctorQualification"
                                   placeholder="e.g., MBBS, MD"
                                   value={formData.DoctorQualification}
-                                  onChange={(e) => setFormData({ ...formData, DoctorQualification: e.target.value })}
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, DoctorQualification: e.target.value })}
                                   className="dialog-input-standard"
                                 />
                               </div>
@@ -828,7 +829,7 @@ function DoctorsView({
                                   aria-label="Doctor Type"
                                   className="dialog-select-standard"
                                   value={formData.DoctorType || ''}
-                                  onChange={(e) => setFormData({ ...formData, DoctorType: e.target.value as 'INHOUSE' | 'VISITING' || undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, DoctorType: e.target.value as 'INHOUSE' | 'VISITING' || undefined })}
                                 >
                                   <option value="">Select type</option>
                                   <option value="INHOUSE">INHOUSE</option>
@@ -842,7 +843,7 @@ function DoctorsView({
                                   type="number"
                                   placeholder="Enter OPD charge"
                                   value={formData.DoctorOPDCharge || ''}
-                                  onChange={(e) => setFormData({ ...formData, DoctorOPDCharge: e.target.value ? Number(e.target.value) : undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, DoctorOPDCharge: e.target.value ? Number(e.target.value) : undefined })}
                                   className="dialog-input-standard"
                                 />
                               </div>
@@ -855,7 +856,7 @@ function DoctorsView({
                                   type="number"
                                   placeholder="Enter surgery charge"
                                   value={formData.DoctorSurgeryCharge || ''}
-                                  onChange={(e) => setFormData({ ...formData, DoctorSurgeryCharge: e.target.value ? Number(e.target.value) : undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, DoctorSurgeryCharge: e.target.value ? Number(e.target.value) : undefined })}
                                   className="dialog-input-standard"
                                 />
                               </div>
@@ -868,7 +869,7 @@ function DoctorsView({
                                   aria-label="OPD Consultation"
                                   className="dialog-select-standard"
                                   value={formData.OPDConsultation || ''}
-                                  onChange={(e) => setFormData({ ...formData, OPDConsultation: e.target.value as 'Yes' | 'No' || undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, OPDConsultation: e.target.value as 'Yes' | 'No' || undefined })}
                                 >
                                   <option value="">Select</option>
                                   <option value="Yes">Yes</option>
@@ -882,7 +883,7 @@ function DoctorsView({
                                   aria-label="IPD Visit"
                                   className="dialog-select-standard"
                                   value={formData.IPDVisit || ''}
-                                  onChange={(e) => setFormData({ ...formData, IPDVisit: e.target.value as 'Yes' | 'No' || undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, IPDVisit: e.target.value as 'Yes' | 'No' || undefined })}
                                 >
                                   <option value="">Select</option>
                                   <option value="Yes">Yes</option>
@@ -898,7 +899,7 @@ function DoctorsView({
                                   aria-label="OT Handle"
                                   className="dialog-select-standard"
                                   value={formData.OTHandle || ''}
-                                  onChange={(e) => setFormData({ ...formData, OTHandle: e.target.value as 'Yes' | 'No' || undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, OTHandle: e.target.value as 'Yes' | 'No' || undefined })}
                                 >
                                   <option value="">Select</option>
                                   <option value="Yes">Yes</option>
@@ -912,7 +913,7 @@ function DoctorsView({
                                   aria-label="ICU Visits"
                                   className="dialog-select-standard"
                                   value={formData.ICUVisits || ''}
-                                  onChange={(e) => setFormData({ ...formData, ICUVisits: e.target.value as 'Yes' | 'No' || undefined })}
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, ICUVisits: e.target.value as 'Yes' | 'No' || undefined })}
                                 >
                                   <option value="">Select</option>
                                   <option value="Yes">Yes</option>
@@ -927,7 +928,7 @@ function DoctorsView({
                               <Switch
                                 id="edit-status"
                                 checked={formData.Status === 'Active'}
-                                onCheckedChange={(checked) => {
+                                onCheckedChange={(checked: boolean) => {
                                   setFormData({ ...formData, Status: checked ? 'Active' : 'InActive' });
                                 }}
                                 className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
@@ -977,7 +978,7 @@ function DoctorsView({
 
           <div className="px-6 pt-4 pb-4 flex-1">
             {/* Quick Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
@@ -1011,6 +1012,17 @@ function DoctorsView({
                   </div>
                 </CardContent>
               </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Total Doctors</p>
+                      <h3 className="text-gray-900">{doctorStats.totalDoctors}</h3>
+                    </div>
+                    <Users className="size-8 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Search */}
@@ -1021,7 +1033,7 @@ function DoctorsView({
                   <Input
                     placeholder="Search by name, role, department, phone, or email..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                     className="pl-10"
                   />
                 </div>

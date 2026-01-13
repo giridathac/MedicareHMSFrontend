@@ -657,7 +657,7 @@ export function ManageConsultation({ appointmentId, onBack }: ManageConsultation
           </Button>
           <div>
             <h1 className="text-gray-900 mb-2">
-              Doctor Consultation - {doctorData ? doctorData.name : 'Loading...'}
+              Doctor Consultation Dashboard - {doctorData ? doctorData.name : 'Loading...'}
             </h1>
             <p className="text-gray-500">
               {doctorData ? doctorData.specialty : 'Loading...'} Department

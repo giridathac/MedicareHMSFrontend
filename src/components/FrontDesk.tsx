@@ -1074,6 +1074,9 @@ export function FrontDesk() {
       : appointment.patientId === '00000000-0000-0000-0000-000000000001' 
         ? 'Dummy Patient Name' 
         : appointment.patientId;
+    const patientNo = patient 
+      ? (patient as any).patientNo || (patient as any).PatientNo || '-' : '-';
+
     const doctorName = doctor ? doctor.name : appointment.doctorId;
     const patientPhone = patient 
       ? (patient as any).PhoneNo || (patient as any).phoneNo || (patient as any).phone || '-'
@@ -1117,6 +1120,9 @@ export function FrontDesk() {
         </td>
         <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-900'}`}>
           {patientName}
+        </td>
+        <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-900'}`}>
+          {patientNo}
         </td>
         <td className={`py-3 px-4 ${isInactive ? 'text-gray-400' : 'text-gray-600'} font-mono text-sm`}>
           {patientAadhar}
@@ -1290,6 +1296,7 @@ export function FrontDesk() {
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-3 px-4 text-gray-700">Token #</th>
                   <th className="text-left py-3 px-4 text-gray-700">Patient Name</th>
+                  <th className="text-left py-3 px-4 text-gray-700">Patient No</th>
                   <th className="text-left py-3 px-4 text-gray-700">Phone</th>
                   <th className="text-left py-3 px-4 text-gray-700">Doctor</th>
                   <th className="text-left py-3 px-4 text-gray-700">Appointment Date</th>

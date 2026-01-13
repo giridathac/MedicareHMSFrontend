@@ -687,6 +687,7 @@ function StaffView({
               <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">User Name</th>
               <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Role</th>
               <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Phone</th>
+              <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">EmailId</th>
               <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Department</th>
               <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Status</th>
               <th className="text-left py-4 px-6 text-gray-700 bg-white whitespace-nowrap">Actions</th>
@@ -713,6 +714,7 @@ function StaffView({
                   </td>
                   <td className="py-4 px-6 text-gray-600">{role?.name || '-'}</td>
                   <td className="py-4 px-6 text-gray-600">{member.PhoneNo || '-'}</td>
+                  <td className="py-4 px-6 text-gray-600">{member.EmailId || '-'}</td>
                   <td className="py-4 px-6 text-gray-600">{department?.name || '-'}</td>
                   <td className="py-4 px-6">
                     <span className={`px-2 py-1 rounded text-xs ${getStatusBadgeColor(member.Status)}`}>

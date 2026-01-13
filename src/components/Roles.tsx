@@ -228,7 +228,7 @@ function RolesView({
           <div className="px-6 pt-6 pb-0 flex-shrink-0">
             <div className="flex items-center justify-between mb-4 flex-shrink-0">
               <div>
-                <h1 className="text-gray-900 mb-2 text-2xl">Role Management</h1>
+                <h1 className="text-gray-900 mb-2 text-2xl">Roles Management</h1>
                 <p className="text-gray-500 text-base">Manage user roles and permissions</p>
               </div>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

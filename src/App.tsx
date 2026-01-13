@@ -79,18 +79,19 @@ export default function App() {
     { path: '/consultation', label: 'Doctor Consultation', icon: Stethoscope },
     { path: '/doctors', label: 'Doctors & Surgeons', icon: Stethoscope },
     { path: '/laboratory', label: 'Laboratory Tests Management', icon: TestTube },
-    { path: '/admissions', label: 'Admissions (IPD)', icon: BedDouble },
-    { path: '/emergency', label: 'Emergency', icon: Siren },
+    { path: '/admissions', label: 'IPD Admissions', icon: BedDouble },
+    { path: '/emergency', label: 'Emergency Admissions', icon: Siren },
     { path: '/ot', label: 'OT Management', icon: Scissors },
-    { path: '/icu', label: 'ICU Management', icon: HeartPulse },
-    { path: '/roles', label: 'Roles', icon: Shield },
-    { path: '/departments', label: 'Departments', icon: Building },
-    { path: '/staff', label: 'Staff', icon: Users },
+    { path: '/icu', label: 'ICU Admissions', icon: HeartPulse },
+    { path: '/roles', label: 'Roles Management', icon: Shield },
+    { path: '/departments', label: 'Departments Management', icon: Building },
+    { path: '/staff', label: 'Staff Management', icon: Users },
+     { path: '/lab-tests', label: 'Laboratory Management - Tests Catalog', icon: TestTube },
     { path: '/room-beds', label: 'IPD Beds & Rooms', icon: Home },
-    { path: '/lab-tests', label: 'Laboratory Management - Tests Catalog', icon: TestTube },
-    { path: '/icu-beds', label: 'ICU Bed Management', icon: HeartPulse },
+   
+    { path: '/icu-beds', label: 'ICU Beds Management', icon: HeartPulse },
     { path: '/ot-rooms', label: 'OT Rooms Management', icon: Building2 },
-    { path: '/emergency-beds', label: 'Emergency Bed Management', icon: BedDouble },
+    { path: '/emergency-beds', label: 'Emergency Beds Management', icon: BedDouble },
     { path: '/reports', label: 'Reports', icon: FileBarChart },
   ];
 
@@ -178,10 +179,10 @@ export default function App() {
       return item.path === '/frontdesk' || item.path === '/patient-registration' || item.path === '/consultation' || item.path === '/dashboard';
     } else if (trimmedRole === 'Doctor') {
       // Show only Doctor Consultation menu for Doctor
-      return item.path === '/consultation';
+      return item.path === '/consultation' || item.path === '/laboratory';
     } else if (trimmedRole === 'Surgeon') {
       // Show only Doctor Consultation menu for Doctor
-      return item.path === '/consultation';
+      return item.path === '/consultation' || item.path === '/laboratory';
     } else if (trimmedRole === 'Nurse') {
       // Show only Doctor Consultation menu for Doctor
       return item.path === '/icu' || item.path === '/admissions' || item.path === '/emergency' || item.path === '/ot';
@@ -198,7 +199,7 @@ export default function App() {
     <div className="flex h-screen bg-gray-50 relative">
       {/* Sidebar - Hide on login and reset-password pages */}
       {!hideSidebar && (
-        <aside className={`${isSidebarMinimized ? 'w-0' : 'w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300 relative`} style={{ overflow: 'visible' }}>
+       <aside className={`${isSidebarMinimized ? 'w-0' : 'w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300 relative`} style={{ overflow: 'visible' }}>
           {!isSidebarMinimized && (
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-2">
