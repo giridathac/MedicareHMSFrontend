@@ -3419,25 +3419,25 @@ function EmergencyAdmissionsList({
     <Card>
       <CardContent className="p-6">
         <div className="overflow-x-auto">
-          <table className="w-full table-fixed">
+          <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-3 text-gray-700">ER ID</th>
-                <th className="text-left py-3 px-3 text-gray-700">Patient</th>
-                <th className="text-left py-3 px-3 text-gray-700">Triage</th>
-                <th className="text-left py-3 px-3 text-gray-700">Complaint</th>
-                <th className="text-left py-3 px-3 text-gray-700">Arrival</th>
-                <th className="text-left py-3 px-3 text-gray-700">Room</th>
-                <th className="text-left py-3 px-3 text-gray-700">Bed</th>
-                <th className="text-left py-3 px-3 text-gray-700">Status</th>
-                <th className="text-left py-3 px-3 text-gray-700">Actions</th>
+                <th className="text-left py-3 px-4 text-gray-700">ER ID</th>
+                <th className="text-left py-3 px-4 text-gray-700">Patient</th>
+                <th className="text-left py-3 px-4 text-gray-700">Triage</th>
+                <th className="text-left py-3 px-4 text-gray-700">Complaint</th>
+                <th className="text-left py-3 px-4 text-gray-700">Arrival</th>
+                <th className="text-left py-3 px-4 text-gray-700">Room</th>
+                <th className="text-left py-3 px-4 text-gray-700">Bed</th>
+                <th className="text-left py-3 px-4 text-gray-700">Status</th>
+                <th className="text-left py-3 px-4 text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody>
               {admissions.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-8 text-gray-500 text-sm">
-                    No emergency admissions found.
+                  <td colSpan={9} className="text-center py-12 text-gray-500">
+                    No emergency admissions found
                   </td>
                 </tr>
               ) : (
@@ -3447,19 +3447,15 @@ function EmergencyAdmissionsList({
                   return (
                     <tr 
                       key={admission.emergencyAdmissionId} 
-                      className={`border-b border-gray-100 ${isDischargedOrTransferredStatus ? 'opacity-50 bg-gray-50' : 'hover:bg-gray-50'}`}
+                      className={`border-b border-gray-100 hover:bg-gray-50 ${isDischargedOrTransferredStatus ? 'opacity-50 bg-gray-50' : ''}`}
                     >
-                      <td className="py-3 px-3">
-                        <span className={isDischargedOrTransferredStatus ? 'text-gray-400' : 'text-gray-900'}>
-                          {admission.emergencyAdmissionId || '-'}
-                        </span>
+                      <td className={`py-3 px-4 ${isDischargedOrTransferredStatus ? 'text-gray-400' : 'text-gray-900'}`}>
+                        {admission.emergencyAdmissionId || '-'}
                       </td>
-                      <td className="py-3 px-3">
-                        <p className={`break-words min-w-0 ${isDischargedOrTransferredStatus ? 'text-gray-400' : 'text-gray-900'}`}>
-                          {getPatientName(admission)}
-                        </p>
+                      <td className={`py-3 px-4 ${isDischargedOrTransferredStatus ? 'text-gray-400' : 'text-gray-900'}`}>
+                        {getPatientName(admission)}
                       </td>
-                      <td className="py-3 px-3">
+                      <td className={`py-3 px-4 ${isDischargedOrTransferredStatus ? 'text-gray-400' : ''}`}>
                         {(() => {
                           const priority = admission.priority || 'Medium';
                           const getTriageBadge = (p: string) => {
@@ -3502,28 +3498,24 @@ function EmergencyAdmissionsList({
                           );
                         })()}
                       </td>
-                      <td className={`py-3 px-3 break-words min-w-0 ${isDischargedOrTransferredStatus ? 'text-gray-400' : 'text-gray-600'}`}>
+                      <td className={`py-3 px-4 ${isDischargedOrTransferredStatus ? 'text-gray-400' : 'text-gray-600'}`}>
                         {admission.diagnosis || admission.treatmentDetails || '-'}
                       </td>
-                      <td className={`py-3 px-3 ${isDischargedOrTransferredStatus ? 'text-gray-400' : 'text-gray-600'}`}>
+                      <td className={`py-3 px-4 ${isDischargedOrTransferredStatus ? 'text-gray-400' : 'text-gray-600'}`}>
                         {formatDateToDDMMYYYY(admission.emergencyAdmissionDate)}
                       </td>
-                      <td className="py-3 px-3">
-                        <span className={isDischargedOrTransferredStatus ? 'text-gray-400' : 'text-gray-900'}>
-                          {getRoomNameFromBedId(admission)}
-                        </span>
+                      <td className={`py-3 px-4 ${isDischargedOrTransferredStatus ? 'text-gray-400' : 'text-gray-900'}`}>
+                        {getRoomNameFromBedId(admission)}
                       </td>
-                      <td className="py-3 px-3">
+                      <td className={`py-3 px-4 ${isDischargedOrTransferredStatus ? 'text-gray-400' : ''}`}>
                         <Badge className={isDischargedOrTransferredStatus ? 'opacity-50' : ''}>
                           {admission.emergencyBedNo || getBedNumber(admission) || '-'}
                         </Badge>
                       </td>
-                      <td className="py-3 px-3">
-                        <div className={isDischargedOrTransferredStatus ? 'opacity-50' : ''}>
-                          {getStatusBadge(admission.emergencyStatus)}
-                        </div>
+                      <td className={`py-3 px-4 ${isDischargedOrTransferredStatus ? 'text-gray-400' : ''}`}>
+                        {getStatusBadge(admission.emergencyStatus)}
                       </td>
-                      <td className="py-3 px-3">
+                      <td className={`py-3 px-4 ${isDischargedOrTransferredStatus ? 'text-gray-400' : ''}`}>
                         <Button variant="outline" size="sm" onClick={() => onEdit(admission)}>
                           Manage
                         </Button>

@@ -3707,45 +3707,45 @@ export function ICUManagement() {
               {loading ? (
                 <div className="dashboard-table-empty-cell">Loading ICU patients...</div>
               ) : (
-              <div className="dashboard-table-wrapper">
-                <table className="dashboard-table">
+              <div className="overflow-x-auto">
+                <table className="w-full">
                   <thead>
-                    <tr className="dashboard-table-header-row">
-                      <th className="dashboard-table-header-cell">Bed</th>
-                      <th className="dashboard-table-header-cell">Patient</th>
-                      <th className="dashboard-table-header-cell">Condition</th>
-                      <th className="dashboard-table-header-cell">ICU Allocation From Date</th>
-                      <th className="dashboard-table-header-cell">ICU Allocation To Date</th>
-                      <th className="dashboard-table-header-cell">Doctor</th>
-                      <th className="dashboard-table-header-cell">Ventilator</th>
-                      <th className="dashboard-table-header-cell">Patient Type</th>
-                      <th className="dashboard-table-header-cell">ICU Patient Status</th>
-                      <th className="dashboard-table-header-cell">ICU Admission Status</th>
-                      <th className="dashboard-table-header-cell">Action</th>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-gray-700">Bed</th>
+                      <th className="text-left py-3 px-4 text-gray-700">Patient</th>
+                      <th className="text-left py-3 px-4 text-gray-700">Condition</th>
+                      <th className="text-left py-3 px-4 text-gray-700">ICU Allocation From Date</th>
+                      <th className="text-left py-3 px-4 text-gray-700">ICU Allocation To Date</th>
+                      <th className="text-left py-3 px-4 text-gray-700">Doctor</th>
+                      <th className="text-left py-3 px-4 text-gray-700">Ventilator</th>
+                      <th className="text-left py-3 px-4 text-gray-700">Patient Type</th>
+                      <th className="text-left py-3 px-4 text-gray-700">ICU Patient Status</th>
+                      <th className="text-left py-3 px-4 text-gray-700">ICU Admission Status</th>
+                      <th className="text-left py-3 px-4 text-gray-700">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                       {patients.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="dashboard-table-empty-cell">
+                          <td colSpan={11} className="text-center py-12 text-gray-500">
                             No ICU patients found
                           </td>
                         </tr>
                       ) : (
                         patients.map((patient) => (
-                      <tr key={patient.id} className="dashboard-table-body-row">
-                        <td className="dashboard-table-body-cell">
+                      <tr key={patient.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-gray-900">
                           <Badge>{patient.bedNumber}</Badge>
                         </td>
-                        <td className="dashboard-table-body-cell">
-                          <p className="dashboard-table-body-cell-primary">{patient.patientName}</p>
-                          <p className="dashboard-table-body-cell-secondary text-xs">{patient.age}Y / {patient.gender}</p>
+                        <td className="py-3 px-4 text-gray-900">
+                          <p>{patient.patientName}</p>
+                          <p className="text-xs text-gray-600">{patient.age}Y / {patient.gender}</p>
                         </td>
-                        <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.condition}</td>
-                        <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.icuAllocationFromDate}</td>
-                        <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.icuAllocationToDate}</td>
-                        <td className="dashboard-table-body-cell dashboard-table-body-cell-secondary">{patient.attendingDoctor}</td>
-                        <td className="dashboard-table-body-cell">
+                        <td className="py-3 px-4 text-gray-600">{patient.condition}</td>
+                        <td className="py-3 px-4 text-gray-600">{patient.icuAllocationFromDate}</td>
+                        <td className="py-3 px-4 text-gray-600">{patient.icuAllocationToDate}</td>
+                        <td className="py-3 px-4 text-gray-600">{patient.attendingDoctor}</td>
+                        <td className="py-3 px-4 text-gray-600">
                           {patient.ventilatorSupport ? (
                             <Badge variant="secondary">
                               <Wind className="size-3 mr-1" />
@@ -3755,12 +3755,12 @@ export function ICUManagement() {
                             <span className="text-gray-500">No</span>
                           )}
                         </td>
-                        <td className="dashboard-table-body-cell">
+                        <td className="py-3 px-4 text-gray-600">
                           <Badge variant="outline">
                             {patient.patientType || 'N/A'}
                           </Badge>
                         </td>
-                        <td className="dashboard-table-body-cell">
+                        <td className="py-3 px-4 text-gray-600">
                           {(() => {
                             // Get status from multiple sources with priority
                             // Check icuPatientStatus first (raw value from API), then severity (normalized)
@@ -3789,7 +3789,7 @@ export function ICUManagement() {
                             );
                           })()}
                         </td>
-                        <td className="dashboard-table-body-cell">
+                        <td className="py-3 px-4 text-gray-600">
                           <Badge variant={
                             patient.icuAdmissionStatus === 'Occupied' ? 'default' :
                             patient.icuAdmissionStatus === 'Discharged' ? 'secondary' : 'outline'
@@ -3797,12 +3797,11 @@ export function ICUManagement() {
                             {patient.icuAdmissionStatus || 'N/A'}
                           </Badge>
                         </td>
-                        <td className="dashboard-table-body-cell">
+                        <td className="py-3 px-4 text-gray-600">
                           <div className="flex gap-2">
                             <Button
                               variant="outline"
                               size="sm"
-                              className="dashboard-manage-button"
                               onClick={() => {
                                 // Open Edit ICU Admission dialog
                                 setEditingICUAdmission(patient);
@@ -3815,7 +3814,6 @@ export function ICUManagement() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="dashboard-manage-button"
                             onClick={() => {
                               // Navigate to Manage ICU Case page with patient ICU admission ID (UUID)
                               // Prefer patientICUAdmissionId if available, otherwise use id
