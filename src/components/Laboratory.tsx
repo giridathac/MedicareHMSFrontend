@@ -1906,7 +1906,7 @@ export function Laboratory() {
         <div className="px-6 pt-6 pb-0 flex-shrink-0">
           <div className="flex items-center justify-between mb-4 flex-shrink-0">
             <div>
-              <h1 className="text-gray-900 mb-2">Laboratory Tests Management</h1>
+              <h1 className="text-gray-900 mb-2">Patient's Laboratory Tests Management</h1>
               <p className="text-gray-500">Manage lab tests, samples, and reports</p>
             </div>
             <div className="flex items-center gap-4">
