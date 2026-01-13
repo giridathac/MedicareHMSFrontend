@@ -8,11 +8,15 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Stethoscope, Heart, ArrowLeft, FileText, Plus, Eye, Edit } from 'lucide-react';
+import { Stethoscope, Heart, ArrowLeft, FileText, Plus, Edit } from 'lucide-react';
 import { PatientDoctorVisit } from '../api/admissions';
 import { apiRequest } from '../api/base';
 import { useStaff } from '../hooks/useStaff';
 import { useRoles } from '../hooks/useRoles';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
+import { doctorsApi } from '../api/doctors';
+import '../styles/dashboard.css';
 
 interface ICUAdmission {
   id?: number | string;
@@ -50,11 +54,37 @@ export function ManageICUCase() {
 
   // Helper function to format date and time in dd-mm-yyyy hh:mm AM/PM format
   const formatDateTime = (dateString: string | undefined | null): string => {
-    if (!dateString || dateString === 'N/A') return 'N/A';
+    if (!dateString || dateString === 'N/A' || dateString === '') return 'N/A';
 
     try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'N/A';
+      let date: Date;
+      
+      // Handle dd-MM-yyyy HH:mm format (e.g., "13-01-2026 17:12")
+      if (typeof dateString === 'string' && /^\d{2}-\d{2}-\d{4} \d{2}:\d{2}/.test(dateString)) {
+        const parts = dateString.split(' ');
+        const datePart = parts[0]; // "13-01-2026"
+        const timePart = parts[1]; // "17:12"
+        
+        const [day, month, year] = datePart.split('-');
+        const [hours24, minutes] = timePart.split(':');
+        
+        // Create date in ISO format: YYYY-MM-DDTHH:mm:ss
+        const isoString = `${year}-${month}-${day}T${hours24}:${minutes}:00`;
+        date = new Date(isoString);
+      }
+      // Handle YYYY-MM-DD HH:MM:SS format (space-separated)
+      else if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(dateString)) {
+        // Replace space with 'T' for ISO format
+        const isoString = dateString.replace(' ', 'T');
+        date = new Date(isoString);
+      } else {
+        date = new Date(dateString);
+      }
+      
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date format:', dateString);
+        return 'N/A';
+      }
 
       const day = String(date.getDate()).padStart(2, '0');
       const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -69,6 +99,25 @@ export function ManageICUCase() {
       const hoursStr = String(hours).padStart(2, '0');
 
       return `${day}-${month}-${year} ${hoursStr}:${minutes} ${ampm}`;
+    } catch (error) {
+      console.warn('Error formatting date:', error, dateString);
+      return 'N/A';
+    }
+  };
+
+  // Helper function to format date only in dd-mm-yyyy format
+  const formatDate = (dateString: string | undefined | null): string => {
+    if (!dateString || dateString === 'N/A') return 'N/A';
+
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+
+      return `${day}-${month}-${year}`;
     } catch (error) {
       return 'N/A';
     }
@@ -102,6 +151,8 @@ export function ManageICUCase() {
   });
   const [doctorVisitSubmitting, setDoctorVisitSubmitting] = useState(false);
   const [doctorVisitSubmitError, setDoctorVisitSubmitError] = useState<string | null>(null);
+  const [availableDoctors, setAvailableDoctors] = useState<any[]>([]);
+  const [doctorVisitedDateTime, setDoctorVisitedDateTime] = useState<Date | null>(null);
   
   // Add ICU Nurse Visit Dialog State
   const [isAddNurseVisitDialogOpen, setIsAddNurseVisitDialogOpen] = useState(false);
@@ -139,6 +190,7 @@ export function ManageICUCase() {
   const [icuVitalsSubmitError, setIcuVitalsSubmitError] = useState<string | null>(null);
   const [nurseSearchTerm, setNurseSearchTerm] = useState('');
   const [showNurseList, setShowNurseList] = useState(false);
+  const [icuVitalsRecordedDateTime, setIcuVitalsRecordedDateTime] = useState<Date | null>(null);
   const [icuVitalsList, setIcuVitalsList] = useState<any[]>([]);
   const [icuVitalsLoading, setIcuVitalsLoading] = useState(false);
   const [icuVitalsError, setIcuVitalsError] = useState<string | null>(null);
@@ -189,6 +241,19 @@ export function ManageICUCase() {
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [icuAdmission?.patientICUAdmissionId]);
+
+  // Load doctors list
+  useEffect(() => {
+    const loadDoctors = async () => {
+      try {
+        const doctorsList = await doctorsApi.getAll();
+        setAvailableDoctors(doctorsList || []);
+      } catch (error) {
+        console.error('Error loading doctors:', error);
+      }
+    };
+    loadDoctors();
+  }, []);
 
   const fetchICUAdmissionDetails = async (patientICUAdmissionId: string) => {
     try {
@@ -487,6 +552,7 @@ export function ManageICUCase() {
           icuDoctorVisitsId: extractField(visit, ['icuDoctorVisitsId', 'ICUDoctorVisitsId', 'iCUDoctorVisitsId', 'ICUDOCTORVISITSID', 'icuDoctorVisitId', 'ICUDoctorVisitId', 'iCUDoctorVisitId', 'patientDoctorVisitId', 'PatientDoctorVisitId', 'id', 'Id'], 0),
           iCUDoctorVisitId: extractField(visit, ['icuDoctorVisitsId', 'ICUDoctorVisitsId', 'iCUDoctorVisitsId', 'ICUDOCTORVISITSID', 'icuDoctorVisitId', 'ICUDoctorVisitId', 'iCUDoctorVisitId', 'patientDoctorVisitId', 'PatientDoctorVisitId', 'id', 'Id'], 0), // Legacy support
           patientDoctorVisitId: extractField(visit, ['patientDoctorVisitId', 'PatientDoctorVisitId', 'id', 'Id'], 0),
+          doctorId: extractField(visit, ['doctorId', 'DoctorId', 'doctor_id', 'Doctor_ID', 'DoctorId', 'doctorId'], ''),
           doctorName: extractField(visit, ['doctorName', 'DoctorName', 'doctor_name', 'Doctor_Name', 'doctor', 'Doctor'], ''),
           visitDate: extractField(visit, ['visitDate', 'VisitDate', 'visit_date', 'Visit_Date', 'doctorVisitedDateTime', 'DoctorVisitedDateTime'], ''),
           visitTime: extractField(visit, ['visitTime', 'VisitTime', 'visit_time', 'Visit_Time'], ''),
@@ -519,7 +585,13 @@ export function ManageICUCase() {
       setIcuVitalsError(null);
       const endpoint = `/icu-visit-vitals/icu-admission/${encodeURIComponent(patientICUAdmissionId)}`;
       const response = await apiRequest<any>(endpoint);
+      console.log('ICU Visit Vitals API Response (RAW):', JSON.stringify(response, null, 2));
       const vitalsData = Array.isArray(response?.data) ? response.data : Array.isArray(response) ? response : [];
+      console.log('ICU Visit Vitals Data (extracted):', vitalsData);
+      if (vitalsData.length > 0) {
+        console.log('First vital raw object keys:', Object.keys(vitalsData[0]));
+        console.log('First vital raw object:', vitalsData[0]);
+      }
 
       const mapVitals = (v: any) => {
         const extract = (data: any, keys: string[], def: any = '') => {
@@ -548,7 +620,16 @@ export function ManageICUCase() {
             'bloodSugar', 'BloodSugar', 'bloodGlucose', 'BloodGlucose',
             'glucose', 'Glucose', 'BS', 'bs', 'bloodSugarLevel', 'BloodSugarLevel'
           ]),
-          recordedDateTime: extract(v, ['recordedDateTime', 'RecordedDateTime']),
+          recordedDateTime: extract(v, [
+            'recordedDateTime', 'RecordedDateTime', 
+            'recordedDate', 'RecordedDate', 
+            'dateTime', 'DateTime', 'DateAndTime', 'dateAndTime',
+            'recordedAt', 'RecordedAt', 'createdAt', 'CreatedAt',
+            'visitDateTime', 'VisitDateTime', 'visitDate', 'VisitDate',
+            'recordedDateAndTime', 'RecordedDateAndTime',
+            'recorded_date_time', 'Recorded_Date_Time', 'RECORDED_DATE_TIME',
+            'recorded_date', 'Recorded_Date', 'RECORDED_DATE'
+          ]),
           recordedBy: extract(v, ['recordedBy', 'RecordedBy']),
           dailyOrHourlyVitals: extract(v, ['dailyOrHourlyVitals', 'DailyOrHourlyVitals']),
           nurseId: extract(v, ['nurseId', 'NurseId']),
@@ -562,6 +643,13 @@ export function ManageICUCase() {
       };
 
       const mapped = vitalsData.map(mapVitals);
+      // Debug: Log first vital to check recordedDateTime
+      if (mapped.length > 0) {
+        console.log('First ICU vital record (mapped):', mapped[0]);
+        console.log('recordedDateTime value:', mapped[0].recordedDateTime);
+        console.log('Raw API response (first item):', vitalsData[0]);
+        console.log('All keys in raw response:', Object.keys(vitalsData[0] || {}));
+      }
       setIcuVitalsList(mapped);
     } catch (err) {
       console.error('Error fetching ICU visit vitals:', err);
@@ -605,13 +693,14 @@ export function ManageICUCase() {
         oxygenSaturation: '',
         respiratoryRate: '',
         bloodSugar: '',
-        recordedDateTime: new Date().toISOString().slice(0, 16), // Current date/time in local format
+        recordedDateTime: '',
         recordedBy: '',
         dailyOrHourlyVitals: '',
         nurseId: '',
         nurseVisitsDetails: '',
         patientCondition: ''
       });
+      setIcuVitalsRecordedDateTime(new Date());
       setNurseSearchTerm('');
       setShowNurseList(false);
       setIcuVitalsSubmitError(null);
@@ -627,52 +716,39 @@ export function ManageICUCase() {
       setIcuVitalsSubmitting(true);
       setIcuVitalsSubmitError(null);
 
-      // Validate required fields
-      if (!icuVitalsFormData.icuAdmissionId || icuVitalsFormData.icuAdmissionId === 'undefined' || icuVitalsFormData.icuAdmissionId === '') {
-        throw new Error('ICU Admission ID is required');
+      // Get ICUAdmissionId and PatientId from icuAdmission (not from form, as they're hidden)
+      const icuAdmissionIdValue = icuAdmission?.patientICUAdmissionId || icuAdmission?.id || '';
+      const patientIdValue = icuAdmission?.patientId || '';
+      
+      if (!icuAdmissionIdValue) {
+        throw new Error('ICU Admission ID is required. Please ensure the ICU admission is loaded.');
       }
       
-      // Get patientId from form or fallback to icuAdmission
-      let patientIdValue = icuVitalsFormData.patientId;
-      if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '') {
-        // Try to get from icuAdmission if form doesn't have it
-        patientIdValue = icuAdmission?.patientId ? String(icuAdmission.patientId) : '';
-        console.log('PatientId from form was empty, trying from icuAdmission:', patientIdValue);
-      }
-      
-      if (!patientIdValue || patientIdValue === 'undefined' || patientIdValue === '') {
-        console.error('PatientId is still empty after fallback!');
-        console.error('ICU Admission:', JSON.stringify(icuAdmission, null, 2));
+      if (!patientIdValue) {
         throw new Error('Patient ID is required. Please ensure the ICU admission has a valid patient ID.');
       }
       
-      if (!icuVitalsFormData.recordedDateTime) {
+      if (!icuVitalsRecordedDateTime) {
         throw new Error('Recorded Date & Time is required');
       }
 
-      // Convert datetime-local to ISO 8601 format
+      // Convert DatePicker date to YYYY-MM-DD HH:MM:SS format for backend
       let recordedDateTimeISO = '';
-      if (icuVitalsFormData.recordedDateTime) {
-        try {
-          // datetime-local format is YYYY-MM-DDTHH:mm, convert to ISO 8601
-          const date = new Date(icuVitalsFormData.recordedDateTime);
-          if (!isNaN(date.getTime())) {
-            recordedDateTimeISO = date.toISOString();
-          } else {
-            // If parsing fails, try to use as-is
-            recordedDateTimeISO = icuVitalsFormData.recordedDateTime;
-          }
-        } catch (e) {
-          console.warn('Error converting date:', e);
-          recordedDateTimeISO = icuVitalsFormData.recordedDateTime;
-        }
+      if (icuVitalsRecordedDateTime) {
+        const year = icuVitalsRecordedDateTime.getFullYear();
+        const month = String(icuVitalsRecordedDateTime.getMonth() + 1).padStart(2, '0');
+        const day = String(icuVitalsRecordedDateTime.getDate()).padStart(2, '0');
+        const hours = String(icuVitalsRecordedDateTime.getHours()).padStart(2, '0');
+        const minutes = String(icuVitalsRecordedDateTime.getMinutes()).padStart(2, '0');
+        const seconds = String(icuVitalsRecordedDateTime.getSeconds()).padStart(2, '0');
+        recordedDateTimeISO = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
       }
 
       // Prepare the request payload - only include fields that have values
       const payload: any = {
-        ICUAdmissionId: String(icuVitalsFormData.icuAdmissionId).trim(), // UUID string
+        ICUAdmissionId: String(icuAdmissionIdValue).trim(), // UUID string
         PatientId: String(patientIdValue).trim(), // UUID string - required
-        RecordedDateTime: recordedDateTimeISO || icuVitalsFormData.recordedDateTime, // ISO 8601 format
+        RecordedDateTime: recordedDateTimeISO, // YYYY-MM-DD HH:MM:SS format
       };
 
       // Add optional numeric fields only if they have values
@@ -778,6 +854,7 @@ export function ManageICUCase() {
         nurseVisitsDetails: '',
         patientCondition: ''
       });
+      setIcuVitalsRecordedDateTime(null);
       setNurseSearchTerm('');
       setShowNurseList(false);
       setEditingICUVitalsId(null);
@@ -852,12 +929,13 @@ export function ManageICUCase() {
         icuDoctorVisitId: '',
         icuAdmissionId: String(icuAdmission.patientICUAdmissionId || icuAdmission.id || ''),
         patientId: String(icuAdmission.patientId || ''),
-        doctorId: '', // Will need to be set from attendingDoctor or fetched
-        doctorVisitedDateTime: new Date().toISOString().slice(0, 16), // Current date/time in local format
+        doctorId: '',
+        doctorVisitedDateTime: '',
         visitsDetails: '',
         patientCondition: icuAdmission.condition || '',
         status: 'Active'
       });
+      setDoctorVisitedDateTime(new Date());
       setDoctorVisitSubmitError(null);
       setIsAddDoctorVisitDialogOpen(true);
     }
@@ -886,22 +964,41 @@ export function ManageICUCase() {
     const finalVisitId = icuDoctorVisitsId || visitId;
     setEditingDoctorVisitId(finalVisitId);
 
-    // Format datetime for datetime-local input (YYYY-MM-DDTHH:mm)
-    let formattedDateTime = '';
-    if (visit.visitDate) {
+    // Parse date for DatePicker - handle various date formats from API
+    let dateTimeValue: Date | null = null;
+    const rawDateTime = visit.visitDate || (visit as any).doctorVisitedDateTime || (visit as any).DoctorVisitedDateTime;
+    
+    if (rawDateTime) {
       try {
-        const date = new Date(visit.visitDate);
+        // Try parsing as ISO string or date string
+        const date = new Date(rawDateTime);
         if (!isNaN(date.getTime())) {
-          // Format to YYYY-MM-DDTHH:mm
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          const hours = String(date.getHours()).padStart(2, '0');
-          const minutes = String(date.getMinutes()).padStart(2, '0');
-          formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+          dateTimeValue = date;
         }
       } catch (e) {
-        console.warn('Error formatting date:', e);
+        console.warn('Error parsing date for DatePicker:', e);
+      }
+    }
+    
+    // If no valid date, use current date/time
+    if (!dateTimeValue) {
+      dateTimeValue = new Date();
+    }
+
+    // Extract doctorId from visit - check multiple possible field names
+    const visitDoctorId = (visit as any).doctorId || (visit as any).DoctorId || 
+                         (visit as any).doctor_id || (visit as any).Doctor_ID ||
+                         visit.doctorId || '';
+    
+    // If we have doctorName but no doctorId, try to find the doctor in availableDoctors
+    let finalDoctorId = String(visitDoctorId || '');
+    if (!finalDoctorId && visit.doctorName && availableDoctors.length > 0) {
+      const foundDoctor = availableDoctors.find((doc: any) => {
+        const docName = doc.name || doc.Name || doc.UserName || '';
+        return docName.toLowerCase() === String(visit.doctorName || '').toLowerCase();
+      });
+      if (foundDoctor) {
+        finalDoctorId = String(foundDoctor.id || foundDoctor.Id || foundDoctor.UserId || '');
       }
     }
 
@@ -909,14 +1006,15 @@ export function ManageICUCase() {
       icuDoctorVisitId: String(icuDoctorVisitsId || visitId || ''),
       icuAdmissionId: String(icuAdmission.patientICUAdmissionId || icuAdmission.id || ''),
       patientId: String(icuAdmission.patientId || ''),
-      doctorId: String(visit.doctorId || visit.doctorName || ''),
-      doctorVisitedDateTime: formattedDateTime || new Date().toISOString().slice(0, 16),
+      doctorId: finalDoctorId,
+      doctorVisitedDateTime: '', // Not used with DatePicker, but keep for compatibility
       visitsDetails: (visit as any).visitsDetails || visit.notes || visit.visitsRemarks || '',
       patientCondition: visit.patientCondition || '',
-      status: visit.status || 'Active' // Map Status to Status
+      status: visit.status || 'Active'
     };
 
     setDoctorVisitFormData(formData);
+    setDoctorVisitedDateTime(dateTimeValue);
     setDoctorVisitSubmitError(null);
 
     setIsAddDoctorVisitDialogOpen(true);
@@ -928,33 +1026,82 @@ export function ManageICUCase() {
       setDoctorVisitSubmitting(true);
       setDoctorVisitSubmitError(null);
 
-      // Prepare the request payload
-      // Ensure all UUID fields are sent as strings
+      // Validate required fields
+      if (!doctorVisitFormData.icuAdmissionId || !doctorVisitFormData.patientId || !doctorVisitFormData.doctorId || !doctorVisitedDateTime) {
+        throw new Error('ICU Admission ID, Patient ID, Doctor ID, and Doctor Visited Date & Time are required');
+      }
+
+      // Convert DatePicker date to ISO format (YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS) for backend
+      let doctorVisitedDateTimeISO = '';
+      if (doctorVisitedDateTime) {
+        const year = doctorVisitedDateTime.getFullYear();
+        const month = String(doctorVisitedDateTime.getMonth() + 1).padStart(2, '0');
+        const day = String(doctorVisitedDateTime.getDate()).padStart(2, '0');
+        const hours = String(doctorVisitedDateTime.getHours()).padStart(2, '0');
+        const minutes = String(doctorVisitedDateTime.getMinutes()).padStart(2, '0');
+        const seconds = String(doctorVisitedDateTime.getSeconds()).padStart(2, '0');
+        // Use ISO format: YYYY-MM-DD HH:MM:SS (backend accepts both YYYY-MM-DD HH:MM:SS and YYYY-MM-DDTHH:MM:SS)
+        doctorVisitedDateTimeISO = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      }
+
+      // Prepare the request payload according to API signature
       const payload: any = {
-        ICUAdmissionId: String(doctorVisitFormData.icuAdmissionId), // UUID string
-        PatientId: String(doctorVisitFormData.patientId), // UUID string
-        DoctorId: String(doctorVisitFormData.doctorId),
-        DoctorVisitedDateTime: doctorVisitFormData.doctorVisitedDateTime,
-        VisitsDetails: doctorVisitFormData.visitsDetails,
-        PatientCondition: doctorVisitFormData.patientCondition, // Keep PatientCondition separate
-        Status: doctorVisitFormData.status // Map Status to Status in API payload
+        ICUAdmissionId: String(doctorVisitFormData.icuAdmissionId).trim(), // String UUID (required)
+        PatientId: String(doctorVisitFormData.patientId).trim(), // String UUID (required)
+        DoctorId: Number(doctorVisitFormData.doctorId), // Number (required)
+        DoctorVisitedDateTime: doctorVisitedDateTimeISO, // String ISO format (required)
       };
 
-      // Include ICUDoctorVisitId when editing
-      if (editingDoctorVisitId && doctorVisitFormData.icuDoctorVisitId) {
-        payload.ICUDoctorVisitId = String(doctorVisitFormData.icuDoctorVisitId);
-        console.log('Including ICUDoctorVisitId in payload:', payload.ICUDoctorVisitId);
+      // Optional fields - only include if they have values
+      if (doctorVisitFormData.visitsDetails && doctorVisitFormData.visitsDetails.trim() !== '') {
+        payload.VisitsDetails = doctorVisitFormData.visitsDetails.trim();
       }
+      if (doctorVisitFormData.patientCondition && doctorVisitFormData.patientCondition.trim() !== '') {
+        payload.PatientCondition = doctorVisitFormData.patientCondition.trim();
+      }
+      if (staff?.id || staff?.userId) {
+        payload.VisitCreatedBy = Number(staff.id || staff.userId);
+      }
+      // Status defaults to "Active" if not provided
+      payload.Status = doctorVisitFormData.status || 'Active';
 
       let response;
       if (editingDoctorVisitId) {
-        // Update existing visit
+        // Update existing visit - all fields are optional for PUT
+        const updatePayload: any = {};
+        
+        // Only include fields that have values
+        if (doctorVisitFormData.icuAdmissionId && doctorVisitFormData.icuAdmissionId.trim() !== '') {
+          updatePayload.ICUAdmissionId = String(doctorVisitFormData.icuAdmissionId).trim();
+        }
+        if (doctorVisitFormData.patientId && doctorVisitFormData.patientId.trim() !== '') {
+          updatePayload.PatientId = String(doctorVisitFormData.patientId).trim();
+        }
+        if (doctorVisitFormData.doctorId && doctorVisitFormData.doctorId.trim() !== '') {
+          updatePayload.DoctorId = Number(doctorVisitFormData.doctorId);
+        }
+        if (doctorVisitedDateTimeISO) {
+          updatePayload.DoctorVisitedDateTime = doctorVisitedDateTimeISO;
+        }
+        if (doctorVisitFormData.visitsDetails && doctorVisitFormData.visitsDetails.trim() !== '') {
+          updatePayload.VisitsDetails = doctorVisitFormData.visitsDetails.trim();
+        }
+        if (doctorVisitFormData.patientCondition && doctorVisitFormData.patientCondition.trim() !== '') {
+          updatePayload.PatientCondition = doctorVisitFormData.patientCondition.trim();
+        }
+        if (staff?.id || staff?.userId) {
+          updatePayload.VisitCreatedBy = Number(staff.id || staff.userId);
+        }
+        if (doctorVisitFormData.status) {
+          updatePayload.Status = doctorVisitFormData.status;
+        }
+        
         response = await apiRequest<any>(`/icu-doctor-visits/${editingDoctorVisitId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(updatePayload),
         });
       } else {
         // Create new visit
@@ -1010,59 +1157,68 @@ export function ManageICUCase() {
 
   if (error || !icuAdmission) {
     return (
-      <div className="flex-1 bg-blue-100 flex items-center justify-center">
-        <Card className="max-w-md">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-red-600 mb-4">{error || 'ICU admission not found'}</p>
-              <Button onClick={handleBack} variant="outline">
-                <ArrowLeft className="size-4 mr-2" />
-                Back to ICU Management
-              </Button>
+      <div className="dashboard-container">
+        <div className="dashboard-scrollable-container">
+          <div className="dashboard-header-section">
+            <div className="dashboard-header-content">
+              <div className="flex items-center gap-4">
+                <Button variant="outline" onClick={handleBack} className="gap-2">
+                  <ArrowLeft className="size-4" />
+                  Back
+                </Button>
+                <div>
+                  <h1 className="dashboard-header">Manage ICU Case</h1>
+                </div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="dashboard-main-content">
+            <Card className="dashboard-table-card">
+              <CardContent className="dashboard-table-card-content">
+                <div className="text-center py-8">
+                  <p className="text-red-600 mb-4">{error || 'ICU admission not found'}</p>
+                  <Button onClick={handleBack} variant="outline">
+                    <ArrowLeft className="size-4 mr-2" />
+                    Back to ICU Management
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 bg-blue-100 flex flex-col overflow-hidden min-h-0">
-      <div className="px-4 pt-4 pb-0 flex-shrink-0">
-        <div className="flex items-center justify-between mb-4 flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={handleBack} className="gap-2">
-              <ArrowLeft className="size-4" />
-              Back
-            </Button>
-            <div>
-              <h1 className="text-gray-900 mb-0 text-xl">Manage ICU Case</h1>
-              <div className="text-gray-500 text-sm space-y-1">
-                <p>Patient ICU Admission ID: {icuAdmission.patientICUAdmissionId || icuAdmission.id}</p>
-               
-                
-               
+    <div className="dashboard-container">
+      <div className="dashboard-scrollable-container">
+        <div className="dashboard-header-section">
+          <div className="dashboard-header-content">
+            <div className="flex items-center gap-4">
+              <Button variant="outline" onClick={handleBack} className="gap-2">
+                <ArrowLeft className="size-4" />
+                Back
+              </Button>
+              <div>
+                <h1 className="dashboard-header">Manage ICU Case</h1>
+                <p className="dashboard-subheader">Patient ICU Admission ID: {icuAdmission.patientICUAdmissionId || icuAdmission.id}</p>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="overflow-y-auto overflow-x-hidden px-4 pb-4" style={{ maxHeight: 'calc(100vh - 100px)', minHeight: 0 }}>
+        <div className="dashboard-main-content">
         {/* ICU Details Section */}
-        <Card className="mb-6">
-          <CardHeader>
+        <Card className="dashboard-table-card">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>ICU Details</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="dashboard-table-card-content">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div>
                 <Label className="text-sm text-gray-500">Patient Name</Label>
                 <p className="text-gray-900 font-medium mt-1">{icuAdmission.patientName || 'N/A'} </p>
-              </div>
-              <div>
-                <Label className="text-sm text-gray-500">Patient ID</Label>
-                <p className="text-gray-900 font-medium mt-1">{icuAdmission.patientId || 'N/A'}</p>
               </div>
               <div>
                 <Label className="text-sm text-gray-500">Patient No</Label>
@@ -1086,7 +1242,7 @@ export function ManageICUCase() {
               </div>
               <div>
                 <Label className="text-sm text-gray-500">ICU Allocation To Date</Label>
-                <p className="text-gray-900 font-medium mt-1">{formatDateTime(icuAdmission.icuAllocationToDate)}</p>
+                <p className="text-gray-900 font-medium mt-1">{formatDate(icuAdmission.icuAllocationToDate)}</p>
               </div>
               <div>
                 <Label className="text-sm text-gray-500">Attending Doctor</Label>
@@ -1099,12 +1255,25 @@ export function ManageICUCase() {
               <div>
                 <Label className="text-sm text-gray-500">Severity</Label>
                 <p className="mt-1">
-                  <Badge variant={
-                    icuAdmission.severity === 'Critical' ? 'destructive' :
-                    icuAdmission.severity === 'Serious' ? 'default' : 'secondary'
-                  }>
-                    {icuAdmission.severity || 'Stable'}
-                  </Badge>
+                  {(() => {
+                    const severity = icuAdmission.severity || 'Stable';
+                    const severityLower = String(severity).toLowerCase();
+                    let bgColor = '';
+                    
+                    if (severityLower.includes('critical')) {
+                      bgColor = 'bg-red-500';
+                    } else if (severityLower.includes('serious')) {
+                      bgColor = 'bg-orange-500';
+                    } else {
+                      bgColor = 'bg-green-500';
+                    }
+                    
+                    return (
+                      <Badge className={`${bgColor} text-white border-0`}>
+                        {severity}
+                      </Badge>
+                    );
+                  })()}
                 </p>
               </div>
               <div>
@@ -1146,11 +1315,11 @@ export function ManageICUCase() {
           </TabsList>
 
           <TabsContent value="diagnosis-treatment" className="mt-6">
-            <Card>
-              <CardHeader>
+            <Card className="dashboard-table-card">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <CardTitle>Diagnosis & Treatment Details</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="dashboard-table-card-content">
                 <div className="space-y-6">
                   {/* Diagnosis Section */}
                   <div>
@@ -1195,9 +1364,9 @@ export function ManageICUCase() {
 
           
           <TabsContent value="doctor-visits" className="mt-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
+            <Card className="dashboard-table-card">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <div className="flex items-center justify-between w-full">
                   <CardTitle>Doctor Visits</CardTitle>
                   <Button
                     onClick={handleOpenAddDoctorVisitDialog}
@@ -1208,7 +1377,7 @@ export function ManageICUCase() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="dashboard-table-card-content">
                 {doctorVisitsLoading ? (
                   <div className="text-center py-8 text-gray-500">Loading doctor visits...</div>
                 ) : doctorVisitsError ? (
@@ -1220,7 +1389,6 @@ export function ManageICUCase() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 text-gray-700">Doctor Visit ID</th>
                           <th className="text-left py-3 px-4 text-gray-700">Doctor</th>
                           <th className="text-left py-3 px-4 text-gray-700">Visit Date</th>
                           <th className="text-left py-3 px-4 text-gray-700">Visit Details</th>
@@ -1232,7 +1400,6 @@ export function ManageICUCase() {
                       <tbody>
                         {patientDoctorVisits.map((visit) => (
                           <tr key={visit.icuDoctorVisitsId || (visit as any).iCUDoctorVisitId || visit.patientDoctorVisitId || visit.id} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-3 px-4">{visit.icuDoctorVisitsId || (visit as any).iCUDoctorVisitId || visit.patientDoctorVisitId || visit.id || 'N/A'}</td>
                             <td className="py-3 px-4">{visit.doctorName || 'N/A'}</td>
                             <td className="py-3 px-4">{visit.visitDate || 'N/A'}</td>
                             <td className="py-3 px-4">{(visit as any).visitsDetails || visit.notes || visit.visitsRemarks || 'N/A'}</td>
@@ -1269,9 +1436,9 @@ export function ManageICUCase() {
           </TabsContent>
 
           <TabsContent value="nurse-visits" className="mt-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
+            <Card className="dashboard-table-card">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <div className="flex items-center justify-between w-full">
                   <CardTitle>ICU Nurse Visits & Vitals</CardTitle>
                   <Button
                     onClick={handleOpenAddICUVitalsDialog}
@@ -1282,7 +1449,7 @@ export function ManageICUCase() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="dashboard-table-card-content">
                 {icuVitalsLoading ? (
                   <div className="text-center py-8 text-gray-500">Loading ICU visit vitals...</div>
                 ) : icuVitalsError ? (
@@ -1294,89 +1461,163 @@ export function ManageICUCase() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 text-gray-700">Vitals ID</th>
-                          <th className="text-left py-3 px-4 text-gray-700">Recorded Date & Time</th>
-                          <th className="text-left py-3 px-4 text-gray-700">HR</th>
-                          <th className="text-left py-3 px-4 text-gray-700">BP</th>
-                          <th className="text-left py-3 px-4 text-gray-700">Temp</th>
-                          <th className="text-left py-3 px-4 text-gray-700">SpO₂</th>
-                          <th className="text-left py-3 px-4 text-gray-700">RR</th>
-                          <th className="text-left py-3 px-4 text-gray-700">Blood Sugar</th>
-                          <th className="text-left py-3 px-4 text-gray-700">Daily/Hourly</th>
-                          <th className="text-left py-3 px-4 text-gray-700">Nurse</th>
-                          <th className="text-left py-3 px-4 text-gray-700">Patient Condition</th>
-                          <th className="text-left py-3 px-4 text-gray-700">Action</th>
+                          <th className="text-left py-3 px-4 text-gray-700 whitespace-nowrap">Recorded Date & Time</th>
+                          <th className="text-left py-3 px-4 text-gray-700 whitespace-nowrap">HR</th>
+                          <th className="text-left py-3 px-4 text-gray-700 whitespace-nowrap">BP</th>
+                          <th className="text-left py-3 px-4 text-gray-700 whitespace-nowrap">Temp</th>
+                          <th className="text-left py-3 px-4 text-gray-700 whitespace-nowrap">SpO₂</th>
+                          <th className="text-left py-3 px-4 text-gray-700 whitespace-nowrap">RR</th>
+                          <th className="text-left py-3 px-4 text-gray-700 whitespace-nowrap">Blood Sugar</th>
+                          <th className="text-left py-3 px-4 text-gray-700 whitespace-nowrap">Daily/Hourly</th>
+                          <th className="text-left py-3 px-4 text-gray-700 whitespace-nowrap">Nurse</th>
+                          <th className="text-left py-3 px-4 text-gray-700 whitespace-nowrap">Patient Condition</th>
+                          <th className="text-left py-3 px-4 text-gray-700 whitespace-nowrap">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {icuVitalsList.map((vital) => (
                           <tr key={vital.icuVisitVitalsId || vital.id} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-3 px-4">{vital.icuVisitVitalsId || 'N/A'}</td>
-                            <td className="py-3 px-4">{vital.recordedDateTime || 'N/A'}</td>
-                            <td className="py-3 px-4">{vital.heartRate != null ? `${vital.heartRate} bpm` : 'N/A'}</td>
-                            <td className="py-3 px-4">{vital.bloodPressure || 'N/A'}</td>
-                            <td className="py-3 px-4">{vital.temperature != null ? `${vital.temperature}°C` : 'N/A'}</td>
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-4 whitespace-nowrap">
+                              {formatDateTime(
+                                vital.recordedDateTime || 
+                                (vital as any).RecordedDateTime || 
+                                (vital as any).recordedDate || 
+                                (vital as any).RecordedDate ||
+                                (vital as any).dateTime ||
+                                (vital as any).DateTime ||
+                                (vital as any).recordedAt ||
+                                (vital as any).RecordedAt ||
+                                (vital as any).visitDateTime ||
+                                (vital as any).VisitDateTime
+                              )}
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap">{vital.heartRate != null ? `${vital.heartRate} bpm` : 'N/A'}</td>
+                            <td className="py-3 px-4 whitespace-nowrap">{vital.bloodPressure || 'N/A'}</td>
+                            <td className="py-3 px-4 whitespace-nowrap">{vital.temperature != null ? `${vital.temperature}°C` : 'N/A'}</td>
+                            <td className="py-3 px-4 whitespace-nowrap">
                               {vital.oxygenSaturation != null || (vital as any).O2Saturation != null || (vital as any).O2 != null || (vital as any).o2Saturation != null
                                 ? `${vital.oxygenSaturation ?? (vital as any).O2Saturation ?? (vital as any).O2 ?? (vital as any).o2Saturation}%`
                                 : 'N/A'}
                             </td>
-                            <td className="py-3 px-4">{vital.respiratoryRate != null ? `${vital.respiratoryRate}/min` : 'N/A'}</td>
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-4 whitespace-nowrap">{vital.respiratoryRate != null ? `${vital.respiratoryRate}/min` : 'N/A'}</td>
+                            <td className="py-3 px-4 whitespace-nowrap">
                               {vital.bloodSugar != null || (vital as any).BloodSugar != null || (vital as any).bloodGlucose != null || (vital as any).Glucose != null
                                 ? `${vital.bloodSugar ?? (vital as any).BloodSugar ?? (vital as any).bloodGlucose ?? (vital as any).Glucose} mg/dL`
                                 : 'N/A'}
                             </td>
-                            <td className="py-3 px-4">{vital.dailyOrHourlyVitals || 'N/A'}</td>
-                            <td className="py-3 px-4">{vital.nurseName || 'N/A'}</td>
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-4 whitespace-nowrap">{vital.dailyOrHourlyVitals || 'N/A'}</td>
+                            <td className="py-3 px-4 whitespace-nowrap">{vital.nurseName || 'N/A'}</td>
+                            <td className="py-3 px-4 whitespace-nowrap">
                               {vital.patientCondition || (vital as any).patientStatus || (vital as any).PatientStatus || (vital as any).PatientCondition || 'N/A'}
                             </td>
-                            <td className="py-3 px-4 flex gap-2">
+                            <td className="py-3 px-4 flex gap-2 items-center whitespace-nowrap">
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
                                   setEditingICUVitalsId(vital.icuVisitVitalsId);
-                                  // Extract O2Saturation with fallbacks
-                                  const o2Value = vital.oxygenSaturation || (vital as any).O2Saturation || (vital as any).O2 || (vital as any).o2Saturation;
-                                  // Extract BloodSugar with fallbacks
-                                  const bloodSugarValue = vital.bloodSugar || (vital as any).BloodSugar || (vital as any).bloodGlucose || (vital as any).Glucose;
-                                  // Extract PatientCondition/PatientStatus with fallbacks
-                                  const patientConditionValue = vital.patientCondition || (vital as any).patientStatus || (vital as any).PatientStatus || (vital as any).PatientCondition || '';
                                   
-                                  setIcuVitalsFormData({
-                                    icuVisitVitalsId: String(vital.icuVisitVitalsId || ''),
-                                    icuAdmissionId: String(vital.icuAdmissionId || icuAdmission?.patientICUAdmissionId || ''),
-                                    patientId: String(vital.patientId || icuAdmission?.patientId || ''),
-                                    heartRate: vital.heartRate ? String(vital.heartRate) : '',
-                                    bloodPressure: vital.bloodPressure || '',
-                                    temperature: vital.temperature ? String(vital.temperature) : '',
-                                    oxygenSaturation: o2Value ? String(o2Value) : '',
-                                    respiratoryRate: vital.respiratoryRate ? String(vital.respiratoryRate) : '',
-                                    bloodSugar: bloodSugarValue ? String(bloodSugarValue) : '',
-                                    recordedDateTime: vital.recordedDateTime ? vital.recordedDateTime.slice(0, 16) : '',
-                                    recordedBy: vital.recordedBy || '',
-                                    dailyOrHourlyVitals: vital.dailyOrHourlyVitals || '',
-                                    nurseId: vital.nurseId ? String(vital.nurseId) : '',
-                                    nurseVisitsDetails: vital.nurseVisitsDetails || '',
-                                    patientCondition: patientConditionValue
-                                  });
-                                  setNurseSearchTerm(vital.nurseId ? String(vital.nurseId) : '');
-                                  setShowNurseList(false);
-                                  setIcuVitalsSubmitError(null);
-                                  setIsAddICUVitalsDialogOpen(true);
-                                }}
-                                className="gap-2"
-                              >
-                                <Eye className="size-4" />
-                                View
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingICUVitalsId(vital.icuVisitVitalsId);
+                                  // Extract DailyOrHourlyVitals with fallbacks and normalize
+                                  let dailyOrHourlyVitalsValue = vital.dailyOrHourlyVitals || (vital as any).DailyOrHourlyVitals || '';
+                                  // Normalize the value to match select options (e.g., "Daily Vitals" -> "Daily", "Hourly Vitals" -> "Hourly")
+                                  if (dailyOrHourlyVitalsValue) {
+                                    const lowerValue = String(dailyOrHourlyVitalsValue).toLowerCase().trim();
+                                    if (lowerValue.includes('daily') || lowerValue === 'daily') {
+                                      dailyOrHourlyVitalsValue = 'Daily';
+                                    } else if (lowerValue.includes('hourly') || lowerValue === 'hourly') {
+                                      dailyOrHourlyVitalsValue = 'Hourly';
+                                    }
+                                    // If it's already "Daily" or "Hourly" (case-insensitive), use it as-is
+                                    if (lowerValue === 'daily') {
+                                      dailyOrHourlyVitalsValue = 'Daily';
+                                    } else if (lowerValue === 'hourly') {
+                                      dailyOrHourlyVitalsValue = 'Hourly';
+                                    }
+                                  }
+                                  
+                                  console.log('Edit ICU Vitals - Raw vital:', vital);
+                                  console.log('Edit ICU Vitals - dailyOrHourlyVitalsValue:', dailyOrHourlyVitalsValue, 'from vital.dailyOrHourlyVitals:', vital.dailyOrHourlyVitals);
+                                  
+                                  // Parse recordedDateTime for DatePicker
+                                  let recordedDateTimeValue: Date | null = null;
+                                  const rawRecordedDateTime = vital.recordedDateTime || 
+                                    (vital as any).RecordedDateTime || 
+                                    (vital as any).recordedDate || 
+                                    (vital as any).RecordedDate ||
+                                    (vital as any).dateTime ||
+                                    (vital as any).DateTime ||
+                                    (vital as any).recordedAt ||
+                                    (vital as any).RecordedAt ||
+                                    (vital as any).visitDateTime ||
+                                    (vital as any).VisitDateTime;
+                                  
+                                  if (rawRecordedDateTime) {
+                                    try {
+                                      let date: Date;
+                                      
+                                      // Handle dd-MM-yyyy HH:mm format (e.g., "13-01-2026 17:12")
+                                      if (typeof rawRecordedDateTime === 'string' && /^\d{2}-\d{2}-\d{4} \d{2}:\d{2}/.test(rawRecordedDateTime)) {
+                                        const parts = rawRecordedDateTime.split(' ');
+                                        const datePart = parts[0]; // "13-01-2026"
+                                        const timePart = parts[1]; // "17:12"
+                                        
+                                        const [day, month, year] = datePart.split('-');
+                                        const [hours24, minutes] = timePart.split(':');
+                                        
+                                        // Create date in ISO format: YYYY-MM-DDTHH:mm:ss
+                                        const isoString = `${year}-${month}-${day}T${hours24}:${minutes}:00`;
+                                        date = new Date(isoString);
+                                      }
+                                      // Handle YYYY-MM-DD HH:MM:SS format (space-separated)
+                                      else if (typeof rawRecordedDateTime === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(rawRecordedDateTime)) {
+                                        // Replace space with 'T' for ISO format
+                                        const isoString = rawRecordedDateTime.replace(' ', 'T');
+                                        date = new Date(isoString);
+                                      } else {
+                                        date = new Date(rawRecordedDateTime);
+                                      }
+                                      
+                                      if (!isNaN(date.getTime())) {
+                                        recordedDateTimeValue = date;
+                                      } else {
+                                        console.warn('Invalid date format for DatePicker:', rawRecordedDateTime);
+                                      }
+                                    } catch (e) {
+                                      console.warn('Error parsing recordedDateTime for DatePicker:', e, rawRecordedDateTime);
+                                    }
+                                  }
+                                  
+                                  // Only fallback to current date if we couldn't parse the recorded date
+                                  if (!recordedDateTimeValue) {
+                                    console.warn('No valid recordedDateTime found, using current date/time as fallback');
+                                    recordedDateTimeValue = new Date();
+                                  }
+                                  
+                                  // Find nurse name by ID for display - use the same logic as View button
+                                  const nurseIdValue = vital.nurseId || (vital as any).NurseId || '';
+                                  let nurseNameForDisplay = '';
+                                  
+                                  // First, try to get nurse name from the vital object directly
+                                  if (vital.nurseName || (vital as any).NurseName) {
+                                    nurseNameForDisplay = vital.nurseName || (vital as any).NurseName || '';
+                                  }
+                                  
+                                  // If we have a nurseId, try to find the nurse in the nurses list
+                                  if (nurseIdValue && nurses.length > 0) {
+                                    const foundNurse = nurses.find((n: any) => String(n.id) === String(nurseIdValue));
+                                    if (foundNurse) {
+                                      nurseNameForDisplay = foundNurse.name || 'Unknown';
+                                    }
+                                  }
+                                  
+                                  // If still no name but we have an ID, use the ID as fallback
+                                  if (!nurseNameForDisplay && nurseIdValue) {
+                                    nurseNameForDisplay = String(nurseIdValue);
+                                  }
+                                  
+                                  console.log('Edit ICU Vitals - nurseIdValue:', nurseIdValue, 'nurseNameForDisplay:', nurseNameForDisplay, 'nurses.length:', nurses.length);
+                                  console.log('Edit ICU Vitals - vital.nurseName:', vital.nurseName, 'vital.nurseId:', vital.nurseId);
+                                  
                                   setIcuVitalsFormData({
                                     icuVisitVitalsId: String(vital.icuVisitVitalsId || ''),
                                     icuAdmissionId: String(vital.icuAdmissionId || icuAdmission?.patientICUAdmissionId || ''),
@@ -1387,14 +1628,15 @@ export function ManageICUCase() {
                                     oxygenSaturation: vital.oxygenSaturation ? String(vital.oxygenSaturation) : '',
                                     respiratoryRate: vital.respiratoryRate ? String(vital.respiratoryRate) : '',
                                     bloodSugar: vital.bloodSugar ? String(vital.bloodSugar) : '',
-                                    recordedDateTime: vital.recordedDateTime ? vital.recordedDateTime.slice(0, 16) : '',
+                                    recordedDateTime: '',
                                     recordedBy: vital.recordedBy || '',
-                                    dailyOrHourlyVitals: vital.dailyOrHourlyVitals || '',
-                                    nurseId: vital.nurseId ? String(vital.nurseId) : '',
+                                    dailyOrHourlyVitals: dailyOrHourlyVitalsValue,
+                                    nurseId: nurseIdValue ? String(nurseIdValue) : '',
                                     nurseVisitsDetails: vital.nurseVisitsDetails || '',
                                     patientCondition: vital.patientCondition || ''
                                   });
-                                  setNurseSearchTerm(vital.nurseId ? String(vital.nurseId) : '');
+                                  setIcuVitalsRecordedDateTime(recordedDateTimeValue);
+                                  setNurseSearchTerm(nurseNameForDisplay);
                                   setShowNurseList(false);
                                   setIcuVitalsSubmitError(null);
                                   setIsAddICUVitalsDialogOpen(true);
@@ -1431,52 +1673,33 @@ export function ManageICUCase() {
                 )}
 
               <div className="grid grid-cols-2 gap-4">
-                {editingDoctorVisitId && (
-                  <div>
-                    <Label htmlFor="icuDoctorVisitId">ICU Doctor Visit ID</Label>
-                    <Input
-                      id="icuDoctorVisitId"
-                      value={doctorVisitFormData.icuDoctorVisitId}
-                      disabled
-                      className="bg-gray-100"
-                    />
-                  </div>
-                )}
                 <div>
-                  <Label htmlFor="icuAdmissionId">ICU Admission ID</Label>
-                  <Input
-                    id="icuAdmissionId"
-                    value={doctorVisitFormData.icuAdmissionId}
-                    disabled
-                    className="bg-gray-100"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="patientId">Patient ID</Label>
-                  <Input
-                    id="patientId"
-                    value={doctorVisitFormData.patientId}
-                    disabled
-                    className="bg-gray-100"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="doctorId">Doctor ID *</Label>
-                  <Input
+                  <Label htmlFor="doctorId">Doctor *</Label>
+                  <select
                     id="doctorId"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-base md:text-sm"
                     value={doctorVisitFormData.doctorId}
                     onChange={(e) => setDoctorVisitFormData({ ...doctorVisitFormData, doctorId: e.target.value })}
-                    placeholder="Enter Doctor ID"
                     required
-                  />
+                  >
+                    <option value="">Select Doctor</option>
+                    {availableDoctors.map((doctor) => (
+                      <option key={doctor.id || doctor.Id || doctor.UserId} value={String(doctor.id || doctor.Id || doctor.UserId)}>
+                        {doctor.name || doctor.Name || doctor.UserName || 'Unknown Doctor'}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <Label htmlFor="doctorVisitedDateTime">Doctor Visited Date & Time *</Label>
-                  <Input
-                    id="doctorVisitedDateTime"
-                    type="datetime-local"
-                    value={doctorVisitFormData.doctorVisitedDateTime}
-                    onChange={(e) => setDoctorVisitFormData({ ...doctorVisitFormData, doctorVisitedDateTime: e.target.value })}
+                  <DatePicker
+                    selected={doctorVisitedDateTime}
+                    onChange={(date: Date | null) => setDoctorVisitedDateTime(date)}
+                    showTimeSelect
+                    timeIntervals={1}
+                    dateFormat="dd-MM-yyyy hh:mm aa"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-base md:text-sm"
+                    placeholderText="Select date and time"
                     required
                   />
                 </div>
@@ -1511,8 +1734,7 @@ export function ManageICUCase() {
                     required
                   >
                     <option value="Active">Active</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Cancelled">Cancelled</option>
+                    <option value="Inactive">Inactive</option>
                   </select>
                 </div>
               </div>
@@ -1648,24 +1870,6 @@ export function ManageICUCase() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="vitalsIcuAdmissionId">ICU Admission ID</Label>
-                    <Input
-                      id="vitalsIcuAdmissionId"
-                      value={icuVitalsFormData.icuAdmissionId}
-                      disabled
-                      className="bg-gray-100"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="vitalsPatientId">Patient ID</Label>
-                    <Input
-                      id="vitalsPatientId"
-                      value={icuVitalsFormData.patientId}
-                      disabled
-                      className="bg-gray-100"
-                    />
-                  </div>
-                  <div>
                     <Label htmlFor="heartRate">Heart Rate (bpm)</Label>
                     <Input
                       id="heartRate"
@@ -1727,21 +1931,15 @@ export function ManageICUCase() {
                   </div>
                   <div>
                     <Label htmlFor="recordedDateTime">Recorded Date & Time *</Label>
-                    <Input
-                      id="recordedDateTime"
-                      type="datetime-local"
-                      value={icuVitalsFormData.recordedDateTime}
-                      onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, recordedDateTime: e.target.value })}
+                    <DatePicker
+                      selected={icuVitalsRecordedDateTime}
+                      onChange={(date: Date | null) => setIcuVitalsRecordedDateTime(date)}
+                      showTimeSelect
+                      timeIntervals={1}
+                      dateFormat="dd-MM-yyyy hh:mm aa"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-base md:text-sm"
+                      placeholderText="Select date and time"
                       required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="recordedBy">Recorded By</Label>
-                    <Input
-                      id="recordedBy"
-                      value={icuVitalsFormData.recordedBy}
-                      onChange={(e) => setIcuVitalsFormData({ ...icuVitalsFormData, recordedBy: e.target.value })}
-                      placeholder="Enter name of person recording"
                     />
                   </div>
                   <div>
@@ -1864,8 +2062,7 @@ export function ManageICUCase() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-       
+        </div>
       </div>
     </div>
   );
