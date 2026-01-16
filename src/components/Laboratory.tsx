@@ -1856,8 +1856,7 @@ export function Laboratory() {
         payload.TestDoneDateTime = testDoneDateTime.toISOString();
       }
       
-      console.log('HELLLLLLLLLLLOOOOOOOOOOOOOOO');
-      console.log('AAAAAAAAAAAAAAAAAAAAAAAAAASaving new lab order with payload:', payload);
+      
       await apiRequest('/patient-lab-tests', {
         method: 'POST',
         body: JSON.stringify(payload)
@@ -1906,7 +1905,7 @@ export function Laboratory() {
         <div className="px-6 pt-6 pb-0 flex-shrink-0">
           <div className="flex items-center justify-between mb-4 flex-shrink-0">
             <div>
-              <h1 className="text-gray-900 mb-2">Patient's Laboratory Tests Management</h1>
+              <h1 className="text-gray-900 mb-2">Patients Lab Tests Management</h1>
               <p className="text-gray-500">Manage lab tests, samples, and reports</p>
             </div>
             <div className="flex items-center gap-4">
@@ -1917,7 +1916,7 @@ export function Laboratory() {
                 </Button>
                 <Button size="sm" className="dashboard-manage-button" onClick={() => { setIsAddDialogOpen(true); handleOpenNewLabOrderDialog(); }}>
                   <TestTube className="size-4" />
-                  New Lab Order
+                  Add New Lab Test
                 </Button>
               </div>
             </div>
@@ -2170,7 +2169,7 @@ export function Laboratory() {
             <CustomResizableDialogClose onClick={() => setIsAddDialogOpen(false)} />
             <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
               <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
-                <CustomResizableDialogTitle className="dialog-title-standard">New Lab Order</CustomResizableDialogTitle>
+                <CustomResizableDialogTitle className="dialog-title-standard">Add New Lab Test</CustomResizableDialogTitle>
               </CustomResizableDialogHeader>
               <div className="dialog-body-content-wrapper">
                 <div className="dialog-form-container space-y-4">
@@ -2673,7 +2672,7 @@ export function Laboratory() {
                   Cancel
                 </Button>
                 <Button onClick={handleSaveNewLabOrder} disabled={newLabOrderSubmitting} className="dialog-footer-button">
-                  {newLabOrderSubmitting ? 'Saving...' : 'Save Lab Order'}
+                  {newLabOrderSubmitting ? 'Saving...' : 'Create Lab Test'}
                 </Button>
               </div>            
         </CustomResizableDialog>

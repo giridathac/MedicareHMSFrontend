@@ -4994,7 +4994,7 @@ export default function Admissions() {
       }}>
         <DialogContent className="p-0 gap-0 large-dialog max-h-[90vh]">
           <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
-            <DialogTitle>New Lab Order</DialogTitle>
+            <DialogTitle>Add Lab Test</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 pb-1 patient-list-scrollable min-h-0">
             <div className="space-y-4 py-4">

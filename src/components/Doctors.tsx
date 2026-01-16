@@ -452,7 +452,7 @@ function DoctorsView({
           <div className="px-6 pt-6 pb-0 flex-shrink-0">
             <div className="flex items-center justify-between mb-4 flex-shrink-0">
               <div>
-                <h1 className="text-gray-900 mb-2 text-2xl">Doctors Management</h1>
+                <h1 className="text-gray-900 mb-2 text-2xl">Doctors & Surgeons Management</h1>
                 <p className="text-gray-500 text-base">Manage doctors</p>
               </div>
               <Button className="gap-2" onClick={() => setIsAddDialogOpen(true)}>

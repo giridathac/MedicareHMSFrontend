@@ -67,12 +67,12 @@ export function PatientRegistration() {
   const [editPanCardError, setEditPanCardError] = useState('');
   const [formData, setFormData] = useState({
     patientName: '',
-    patientType: '',
+    patientType: 'OPD',
     lastName: '',
     adhaarID: '',
     panCard: '',
     phoneNo: '',
-    gender: '',
+    gender: 'Male',
     age: '',
     address: '',
     chiefComplaint: '',
@@ -305,12 +305,12 @@ export function PatientRegistration() {
       setTimeout(() => {
         setFormData({
           patientName: '',
-          patientType: '',
+          patientType: 'OPD',
           lastName: '',
           adhaarID: '',
           panCard: '',
           phoneNo: '',
-          gender: '',
+          gender: 'Male',
           age: '',
           address: '',
           chiefComplaint: '',
@@ -1033,7 +1033,7 @@ export function PatientRegistration() {
                   onClick={() => setIsAddDialogOpen(true)}
                 >
                   <Plus className="size-4" />
-                  Add New Patient
+                  Register New Patient
                 </Button>
                 
                 <CustomResizableDialog 
@@ -1046,7 +1046,7 @@ export function PatientRegistration() {
                   <CustomResizableDialogClose onClick={() => setIsAddDialogOpen(false)} />
                   <div className="dialog-scrollable-wrapper dialog-content-scrollable flex flex-col flex-1 min-h-0 overflow-y-auto">
                     <CustomResizableDialogHeader className="dialog-header-standard flex-shrink-0">
-                      <CustomResizableDialogTitle className="dialog-title-standard">Add New Patient</CustomResizableDialogTitle>
+                      <CustomResizableDialogTitle className="dialog-title-standard">Register New Patient</CustomResizableDialogTitle>
                     </CustomResizableDialogHeader>
                       <div className="dialog-body-content-wrapper">
                         <form onSubmit={handleSubmit} className="dialog-form-container space-y-2" autoComplete="off">
@@ -1084,7 +1084,6 @@ export function PatientRegistration() {
                                 value={formData.patientType}
                                 onChange={(e) => setFormData({ ...formData, patientType: e.target.value })}
                               >
-                                <option value="">Select type</option>
                                 <option value="OPD">OPD</option>
                                 <option value="IPD">IPD</option>
                                 <option value="Emergency">Emergency</option>
@@ -1104,24 +1103,19 @@ export function PatientRegistration() {
                           </div>
                           <div className="dialog-form-field-grid">
                             <div className="dialog-form-field">
-                              <Label htmlFor="adhaarID" className="dialog-label-standard dialog-label-with-icon">
-                                Adhaar ID
-                                <span className="dialog-label-important">(Important)</span>
-                              </Label>
+                              <Label htmlFor="phoneNo" className="dialog-label-standard">Phone No *</Label>
                               <Input
-                                id="adhaarID"
-                                type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                value={formData.adhaarID}
-                                onChange={(e) => handleAdhaarChange(e.target.value)}
-                                placeholder="Enter 12-digit Aadhaar number"
-                                maxLength={12}
-                                className={`dialog-input-standard ${adhaarError ? 'dialog-input-error' : ''}`}
+                                id="phoneNo"
+                                required
+                                type="tel"
+                                value={formData.phoneNo}
+                                onChange={(e) => handlePhoneChange(e.target.value)}
+                                //placeholder="Enter 10-digit phone number"
+                                //className={`dialog-input-standard ${phoneError ? 'border-red-500' : ''}`}
                               />
-                              {adhaarError && (
-                                <p className="dialog-error-text">{adhaarError}</p>
-                              )}
+                              {/* phoneError && (
+                                <p className="text-sm text-red-600 mt-1">{phoneError}</p>
+                              ) */}
                             </div>
                             <div className="dialog-form-field">
                               <Label htmlFor="panCard" className="dialog-label-standard">PAN Card</Label>
@@ -1160,19 +1154,28 @@ export function PatientRegistration() {
                           </div>
                           <div className="dialog-form-field-grid">
                             <div className="dialog-form-field">
-                              <Label htmlFor="phoneNo" className="dialog-label-standard">Phone No *</Label>
+ <Label htmlFor="adhaarID" className="dialog-label-standard dialog-label-with-icon">
+                                Adhaar ID
+                                <span className="dialog-label-important">(Important)</span>
+                              </Label>
                               <Input
-                                id="phoneNo"
-                                required
-                                type="tel"
-                                value={formData.phoneNo}
-                                onChange={(e) => handlePhoneChange(e.target.value)}
-                                placeholder="Enter 10-digit phone number"
-                                className={`dialog-input-standard ${phoneError ? 'border-red-500' : ''}`}
+                                id="adhaarID"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={formData.adhaarID}
+                                onChange={(e) => handleAdhaarChange(e.target.value)}
+                                placeholder="Enter 12-digit Aadhaar number"
+                                maxLength={12}
+                                className={`dialog-input-standard ${adhaarError ? 'dialog-input-error' : ''}`}
                               />
-                              {phoneError && (
-                                <p className="text-sm text-red-600 mt-1">{phoneError}</p>
-                              )}
+                              {/* adhaarError && (
+                                <p className="dialog-error-text">{adhaarError}</p>
+                              ) */}
+
+
+
+                             
                             </div>
                             <div className="dialog-form-field">
                               <Label htmlFor="gender" className="dialog-label-standard">Gender *</Label>
@@ -1189,7 +1192,6 @@ export function PatientRegistration() {
                                   }
                                 }}
                               >
-                                <option value="">Select gender</option>
                                 <option value="Male">Male</option>
                                 <option value="Female">Female</option>
                                 <option value="Other">Other</option>
@@ -1673,7 +1675,7 @@ export function PatientRegistration() {
                         <Switch
                           id="edit-status"
                           checked={editFormData.status !== undefined ? editFormData.status : true}
-                          onCheckedChange={(checked) => setEditFormData({ ...editFormData, status: checked })}
+                          onCheckedChange={(checked: boolean) => setEditFormData({ ...editFormData, status: checked })}
                           className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 [&_[data-slot=switch-thumb]]:!bg-white [&_[data-slot=switch-thumb]]:!border [&_[data-slot=switch-thumb]]:!border-gray-400 [&_[data-slot=switch-thumb]]:!shadow-sm"
                           style={{
                             width: '2.5rem',
